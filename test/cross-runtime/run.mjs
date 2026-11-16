@@ -5,11 +5,11 @@
 //   deno run --allow-read test/cross-runtime/run.mjs
 //
 // Plain JavaScript with no imports but dist/ and no test framework, so every runtime runs it as it is. It checks the
-// standard globals the core is built on, then every value dist/index.js exports. exercised.mjs names those exports;
-// test/cross-runtime/coverage.test.ts fails when src/index.ts exports a value this file does not exercise, so the job
+// standard globals the core is built on, then runs exercised.mjs's check function for every value dist/index.js exports;
+// test/cross-runtime/coverage.test.ts fails when src/index.ts exports a value that has no check function, so the job
 // grows with the package. Exits 1 on the first failed check.
 
-import { EXERCISED } from "./exercised.mjs"
+import { CHECKS } from "./exercised.mjs"
 
 /** Fails with a message naming the runtime and the check. */
 function check(condition, message) {
@@ -60,30 +60,12 @@ async function globals() {
 
 async function exports() {
   const dist = await import("../../dist/index.js")
+  const names = Object.keys(CHECKS).sort()
   check(
-    JSON.stringify(Object.keys(dist).sort()) === JSON.stringify([...EXERCISED].sort()),
-    `dist exports exactly ${EXERCISED.join(", ")}`,
+    JSON.stringify(Object.keys(dist).sort()) === JSON.stringify(names),
+    `dist exports exactly ${names.join(", ")}`,
   )
-  const transport = new dist.TransportError("body-too-large", "too big")
-  check(
-    transport instanceof Error && transport.name === "TransportError",
-    "TransportError is an Error",
-  )
-  check(
-    transport.code === "body-too-large" && transport.status === 413,
-    "TransportError maps its code to 413",
-  )
-  check(
-    new dist.TransportError("unsupported-media-type", "x").status === 415,
-    "TransportError maps to 415",
-  )
-  check(new dist.TransportError("invalid-path", "x").status === 400, "TransportError maps to 400")
-  const config = new dist.ConfigError(["first problem", "second problem"])
-  check(config instanceof Error && config.name === "ConfigError", "ConfigError is an Error")
-  check(
-    config.problems.length === 2 && config.message.includes("- second problem"),
-    "ConfigError lists every problem",
-  )
+  for (const name of names) await CHECKS[name](dist, check)
 }
 
 // Read through globalThis: each runtime defines only its own global, and the others are undefined there.
