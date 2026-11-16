@@ -328,6 +328,26 @@ const CHECKS: readonly Check[] = [
     },
   },
   {
+    id: "update-concurrent",
+    title:
+      "Concurrent updates at one expected version: exactly one applies, and its data is what is stored",
+    kind: "plain",
+    async run(store, n) {
+      await store.createUnique(A, { collection: "c", key: "k", owner: null, data: null })
+      const results = await parallel(n, (i) => store.update(A, "c", "k", 1, { data: i }))
+      const record = await store.get(A, "c", "k")
+      return {
+        observed: {
+          updated: count(results, (r) => r === "updated"),
+          conflict: count(results, (r) => r === "conflict"),
+          version: record?.version,
+          data: record?.data,
+        },
+        required: { updated: 1, conflict: n - 1, version: 2, data: results.indexOf("updated") },
+      }
+    },
+  },
+  {
     id: "delete",
     title: "delete removes a record so its key can be created again",
     kind: "plain",
@@ -364,7 +384,7 @@ const CHECKS: readonly Check[] = [
   {
     id: "tenant-isolation",
     title:
-      "No operation in one tenant reads or changes another tenant's records, counters or audit",
+      "No operation in one tenant, resetCounter included, reads or changes another tenant's records, counters or audit",
     kind: "plain",
     async run(store) {
       await store.createUnique(A, { collection: "c", key: "k", owner: "o", data: "a" })
@@ -388,11 +408,18 @@ const CHECKS: readonly Check[] = [
           data: "b",
         }),
       }
+      // B's counter now stands at 1. Resetting it must leave A's counter, also at 1, where it was.
+      await store.resetCounter(B, "n")
+      const counters = {
+        a: (await store.increment(A, "n", HOUR, 0)).count,
+        b: (await store.increment(B, "n", HOUR, 0)).count,
+      }
       const inA = await store.get(A, "c", "k")
       const inB = await store.get(B, "c", "k")
       return {
         observed: {
           fromB,
+          counters,
           inA: [inA?.data, inA?.version, inA?.revokedAt, inA?.consumedAt],
           auditA: await store.readAudit(A, "s", 1, 10),
           auditB: await store.readAudit(B, "s", 1, 10),
@@ -412,6 +439,7 @@ const CHECKS: readonly Check[] = [
             appendAudit: "appended",
             createUnique: "created",
           },
+          counters: { a: 2, b: 1 },
           inA: ["a", 1, null, null],
           auditA: [{ stream: "s", seq: 1, record: "a" }],
           auditB: [{ stream: "s", seq: 1, record: "b" }],

@@ -79,7 +79,9 @@ request object would each carry that framework's parsing decisions into the core
 ### 2. The core owns all parsing and validation
 
 The core alone reads the content type, enforces the body size limit, parses forms and JSON, and parses and serialises
-cookies. A body over the limit is refused before parsing. A content type the route does not accept is refused.
+cookies. A body over the limit is refused before parsing. A content type the route does not accept is refused. A form
+keeps a leading `?` as part of its first field name, and a form field whose percent escapes are malformed or do not
+decode to UTF-8 is refused rather than read with replacement characters.
 Each route declares the fields it reads; the core parses only those, and a body that carries any other field is
 refused with a 400, so a request can never set a server-owned field such as a verified flag, a tenant or a status.
 

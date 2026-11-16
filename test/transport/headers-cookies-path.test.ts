@@ -129,6 +129,7 @@ describe("rawPath", () => {
     expect(rawPath("/auth/session#frag")).toBe("/auth/session")
     expect(rawPath("https://app.example")).toBe("/")
     expect(rawPath("http://app.example:8080/a")).toBe("/a")
+    expect(rawPath("https://app.example\\ignored/auth/session")).toBe("\\ignored/auth/session")
   })
 
   it("refuses a URL that is neither absolute nor origin-form", () => {
@@ -185,6 +186,9 @@ describe("matchAuthPath", () => {
       "https://app.example/auth\\session",
       "https://app.example/auth/sess%5cion",
       "https://app.example/auth/se\tssion",
+      // A URL parser reads this backslash as the first path separator, so it must never be taken as authority.
+      "https://app.example\\ignored/auth/session",
+      "https://app.example\\",
     ]) {
       expect(
         refusal(() => matchAuthPath(url)),

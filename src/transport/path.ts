@@ -7,7 +7,9 @@
 
 import { TransportError } from "../core/errors.js"
 
-const ABSOLUTE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]*/
+// The authority stops at a backslash too: a URL parser reads one there as the first path separator, so it is left in
+// the path, where it is refused.
+const ABSOLUTE = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#\\]*/
 
 /** The path of an absolute or origin-form URL, exactly as sent. */
 export function rawPath(url: string): string {

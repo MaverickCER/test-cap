@@ -3,7 +3,9 @@
  * package.json (env-cap ADR 0014), so an app that lists `test-cap` in its `packages` gets these variables documented
  * and validated with its own.
  *
- * Three contracts, so an app is only asked for what it turns on: the core (always), audit, and SAML. APP_ORIGIN,
+ * Three contracts, so an app is only asked for what it turns on: the core (always), audit, and SAML. The audit and SAML
+ * variables belong to the env-cap validation contexts `test-cap-audit` and `test-cap-saml`, so a manifest that lists
+ * all three contracts validates them only when the app passes those contexts in `activeContexts`. APP_ORIGIN,
  * APP_SYSTEM_ID and APP_ENV are declared identically by every cap; env-cap reports any drift between them as
  * `DUPLICATE_VARIABLE_DOCUMENTATION` (env-cap ADR 0050). Each key's expiry belongs to the app's copy of the key, so the
  * app adds `expiresAt` in its own declaration and env-cap merges it with this one.
@@ -93,18 +95,20 @@ documentEnv(testCapSchema, {
 
 const testCapAuditSchema = {
   AUTH_AUDIT_KEY: {
+    context: "test-cap-audit",
     processor: text,
     validator: (value: string, raw: Readonly<Record<string, unknown>>) =>
       keyRingVariableProblem("AUTH_AUDIT_KEY", value, raw),
   },
   AUTH_AUDIT_SIGNING_KEY: {
+    context: "test-cap-audit",
     processor: text,
     validator: (value: string, raw: Readonly<Record<string, unknown>>) =>
       keyRingVariableProblem("AUTH_AUDIT_SIGNING_KEY", value, raw),
   },
 }
 
-/** The audit contract: needed only when the audit trail is on. */
+/** The audit contract: validated only when the app turns the audit trail on with the `test-cap-audit` context. */
 export const testCapAuditEnv = createEnv(testCapAuditSchema, {
   name: "test-cap-audit",
   source: import.meta.url,
@@ -141,18 +145,20 @@ documentEnv(testCapAuditSchema, {
 
 const testCapSamlSchema = {
   AUTH_SAML_SP_PRIVATE_KEY: {
+    context: "test-cap-saml",
     processor: text,
     validator: (value: string, raw: Readonly<Record<string, unknown>>) =>
       pemProblem("AUTH_SAML_SP_PRIVATE_KEY", "PRIVATE KEY", value, raw),
   },
   AUTH_SAML_SP_CERT: {
+    context: "test-cap-saml",
     processor: text,
     validator: (value: string, raw: Readonly<Record<string, unknown>>) =>
       pemProblem("AUTH_SAML_SP_CERT", "CERTIFICATE", value, raw),
   },
 }
 
-/** The SAML contract: needed only when SAML is on. */
+/** The SAML contract: validated only when the app turns SAML on with the `test-cap-saml` context. */
 export const testCapSamlEnv = createEnv(testCapSamlSchema, {
   name: "test-cap-saml",
   source: import.meta.url,

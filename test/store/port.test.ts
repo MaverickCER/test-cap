@@ -75,6 +75,17 @@ describe("assertJson", () => {
       new TypeError("data.a.b is not plain JSON."),
     )
   })
+
+  it("refuses a sparse array, which a JSON round trip would turn into nulls", () => {
+    expect(() => assertJson(new Array(1))).toThrow(
+      new TypeError("data[0] is missing, so the array is not plain JSON."),
+    )
+    // eslint-disable-next-line no-sparse-arrays -- the hole is the case under test
+    expect(() => assertJson({ list: [1, , 3] }, "record")).toThrow(
+      new TypeError("record.list[1] is missing, so the array is not plain JSON."),
+    )
+    expect(() => assertJson([undefined])).toThrow(new TypeError("data[0] is not plain JSON."))
+  })
 })
 
 describe("assertNewRecord", () => {

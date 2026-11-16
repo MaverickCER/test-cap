@@ -27,13 +27,15 @@ type Manifest = Parameters<typeof validateEnv>[0]["manifest"]
 async function problems(
   values: Record<string, string | undefined>,
   manifest: Manifest = [testCapEnv],
+  activeContexts: string[] = [],
 ): Promise<string[]> {
   try {
-    await validateEnv({ values, manifest })
+    await validateEnv({ values, manifest, activeContexts })
     return []
   } catch (error) {
     if (!(error instanceof EnvValidationError)) throw error
-    return error.message.split("\n").filter((line) => /APP_|AUTH_/.test(line))
+    // Keep the validator messages, which start with the variable name and a space, not the bare name headings.
+    return error.message.split("\n").filter((line) => /^(APP|AUTH)_[A-Z_]+ /.test(line))
   }
 }
 
@@ -88,6 +90,7 @@ describe("the variable each validator names", () => {
         AUTH_SAML_SP_CERT: pem("PRIVATE KEY"),
       },
       [testCapEnv, testCapAuditEnv, testCapSamlEnv],
+      ["test-cap-audit", "test-cap-saml"],
     )
     for (const variable of [
       "AUTH_ENCRYPTION_KEY",
@@ -103,14 +106,29 @@ describe("the variable each validator names", () => {
 })
 
 describe("the capability contracts", () => {
-  it("ask for the audit keys only through the audit contract", async () => {
+  it("leave a core-only production app alone when a manifest lists all three", async () => {
+    // A manifest env-cap generates from `packages: ["test-cap"]` lists every contract the package declares.
+    expect(await problems(production, [testCapEnv, testCapAuditEnv, testCapSamlEnv])).toEqual([])
+  })
+
+  it("ask for the audit keys only when the app turns on the test-cap-audit context", async () => {
     const values = { ...production, AUTH_AUDIT_KEY: key(3), AUTH_AUDIT_SIGNING_KEY: key(4) }
-    await validateEnv({ values, manifest: [testCapEnv, testCapAuditEnv] })
+    await validateEnv({
+      values,
+      manifest: [testCapEnv, testCapAuditEnv],
+      activeContexts: ["test-cap-audit"],
+    })
     expect(testCapAuditEnv.AUTH_AUDIT_KEY).toBe(values.AUTH_AUDIT_KEY)
     resetEnvCache()
-    expect((await problems(production, [testCapEnv, testCapAuditEnv])).join("\n")).toMatch(
-      /AUTH_AUDIT_KEY/,
-    )
+    expect(
+      await problems(production, [testCapEnv, testCapAuditEnv, testCapSamlEnv], ["test-cap-audit"]),
+    ).toEqual(["AUTH_AUDIT_KEY is missing.", "AUTH_AUDIT_SIGNING_KEY is missing."])
+  })
+
+  it("ask for the SAML key and certificate only when the app turns on the test-cap-saml context", async () => {
+    expect(
+      await problems(production, [testCapEnv, testCapAuditEnv, testCapSamlEnv], ["test-cap-saml"]),
+    ).toEqual(["AUTH_SAML_SP_PRIVATE_KEY is missing.", "AUTH_SAML_SP_CERT is missing."])
   })
 
   it("ask for the SAML key and certificate only through the SAML contract", async () => {
@@ -120,16 +138,19 @@ describe("the capability contracts", () => {
       AUTH_SAML_SP_PRIVATE_KEY: pem("PRIVATE KEY"),
       AUTH_SAML_SP_CERT: pem("CERTIFICATE"),
     }
-    await validateEnv({ values, manifest: [testCapEnv, testCapSamlEnv] })
+    await validateEnv({
+      values,
+      manifest: [testCapEnv, testCapSamlEnv],
+      activeContexts: ["test-cap-saml"],
+    })
     resetEnvCache()
     expect(
-      (
-        await problems({ ...values, AUTH_SAML_SP_CERT: pem("PRIVATE KEY") }, [
-          testCapEnv,
-          testCapSamlEnv,
-        ])
-      ).join("\n"),
-    ).toMatch(/AUTH_SAML_SP_CERT/)
+      await problems(
+        { ...values, AUTH_SAML_SP_CERT: pem("PRIVATE KEY") },
+        [testCapEnv, testCapSamlEnv],
+        ["test-cap-saml"],
+      ),
+    ).toEqual(["AUTH_SAML_SP_CERT must be one PEM block labelled CERTIFICATE."])
   })
 })
 
@@ -188,5 +209,33 @@ describe("validators", () => {
     expect(pemProblem("AUTH_SAML_SP_CERT", "CERTIFICATE", "", { APP_ENV: "development" })).toBe(
       true,
     )
+  })
+
+  it("pemProblem accepts CRLF and LF line endings and refuses a bare CR, which OpenSSL cannot read", () => {
+    for (const [variable, label] of [
+      ["AUTH_SAML_SP_CERT", "CERTIFICATE"],
+      ["AUTH_SAML_SP_PRIVATE_KEY", "PRIVATE KEY"],
+    ] as const) {
+      const lines = [`-----BEGIN ${label}-----`, "MIIB", "AAAA", `-----END ${label}-----`]
+      for (const eol of ["\r\n", "\n"]) {
+        expect(
+          pemProblem(variable, label, `${lines.join(eol)}${eol}`, { APP_ENV: "production" }),
+          eol,
+        ).toBe(true)
+      }
+      expect(pemProblem(variable, label, lines.join("\r"), { APP_ENV: "production" })).toBe(
+        `${variable} must be one PEM block labelled ${label}.`,
+      )
+      expect(
+        pemProblem(
+          variable,
+          label,
+          `-----BEGIN ${label}-----\r\nMI\tIB\r\n-----END ${label}-----`,
+          {
+            APP_ENV: "production",
+          },
+        ),
+      ).toBe(`${variable} must be one PEM block labelled ${label}.`)
+    }
   })
 })

@@ -185,7 +185,12 @@ export function assertJson(value: unknown, path = "data"): asserts value is Json
     return
   }
   if (Array.isArray(value)) {
-    value.forEach((item, index) => assertJson(item, `${path}[${index}]`))
+    // `keys()` visits every index, holes included; `forEach` would skip a hole that JSON turns into `null`.
+    for (const index of value.keys()) {
+      if (!Object.hasOwn(value, index))
+        throw new TypeError(`${path}[${index}] is missing, so the array is not plain JSON.`)
+      assertJson(value[index], `${path}[${index}]`)
+    }
     return
   }
   if (typeof value === "object" && isPlainObject(value)) {

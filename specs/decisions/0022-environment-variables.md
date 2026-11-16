@@ -113,18 +113,28 @@ Override: the app passes plain values.
 
 ## Open
 
-1. **Main entry versus `test-cap/env`.** Settled in phase 2. env-cap discovers the contracts through
-   `"envCap": { "schema": "./src/env.schema.ts" }` in `package.json`, and the schema file ships in the tarball, so
-   the main entry does not need to re-export them. `@maverickcer/env-cap` is an optional peer dependency: an app that
-   uses env-cap already has it, and an app that does not passes plain values (section 4). A regular dependency was
-   tried and rejected, because it put env-cap's own build-time dependencies (its TypeScript scanner and `minimatch`)
-   into every app's production tree, which the `Licenses` and `SecurityDeps` checks refused.
+1. **Main entry versus `test-cap/env`.** Reopened after the phase 2 review. env-cap finds the schema through
+   `"envCap": { "schema": "./src/env.schema.ts" }` in `package.json`, and the schema file ships in the tarball, but
+   that is only half of discovery: the manifest env-cap generates imports `testCapEnv`, `testCapAuditEnv` and
+   `testCapSamlEnv` from the bare name `test-cap`, so the main entry must export them, as the Context says. Phase 2's
+   main entry does not, so an app that lists `test-cap` in env-cap's `packages` gets a manifest that does not compile.
+   `@maverickcer/env-cap` is an optional peer dependency: an app that uses env-cap already has it, and an app that does
+   not passes plain values (section 4). Exporting the contracts from the main entry would import env-cap whenever
+   `test-cap` loads, which breaks that. A regular dependency was tried and rejected, because it put env-cap's own
+   build-time dependencies (its TypeScript scanner and `minimatch`) into every app's production tree, which the
+   `Licenses` and `SecurityDeps` checks refused. The owner decides between a regular dependency on a future env-cap
+   runtime entry without those dependencies, an env-cap option that names the import path for a package's contracts,
+   and dropping the `envCap` field until one of them exists.
 2. **Where the shared fixture lives.** The plan pins the three shared variables to "one fixture" without naming its
    home. Recommendation: internal-package-contract, which every cap already depends on, with each cap's test comparing
    its own declarations against it.
 3. **Variables needed only for some capabilities.** The audit and SAML keys are required only when those capabilities
    are on. Recommendation: three contracts, `testCapEnv` (core), `testCapAuditEnv` (audit) and `testCapSamlEnv`
-   (SAML), so an app without audit is never asked for audit keys. Phase 2 built them this way.
+   (SAML), so an app without audit is never asked for audit keys. Phase 2 built them this way. A manifest env-cap
+   generates from `packages` lists all three, so the audit variables carry the env-cap validation context
+   `test-cap-audit` and the SAML variables `test-cap-saml` (env-cap ADR 0022). env-cap validates a variable with a
+   context only when the app passes that context in `activeContexts`, so the app turns each capability's variables on
+   by naming it, and an app that passes the generated `activeContexts` unchanged turns both on.
 4. **The key format.** `AUTH_ENCRYPTION_KEY`, `AUTH_CSRF_KEY`, `AUTH_AUDIT_KEY` and `AUTH_AUDIT_SIGNING_KEY` each carry
    a key id and rotate, so one variable holds more than one key. Recommendation: each is a key ring, a comma-separated
    list of `id:base64url` entries, the first one current and the rest used only to decrypt or verify; each parsed entry
