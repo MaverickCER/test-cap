@@ -4,7 +4,8 @@ test-cap is an internal authentication package: one framework-free core, thin ad
 stores the app supplies, and an interface layer built on one form model. This document is the map. Each decision it
 relies on lives in an ADR under [decisions/](decisions/), and each flow's threats live in
 [threat-model.md](threat-model.md); this file names them rather than repeating them. Terms are defined in the
-[glossary](../GLOSSARY.md).
+[glossary](../GLOSSARY.md). A recommendation under any document's Open heading is a provisional default until the
+owner decides.
 
 ## The shape
 
@@ -65,7 +66,11 @@ and from phase 2 on, when an exported type is missing from this table.
 | `Auth` (`handle`, `session`, `require`, `admin`)                                   | `test-cap`                | 0003 |
 | `PlainRequest`, `PlainResponse`                                                    | `test-cap`                | 0003 |
 | `Clock`, `RandomSource`                                                            | `test-cap`                | 0003 |
+| `TransportError`, `ConfigError`                                                    | `test-cap`                | 0003 |
+| `TransportErrorCode`                                                               | `test-cap`                | 0003 |
+| `FixedClock`, `fixedClock`, `sequenceRandom`                                       | `test-cap`                | 0003 |
 | `DeploymentMode`                                                                   | `test-cap`                | 0026 |
+| `RingKey`                                                                          | `test-cap`                | 0022 |
 | `AuthenticationEvidence`, `KeyProtection`                                          | `test-cap`                | 0005 |
 | `SessionAssurance`, `AssuranceLevel`                                               | `test-cap`                | 0005 |
 | `RequireResult` (`allow`, `step-up`, `enroll`, `recovery-only`, `unauthenticated`) | `test-cap`                | 0005 |
@@ -73,13 +78,17 @@ and from phase 2 on, when an exported type is missing from this table.
 | `SessionInfo`                                                                      | `test-cap`                | 0006 |
 | `Subject`, `UserSubject`, `ServiceSubject`, `AgentSubject`                         | `test-cap`                | 0013 |
 | `Impersonator`, `BreakGlassGrant`                                                  | `test-cap`                | 0014 |
-| `TrustConfig`, `TrustedIssuer`                                                     | `test-cap`                | 0008 |
+| `TrustConfig`, `TrustedIssuer`                                                     | `test-cap`                | 0005 |
 | `ThrottleConfig`, `TrustedProxies`, `ChallengeHook`                                | `test-cap`                | 0009 |
 | `BreachedPasswordConfig`                                                           | `test-cap`                | 0010 |
 | `SendEmail`, `EmailMessage`                                                        | `test-cap`                | 0021 |
 | `TenantId`, `TenantConfig`                                                         | `test-cap`                | 0012 |
 | `SecurityEvent`, `EventSink`                                                       | `test-cap`                | 0015 |
 | `AuthStore`, `StoreTransaction`                                                    | `test-cap`                | 0002 |
+| `StoredRecord`, `NewRecord`, `JsonValue`                                           | `test-cap`                | 0002 |
+| `ConformanceReport`, `ConformanceResult`                                           | `test-cap/conformance`    | 0002 |
+| `StoreOperations`, `RecordChange`, `CounterState`, `AuditEntry`                    | `test-cap`                | 0002 |
+| `ConformanceOptions`                                                               | `test-cap/conformance`    | 0002 |
 | `memoryStore()`                                                                    | `test-cap/store/memory`   | 0002 |
 | `sqlStore(options)`, `SqlDialect`, `migrations(dialect)`                           | `test-cap/store/sql`      | 0002 |
 | `runAuthStoreConformance(createStore)`                                             | `test-cap/conformance`    | 0002 |
@@ -88,7 +97,7 @@ and from phase 2 on, when an exported type is missing from this table.
 | `AuditRecord`, `AuditSink`, `Checkpoint`, `verifyAudit`, `AuditVerification`       | `test-cap/audit`          | 0020 |
 | `sessionTimeline`, `accessReport`                                                  | `test-cap/audit`          | 0020 |
 | `PolicyReport`, `renderPolicyReport`                                               | `test-cap/report`         | 0005 |
-| `env`, the env-cap schema                                                          | `test-cap/env`            | 0022 |
+| `testCapEnv`, `testCapAuditEnv`, `testCapSamlEnv` (the env-cap contracts)          | `test-cap/env`            | 0022 |
 | `expressAuth(auth, options)`                                                       | `test-cap/express`        | 0024 |
 | `TestCapModule`, `AuthGuard`, `@Public()`, `@RequireAuth()`                        | `test-cap/nest`           | 0024 |
 | `nextAuthHandler`, `nextServerAuth`, `nextProxy`                                   | `test-cap/next`           | 0024 |
@@ -106,8 +115,9 @@ Names are provisional until their phase lands; a rename updates this table in th
 
 `createAuth(config)` returns `auth`:
 
-- `auth.handle(req: PlainRequest): Promise<PlainResponse>` serves every `/auth/*` route, the default pages and the
-  hashed assets. This is what adapters call (ADR 0003).
+- `auth.handle(req: PlainRequest): Promise<PlainResponse | null>` serves every `/auth/*` route, the default pages and
+  the hashed assets, and answers `null` for a path outside them, so the adapter passes the request on (ADR 0003,
+  Open 4). This is what adapters call.
 - `auth.session(req)` returns the current `SessionInfo` or `null`, after revocation and expiry are checked against
   the store; no cached answer skips that check (ADR 0006).
 - `auth.require(req, requirementId)` returns a `RequireResult` (ADR 0005):
@@ -153,7 +163,7 @@ Logical records, each scoped to a tenant (ADR 0012). The SQL store's tables and 
 | identifier             | account, kind (email), value (normalised), verified at; unique per tenant                    | F01, F08      |
 | authenticator          | account, method, public data, encrypted secret and key id, key protection, failures, created | F03, F05, F07 |
 | linked identity        | account, issuer, subject; unique per tenant and issuer                                       | F11, F12      |
-| session                | token hash (SHA-256), subject, session assurance, idle and absolute expiry, revoked at       | F02–F18       |
+| session                | token hash (SHA-256), subject, evidence, state, idle and absolute expiry, revoked at         | F02–F18       |
 | one-time secret        | purpose, hash, expiry, consumed at (consumed through `consumeOnce`)                          | F07–F11       |
 | counter                | key, window, count (through `increment`)                                                     | F02–F12       |
 | federation transaction | id, state, nonce, PKCE verifier, `InResponseTo`, expiry, consumed at                         | F11, F12      |
@@ -169,8 +179,8 @@ Each flow lists what it produces. The threats and the design element stopping ea
 - **F01 Sign-up.** Identifier first; the account starts in the pre-auth state; email confirmation (F08) runs
   alongside; the account must enrol a passkey, or a password plus TOTP, before any requirement allows it. Produces
   an Account Change event (Create).
-- **F02 Password sign-in.** argon2id verify under a fixed cost and a concurrency limit, with a dummy hash for unknown
-  accounts. Evidence: one factor, AAL1. Throttled per ADR 0009.
+- **F02 Password sign-in.** argon2id verify under a fixed cost and a concurrency limit, with a dummy hash whenever no
+  stored password hash is verified. Evidence: one factor, AAL1. Throttled per ADR 0009.
 - **F03 TOTP enrolment.** Secret generated by the injected random source, shown once, stored AES-GCM encrypted
   (ADR 0027), confirmed by one valid code before it counts.
 - **F04 TOTP verification.** RFC 6238 over Web Crypto HMAC; a time step already used is rejected. With a password,
@@ -183,24 +193,25 @@ Each flow lists what it produces. The threats and the design element stopping ea
   more than the account's proven evidence (ADR 0007).
 - **F08 Email confirmation.** At least 6 digits, at most 24 hours, single use. Confirms an address; never raises
   assurance (ADR 0021).
-- **F09 Email recovery and password reset.** Same code rules as F08; leads to the recovery-only state; credential
-  changes rotate the session and revoke the others (ADR 0007, ADR 0006).
+- **F09 Email recovery and password reset.** Same code rules as F08; leads to the recovery-only state. Completing it
+  revokes the account's other sessions and outstanding emailed codes; the recovery-only session then ends and the
+  person signs in with the new authenticators (ADR 0007, Open 5).
 - **F10 Email sign-in (opt-in).** A declared deviation; cannot satisfy AAL2 (ADR 0021).
 - **F11 OIDC sign-in and linking.** `oauth4webapi`, state, nonce, PKCE S256, `response_mode=query`, issuer
   allowlist; AAL1 unless the trust config maps the issuer's `acr`/`amr` (ADR 0005, ADR 0008).
 - **F12 SAML sign-in.** Node only, last phase, behind its own gate (ADR 0028); the POST binding uses the federation
   transaction cookie (ADR 0006).
 - **F13 Step-up.** Runs any ceremony inside a session; the new evidence is added and the token rotates.
-- **F14 Session lifecycle.** Opaque token, stored as a hash, rotated on sign-in, step-up, privilege change and
-  impersonation; idle and absolute limits per level; list and remote revoke (ADR 0006).
+- **F14 Session lifecycle.** Opaque token, stored as a hash, rotated on every change of trust (ADR 0006, section 5);
+  idle and absolute limits per level; list and remote revoke (ADR 0006).
 - **F15 API keys.** Hashed, scoped, mandatory expiry; a `service` subject with no assurance level (ADR 0013).
 - **F16 Delegations.** Issued from a session, short-lived, scoped, revocable; an `agent` subject with `actingFor`
   (ADR 0013).
 - **F17 Impersonation.** A fresh AAL2+ admin session, a reason and a time limit; flagged on every event; credential
   changes blocked (ADR 0014).
 - **F18 Break-glass.** As F17, outside the normal requirements, listed for review (ADR 0014).
-- **F19 Deprovision.** The hook a SCIM server calls: disables the account and revokes every session and delegation
-  (ADR 0012).
+- **F19 Deprovision.** The hook a SCIM server calls: marks the account disabled, so no ceremony produces evidence for
+  it, and revokes every session and delegation (ADR 0012).
 - **F20 Audit.** The app records activity; records are chained and checkpointed; `verifyAudit` checks them
   (ADR 0020).
 - **F21 Default pages.** Server-rendered from the form model; progressive enhancement; strict CSP with no inline
@@ -216,16 +227,8 @@ for each point.
 
 ## Runtime support
 
-Per capability, from CI over the built `dist/` (ADR 0023):
-
-| Capability                                 | Node 22/24 | Bun         | Deno        | Edge        |
-| ------------------------------------------ | ---------- | ----------- | ----------- | ----------- |
-| Core, sessions, policy, TOTP, forms, pages | CI         | CI          | CI          | not claimed |
-| Passwords (`hash-wasm`)                    | CI         | CI          | CI          | not claimed |
-| Passkeys (`@simplewebauthn/server`)        | CI         | CI          | CI          | not claimed |
-| OIDC (`oauth4webapi`)                      | CI         | CI          | CI          | not claimed |
-| Audit (Ed25519, HMAC on Web Crypto)        | CI         | CI          | CI          | not claimed |
-| SAML (`@node-saml/node-saml`)              | CI         | unsupported | unsupported | unsupported |
+Support is stated per capability, and every claimed cell is a CI job over the built `dist/`. The table lives in
+[ADR 0023](decisions/0023-runtime-support-per-capability.md), section 1, and only there.
 
 ## Stated gaps
 

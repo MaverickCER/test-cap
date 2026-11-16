@@ -5,7 +5,8 @@
 Accepted (2026-11-15). Implemented in phase 4 (recovery codes, the recovery-only state, and the recovery attack
 tests) and phase 5 (recovery by email, including password reset).
 
-Answers handoff question 7 (account recovery), partly: admin-assisted recovery is left open (see Open).
+Answers [handoff question](../../GLOSSARY.md) 7 (account recovery), partly: admin-assisted recovery is left open (see
+Open).
 
 Planned tests:
 
@@ -16,11 +17,17 @@ Planned tests:
 - `test/recovery/recovery-only-state.test.ts` (`auth.require` answers `recovery-only` for every requirement; only the
   replacement actions succeed);
 - `test/recovery/recovery-revokes-sessions.test.ts`;
+- `test/attacks/outstanding-codes-survive-recovery.test.ts` (an emailed recovery code issued before a completed
+  recovery no longer works);
 - `test/assurance/recovery-yields-no-assurance.test.ts` (no recovery path produces evidence or a level);
 - `test/attacks/recovery-below-account-level.test.ts` (an AAL3 account recovered by email does not come out holding
   AAL3, or AAL2, from the recovery itself);
-- `test/attacks/otp-redemption-race.test.ts` (parallel redemptions of one recovery code, exactly one wins);
-- `test/attacks/recovery-code-guessing.test.ts` (email codes are throttled per ADR 0009).
+- `test/attacks/redemption-race.test.ts` (parallel redemptions of one recovery code, exactly one wins);
+- `test/attacks/email-code-brute-force.test.ts` (email codes are throttled per ADR 0009);
+- `test/attacks/recovery-code-brute-force.test.ts` (saved recovery codes are throttled per ADR 0009);
+- `test/attacks/recovery-code-weak-storage.test.ts` (a stored code is an argon2id hash with its own salt).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -77,12 +84,15 @@ everything after.
 
 ### 4. Recovery revokes the account's other sessions and emits events
 
-Completing a recovery is a credential change: it revokes the account's other sessions (ADR 0006) and emits a security
+Completing a recovery is a credential change: it revokes the account's other sessions (ADR 0006), revokes every
+outstanding emailed recovery code of the account with `revokeByOwner` (ADR 0002), and emits a security
 event (OCSF Account Change: Password Reset for a reset, MFA Factor Enable or Disable for authenticator changes; ADR
 0015).
 
 Why: a person who recovers an account usually suspects someone else has it. Their sessions must end with the old
-authenticators.
+authenticators, and a second emailed code sitting in the same mailbox must not open a second recovery. Saved recovery
+codes stay valid apart from the one redeemed; generating a new set during recovery invalidates the old set
+(section 1).
 
 ## Consequences
 

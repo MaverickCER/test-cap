@@ -126,7 +126,7 @@ describe("requirement mapping", () => {
       const numbers = adrs.match(/\d{4}/g) ?? []
       expect(numbers.length, `${id}: ADR`).toBeGreaterThan(0)
       for (const adr of numbers) expect(decisionNumbers.has(adr), `${id}: ADR ${adr}`).toBe(true)
-      expect(/^`test\/.+\.test\.ts`|^none: \S/.test(test), `${id}: test "${test}"`).toBe(true)
+      expect(/^`test\/.+\.test\.tsx?`|^none: \S/.test(test), `${id}: test "${test}"`).toBe(true)
     }
   })
 })

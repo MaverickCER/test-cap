@@ -6,19 +6,29 @@ Accepted (2026-11-15). Implemented in phase 8, as its last capability. Flow: F12
 
 - `test/saml/interop-local-idp.test.ts`
 - `test/saml/post-binding-tx-cookie.test.ts`
-- `test/attacks/saml/signature-wrapping.test.ts`
-- `test/attacks/saml/multiple-signed-info.test.ts`
-- `test/attacks/saml/digest-comment-injection.test.ts`
-- `test/attacks/saml/comment-node-splitting.test.ts`
-- `test/attacks/saml/unsigned-assertion.test.ts`
-- `test/attacks/saml/attacker-key-in-message.test.ts`
-- `test/attacks/saml/weak-algorithms.test.ts`
-- `test/attacks/saml/audience-and-destination.test.ts`
-- `test/attacks/saml/replay-in-response-to.test.ts`
-- `test/attacks/saml/xml-entity-and-size.test.ts`
+- `test/attacks/saml-signature-wrapping.test.ts`
+- `test/attacks/saml-multiple-root-elements.test.ts`
+- `test/attacks/saml-assertion-read-from-unsigned-document.test.ts`
+- `test/attacks/saml-keyinfo-certificate-trusted.test.ts`
+- `test/attacks/saml-digest-value-comment.test.ts`
+- `test/attacks/saml-multiple-signedinfo-references.test.ts`
+- `test/attacks/saml-comment-node-splitting.test.ts`
+- `test/attacks/saml-hmac-key-confusion.test.ts`
+- `test/attacks/saml-weak-encryption-algorithm.test.ts`
+- `test/attacks/saml-audience-not-checked.test.ts`
+- `test/attacks/saml-response-replay.test.ts`
+- `test/attacks/saml-unsolicited-response.test.ts`
+- `test/attacks/saml-expired-assertion.test.ts`
+- `test/attacks/saml-detached-signature-not-bound.test.ts`
+- `test/attacks/saml-xml-resource-exhaustion.test.ts`
+- `test/attacks/saml-xml-injection-in-sp-output.test.ts`
+- `test/attacks/saml-parser-misinterpretation.test.ts`
+- `test/attacks/saml-relaystate-open-redirect.test.ts`
 - `test/surface/saml-isolation.test.ts`
 - `test/supply-chain/xml-crypto-floor.test.ts`
 - `test/cross-runtime/saml-node-only.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -63,7 +73,8 @@ SAML is the last capability built in phase 8. It enters `exports` only when its 
 
 - **Interop** against a local test identity provider in CI: sign-in with the POST binding, signed responses and signed
   assertions.
-- **Every XML-signature advisory class as a negative test**, each one under `test/attacks/saml/`: signature wrapping,
+- **Every XML-signature advisory class as a negative test**, each one a `saml-*` entry of the attack catalogue with
+  its test at `test/attacks/<id>.test.ts` (listed in Status): signature wrapping,
   multiple `SignedInfo`, comments inside `DigestValue` or `NameID`, an unsigned assertion inside a signed response, a
   key or certificate supplied in the message instead of the configured one, weak algorithms (SHA-1 digests, RSA-1.5,
   3DES), audience, recipient and destination mismatches, replay of a response or its `InResponseTo`, and XML entity
@@ -76,10 +87,10 @@ Override: none. An app without SAML is unaffected by the gate.
 
 ### 4. A separate entry that only SAML apps load
 
-SAML lives in an entry of its own. Nothing in the main entry or any other entry imports it, and a test checks the built
-import graph. The entry's name and how `@node-saml/node-saml` is installed are open in
-[ADR 0004](0004-package-entries-and-capability-gates.md) (Open 1, which recommends `test-cap/saml` and an optional peer
-dependency).
+SAML lives in an entry of its own, whose `samlProvider(options)` configures the service provider. Nothing in the main
+entry or any other entry imports it, and a test checks the built import graph. The entry's name and how
+`@node-saml/node-saml` is installed are open in [ADR 0004](0004-package-entries-and-capability-gates.md) (Open 1, which
+recommends `test-cap/saml` and an optional peer dependency).
 
 Why: an app without SAML should never load `xml-crypto` or `@xmldom/xmldom`, so their advisories cannot reach it.
 
@@ -130,6 +141,7 @@ The service provider signs with `AUTH_SAML_SP_PRIVATE_KEY` and publishes `AUTH_S
 2. **Which local test identity provider.** Recommendation: Keycloak in a Docker service container, which can sign
    responses, assertions or both.
 3. **Mapping SAML authentication context.** The trust config maps OIDC `acr` and `amr`. Recommendation: it maps SAML's
-   `AuthnContextClassRef` the same way, with a maximum authentication age, so an unmapped context stays AAL1.
+   `AuthnContextClassRef` the same way, with a maximum authentication age and the same AAL2 cap
+   ([ADR 0005](0005-policy-and-evidence-based-assurance.md), section 3), so an unmapped context stays AAL1.
 4. **Unsolicited responses.** A response with no `InResponseTo` (IdP-initiated sign-in) has no federation transaction
    to bind to. Recommendation: reject it by default.

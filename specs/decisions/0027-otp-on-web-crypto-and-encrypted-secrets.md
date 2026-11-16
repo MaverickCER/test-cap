@@ -8,11 +8,12 @@ F04 (TOTP verification). Pinned by:
 - `test/otp/hotp-rfc4226-vectors.test.ts`
 - `test/otp/totp-rfc6238-vectors.test.ts`
 - `test/otp/truncation-and-counter.test.ts`
-- `test/attacks/totp-same-step-replay.test.ts`
-- `test/attacks/totp-concurrent-same-code.test.ts`
+- `test/attacks/totp-code-replay.test.ts`
 - `test/crypto/secret-encryption.test.ts`
 - `test/crypto/key-rotation.test.ts`
-- `test/attacks/otp-secret-at-rest.test.ts`
+- `test/attacks/totp-secret-read-at-rest.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -51,10 +52,14 @@ authenticator app.
 ### 3. A time step is accepted at most once
 
 After a code is accepted for an authenticator, a second code for the same time step is rejected, even if it is correct.
-The check is an atomic operation (`consumeOnce`, [ADR 0002](0002-store-port-and-atomic-operations.md)), so two
-concurrent requests with the same code cannot both succeed.
+The authenticator's record stores the last accepted step. A verification reads the record, checks that the code's step
+is later than the stored one, and writes the new step with the compare-and-set `update(..., expectedVersion, ...)`
+([ADR 0002](0002-store-port-and-atomic-operations.md)). Of two concurrent requests with the same code, one write
+succeeds and the other gets `conflict` and fails, so both cannot succeed.
 
-Why: a code seen over a shoulder or through a phishing proxy is otherwise good for the rest of its step. The race is a
+Why: a code seen over a shoulder or through a phishing proxy is otherwise good for the rest of its step. `consumeOnce`
+takes a record that already exists, and nothing exists for a step until it is used, so the guarantee needs a
+compare-and-set on the stored last step instead. The race is a
 Better Auth advisory class (OTP race) and has its own attack test.
 
 Override: none.
@@ -75,7 +80,8 @@ Override: the app supplies and rotates the key.
 The docs and the policy report say that NIST requires access controls on OTP secrets (§3.1.4.2) and that encryption
 goes beyond it. They do not say NIST requires encryption.
 
-Why: stating a requirement NIST does not make would be the over-claim the house rules forbid.
+Why: stating a requirement NIST does not make would be an over-claim, and ADR 0019 (section 5) holds every document to
+what test-cap's own evidence shows.
 
 ## Consequences
 

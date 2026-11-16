@@ -13,6 +13,8 @@ keys); the audit keys land in phase 8 with the audit trail, and the SAML keys in
 - `test/env/secrets-documented.test.ts`
 - `test/examples/env-startup-validation.test.ts`
 
+The recommendations under Open are provisional defaults until the owner decides.
+
 ## Context
 
 Owner requirement 7: env-cap shares the required environment variables across the cap packages. Each cap needs some
@@ -118,7 +120,10 @@ Override: the app passes plain values.
    home. Recommendation: internal-package-contract, which every cap already depends on, with each cap's test comparing
    its own declarations against it.
 3. **Variables needed only for some capabilities.** The audit and SAML keys are required only when those capabilities
-   are on. Recommendation: three contracts (core, audit, SAML), so an app without audit is never asked for audit keys.
-4. **The key format.** `AUTH_ENCRYPTION_KEY` and `AUTH_AUDIT_KEY` carry a key id and rotate, so one variable holds more
-   than one key. Recommendation: a comma-separated list of `id:base64url` entries, the first one current and the rest
-   used only to decrypt or verify; ADRs 0020 and 0027 use this format.
+   are on. Recommendation: three contracts, `testCapEnv` (core), `testCapAuditEnv` (audit) and `testCapSamlEnv`
+   (SAML), so an app without audit is never asked for audit keys. Phase 2 built them this way.
+4. **The key format.** `AUTH_ENCRYPTION_KEY`, `AUTH_CSRF_KEY`, `AUTH_AUDIT_KEY` and `AUTH_AUDIT_SIGNING_KEY` each carry
+   a key id and rotate, so one variable holds more than one key. Recommendation: each is a key ring, a comma-separated
+   list of `id:base64url` entries, the first one current and the rest used only to decrypt or verify; each parsed entry
+   is a `RingKey` (its id and bytes). ADRs 0011, 0020 and 0027 use this format, and phase 2's startup check parses all
+   four this way. `AUTH_SAML_SP_PRIVATE_KEY` and `AUTH_SAML_SP_CERT` are single PEM blocks, not key rings.

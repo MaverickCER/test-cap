@@ -5,17 +5,17 @@
 Accepted (2026-11-15). Owner decision. Implemented in phase 1 (this record and the attack catalogue) and pinned from
 phase 4 onwards, as each advisory class gains its negative test.
 
-Answers handoff question 1 (Better Auth). It also removes the premise of questions 2 and 3, which assumed Better
-Auth's database adapters and its web `Request` handler; ADR 0002 and ADR 0003 answer them on their own terms.
+Answers [handoff question](../../GLOSSARY.md) 1 (Better Auth). It also removes the premise of questions 2 and 3, which
+assumed Better Auth's database adapters and its web `Request` handler; ADR 0002 and ADR 0003 answer them on their own
+terms.
 
 Planned tests:
 
-- `test/docs/better-auth-advisories-covered.test.ts` (each of the 49 advisory ids appears in the attack catalogue,
-  with a test or a "not applicable" reason);
-- the ten attack tests named in section 3;
+- `test/docs/attack-catalogue.test.ts` (each of the 49 advisory ids appears in the attack catalogue, with a test or
+  a "not applicable" reason, and an entry without a test fails the build);
+- the attack tests named in section 3;
 - `test/core/injected-clock-and-random.test.ts` (no call to the global clock or random source outside the defaults
-  ADR 0003 names);
-- `test/docs/attack-catalogue-has-tests.test.ts` (an entry without a test fails the build).
+  ADR 0003 names).
 
 ## Context
 
@@ -77,18 +77,18 @@ parts left to test-cap (flow order, session state, policy) are the ones its test
 Every one of Better Auth's 49 advisories becomes an entry in `specs/attack-catalogue.md`. The catalogue owns the
 entries; this section fixes the rule and the source. The classes the plan names, with the advisories behind them:
 
-| Class                                                         | Advisories (GHSA)                                    | Negative test                                      |
-| ------------------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
-| Second factor bypassed through a session cache                | `xg6x-h9c9-2m83`                                     | `test/attacks/session-cache-2fa-bypass.test.ts`    |
-| OAuth `state` usable as a magic-link token                    | `965c-763c-88jm`                                     | `test/attacks/oauth-state-reuse.test.ts`           |
-| Pre-account hijack through magic link or email OTP            | `qq9h-g4jm-xgf3`                                     | `test/attacks/pre-account-hijack.test.ts`          |
-| OIDC identity auto-linked to an unverified email              | `g38m-r43w-p2q7`, `9hm7-xhfp-cx58`                   | `test/attacks/auto-link-unverified-email.test.ts`  |
-| Rate limit bypassed by rotating IPv6 addresses                | `p6v2-xcpg-h6xw`                                     | `test/attacks/ipv6-rate-limit-bypass.test.ts`      |
-| Race on an OTP's attempt limit                                | `2f9c-7xj7-gh55`                                     | `test/attacks/otp-redemption-race.test.ts`         |
-| Double-slash path past route checks and rate limits           | `x732-6j76-qmhm`                                     | `test/attacks/double-slash-path.test.ts`           |
-| Open redirect                                                 | `8jhw-6pjj-8723`, `hjpm-7mrm-26w8`, `36rg-gfq2-3h56` | `test/attacks/open-redirect.test.ts`               |
-| Passkey accepted without user verification or from any origin | `gv75-j3v8-3crm`                                     | `test/attacks/passkey-uv-and-origin.test.ts`       |
-| Revoked session still valid through a cache                   | `fvxx-76fc-893x`                                     | `test/attacks/revoked-session-still-valid.test.ts` |
+| Class                                                         | Advisories (GHSA)                                    | Negative test                                                                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Second factor bypassed through a session cache                | `xg6x-h9c9-2m83`                                     | `test/attacks/session-cache-skips-mfa.test.ts`                                                                                                         |
+| OAuth `state` usable as a magic-link token                    | `965c-763c-88jm`                                     | `test/attacks/oauth-state-reused-as-magic-link.test.ts`                                                                                                |
+| Pre-account hijack through magic link or email OTP            | `qq9h-g4jm-xgf3`                                     | `test/attacks/pre-account-hijack.test.ts`                                                                                                              |
+| OIDC identity auto-linked to an unverified email              | `g38m-r43w-p2q7`, `9hm7-xhfp-cx58`                   | `test/attacks/oidc-auto-link-to-unverified-account.test.ts`                                                                                            |
+| Rate limit bypassed by rotating IPv6 addresses                | `p6v2-xcpg-h6xw`                                     | `test/attacks/ipv6-rotation-throttle-bypass.test.ts`                                                                                                   |
+| Race on an OTP's attempt limit                                | `2f9c-7xj7-gh55`                                     | `test/attacks/otp-attempt-limit-race.test.ts`                                                                                                          |
+| Double-slash path past route checks and rate limits           | `x732-6j76-qmhm`                                     | `test/attacks/double-slash-path-bypass.test.ts`                                                                                                        |
+| Open redirect                                                 | `8jhw-6pjj-8723`, `hjpm-7mrm-26w8`, `36rg-gfq2-3h56` | `test/attacks/open-redirect-protocol-relative.test.ts`, `test/attacks/open-redirect-origin-prefix.test.ts`, `test/attacks/email-link-redirect.test.ts` |
+| Passkey accepted without user verification or from any origin | `gv75-j3v8-3crm`                                     | `test/attacks/passkey-uv-flag-not-checked.test.ts`, `test/attacks/passkey-origin-from-request.test.ts`                                                 |
+| Revoked session still valid through a cache                   | `fvxx-76fc-893x`                                     | `test/attacks/cached-session-survives-revocation.test.ts`                                                                                              |
 
 The other applicable advisories also get entries and tests: `9x4v-xfq5-m8x5`, `vp58-j275-797x`, `99h5-pjcv-gr6v`,
 `4vcf-q4xf-f48m`, `wmjr-v86c-m9jj`, `569q-mpph-wgww`, `wxw3-q3m9-c3jr`, `5rr4-8452-hf4v`, `gv74-j8m3-fg5f`,

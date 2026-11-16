@@ -4,7 +4,7 @@
 
 Accepted (2026-11-15), with the numbers open (see Open). The fixed argon2id cost, the concurrency semaphore and the
 256-character input limit are implemented in phase 3; the latency and bundle-size budgets are set and checked in
-phase 9. Answers handoff question 18.
+phase 9. Answers [handoff question](../../GLOSSARY.md) 18.
 
 Planned tests:
 
@@ -13,6 +13,8 @@ Planned tests:
 - `test/budgets/password-max-input.test.ts` (input over 256 characters is refused before hashing)
 - `test/budgets/bundle-size.test.ts` (each entry within its gzip budget)
 - `benchmarks/suite.mjs` entries for password sign-in, TOTP verification, passkey verification and `auth.require`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 

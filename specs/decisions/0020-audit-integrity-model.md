@@ -11,12 +11,14 @@ Accepted (2026-11-15). Implemented in phase 8. Flow: F20 (audit: record, checkpo
 - `test/audit/checkpoint-signing.test.ts`
 - `test/audit/checkpoint-export.test.ts`
 - `test/audit/verify-tamper.test.ts`
-- `test/attacks/audit-truncation.test.ts`
-- `test/attacks/audit-rewrite-with-keys.test.ts`
+- `test/attacks/audit-record-tampering.test.ts`
+- `test/attacks/audit-rewrite-after-last-checkpoint.test.ts`
 - `test/audit/session-timeline.golden.test.ts`
 - `test/audit/access-report.golden.test.ts`
 - `test/audit/privacy.test.ts`
 - `test/audit/retention-and-legal-hold.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -50,7 +52,7 @@ emitted either way.
 Why: requirement 4 makes the trail optional, and an app that does not need one should not carry its keys, its storage
 or its checkpoint export.
 
-Override: the app turns it on by importing the entry and passing it to `createAuth`.
+Override: the app turns it on by importing the entry and passing its `AuditSink` to `createAuth`.
 
 ### 2. What goes in the trail: test-cap's session records plus the app's activity records
 
@@ -68,14 +70,14 @@ Override: the app chooses what to record and how finely.
 
 ### 3. Each record is canonical JSON in a numbered stream
 
-Every audit record holds the system (`APP_SYSTEM_ID`), the tenant, a sequence number `seq`, the key id of the chain
-key that linked it, and its content. It is serialised as RFC 8785 canonical JSON (JCS) before anything is computed
-over it.
+Every audit record (`AuditRecord`) holds the system (`APP_SYSTEM_ID`), the tenant, a sequence number `seq`, the key id
+of the chain key that linked it, and its content. It is serialised as RFC 8785 canonical JSON (JCS) before anything is
+computed over it.
 
-The store writes records with the atomic operation `appendAudit(stream, seq, record)`
-([ADR 0002](0002-store-port-and-atomic-operations.md)). It rejects a `seq` that leaves a gap or repeats one already
-stored. `store/sql` backs this with a unique `(stream, seq)` constraint, and the conformance kit runs concurrent appends
-against it.
+The store writes records with the atomic operation `appendAudit(tenant, stream, seq, record)` ([ADR
+0002](0002-store-port-and-atomic-operations.md)). It answers `gap` for a `seq` that leaves a gap and `duplicate` for one
+already stored, and stores neither. `store/sql` backs this with a unique `(stream, seq)` constraint, and the conformance
+kit runs concurrent appends against it.
 
 Why: canonical JSON gives one byte string per record, so a verifier in another language or another year computes the
 same MAC. A sequence the store refuses to break turns a lost or duplicated append into an error at write time rather
@@ -111,7 +113,8 @@ Override: the app sets N and T and supplies `exportCheckpoint`.
 
 ### 6. Independent verification
 
-`verifyAudit(records, checkpoints, publicKey)` recomputes the chain and checks each checkpoint's signature. It reports:
+`verifyAudit(records, checkpoints, publicKey)` recomputes the chain and checks each checkpoint's signature. It returns
+an `AuditVerification` that reports:
 
 | Tampering     | How it shows                                                     |
 | ------------- | ---------------------------------------------------------------- |

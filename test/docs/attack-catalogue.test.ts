@@ -115,6 +115,32 @@ describe("attack catalogue", () => {
     expect(betterAuth.size).toBe(49)
   })
 
+  it("is the only source of attack-test paths: every test/attacks/ path in specs/ and GLOSSARY.md names an entry", () => {
+    const ids = new Set(entries.map((entry) => entry.id))
+    const documents = [
+      path.join(root, "GLOSSARY.md"),
+      ...readdirSync(specs, { recursive: true, encoding: "utf8" })
+        .filter((file) => file.endsWith(".md"))
+        .map((file) => path.join(specs, file)),
+    ]
+    const strays: string[] = []
+    for (const file of documents) {
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          for (const [mention] of line.matchAll(/test\/attacks\/[^\s`'"()[\]|,;]*/g)) {
+            // A bare directory mention and the catalogue's own `<id>` placeholder name no test.
+            if (mention === "test/attacks/" || mention === "test/attacks/<id>.test.ts") continue
+            const id = /^test\/attacks\/([a-z0-9-]+)\.test\.ts$/.exec(mention)?.[1]
+            if (id === undefined || !ids.has(id)) {
+              strays.push(`${path.relative(root, file)}:${index + 1} ${mention}`)
+            }
+          }
+        })
+    }
+    expect(strays).toEqual([])
+  })
+
   it("names only ADRs that exist", () => {
     for (const entry of entries) {
       // ADR numbers are 00NN; a year such as 2026 in a reason is not one.

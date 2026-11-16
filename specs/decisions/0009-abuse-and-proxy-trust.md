@@ -5,7 +5,8 @@
 Accepted (2026-11-15). Implemented in phase 4 (throttling, the failure ceiling, the credential-stuffing detector and
 challenge hook, proxy trust and enumeration defences), with each new method in phase 5 joining the same counters.
 
-Answers handoff question 9 (abuse protection). The boundary with secure-cap for CSRF and XSS is ADR 0011's.
+Answers [handoff question](../../GLOSSARY.md) 9 (abuse protection). The boundary with secure-cap for CSRF and XSS is ADR
+0011's.
 
 Planned tests:
 
@@ -19,14 +20,20 @@ Planned tests:
 - `test/abuse/client-address.test.ts` (the client address comes from the socket; `X-Forwarded-For` is read only when
   the immediate peer is in `trustedProxies`);
 - `test/abuse/ipv4-mapped-ipv6.test.ts` (an IPv4 address and its IPv4-mapped IPv6 form share one counter);
-- `test/attacks/ipv6-rate-limit-bypass.test.ts` (rotating addresses inside one /64 does not reset the throttle);
-- `test/attacks/forwarded-for-spoofing.test.ts` (a client-supplied `X-Forwarded-For` changes nothing without a trusted
+- `test/attacks/email-send-flooding.test.ts` (sends per address and per IP stop at the limit, with an unchanged
+  reply);
+- `test/attacks/lockout-denial-of-service.test.ts` (failures never disable the account; the ceiling stops only the
+  authenticator that failed);
+- `test/attacks/ipv6-rotation-throttle-bypass.test.ts` (rotating addresses inside one /64 does not reset the throttle);
+- `test/attacks/spoofed-forwarded-for.test.ts` (a client-supplied `X-Forwarded-For` changes nothing without a trusted
   proxy);
-- `test/attacks/double-slash-path.test.ts` (no path form reaches a sign-in route without its counters);
-- `test/attacks/enumeration-replies.test.ts` (sign-in, sign-up and recovery replies are byte-identical for an existing
-  and a missing account);
-- `test/attacks/enumeration-timing.test.ts` (the reply time for a missing account falls within the spread of an
-  existing one, with the dummy argon2 in place).
+- `test/attacks/double-slash-path-bypass.test.ts` (no path form reaches a sign-in route without its counters);
+- `test/attacks/user-enumeration-responses.test.ts` (sign-in, sign-up and recovery replies are byte-identical for an
+  existing and a missing account);
+- `test/attacks/user-enumeration-timing.test.ts` (the reply time for a missing account, and for an account with no
+  password, falls within the spread of an existing one, with the dummy argon2 in place).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -84,8 +91,8 @@ choice before further attempts. There is no CAPTCHA by default.
 Why: stuffing uses valid username and password pairs from other breaches, so per-account throttling sees one attempt
 per account and never fires. A hook leaves the choice of challenge, and of any third-party service, to the app.
 
-Override: the app supplies the challenge hook. Without one, the detector tightens throttling and emits a security
-event.
+Override: the app supplies the challenge hook, a `ChallengeHook`. Without one, the detector tightens throttling and
+emits a security event.
 
 ### 5. The client address comes from the socket
 
@@ -96,21 +103,38 @@ not itself a trusted proxy.
 Why: `X-Forwarded-For` is a header anyone can send. Reading it from an untrusted peer would let an attacker choose the
 IP key of every counter.
 
-Override: the app declares `trustedProxies` for its load balancer or CDN.
+Override: the app declares `trustedProxies` (a `TrustedProxies` list) for its load balancer or CDN.
 
 ### 6. Replies and timing reveal nothing about accounts
 
-Sign-in, sign-up and recovery give the same reply whether or not the account exists, and take the same time. When the
-account does not exist, sign-in still runs an argon2id hash with the same parameters against a dummy value, so the
-time spent hashing matches a real check.
+Sign-in, sign-up and recovery give the same reply whether or not the account exists, and take the same time. Whenever
+a password sign-in verifies no stored password hash (the account does not exist, has no password, or is disabled), it
+still runs an argon2id hash with the same parameters against a dummy value, so the time spent hashing matches a real
+check.
 
 Why: a reply or a delay that differs for existing accounts turns sign-in into an account directory, which feeds
-stuffing and targeted phishing.
+stuffing and targeted phishing. Running the dummy hash only for unknown accounts would still let timing tell a
+passkey-only account from no account.
+
+### 7. Email sends are throttled
+
+Every flow that sends email (sign-up confirmation, address change, recovery and email sign-in) counts each send with
+the atomic `increment`, keyed per destination address and per IP and IPv6 /64. Over the limit, no mail is sent and
+the reply is the same as for a send, with the wait time the UX contract shows (ADR 0025).
+
+Why: a sending route is a free way to flood someone's inbox with mail from the app's domain, and the failure counters
+of section 2 never fire, because nothing fails.
+
+Override: the throttle values, with the others, are configuration (a `ThrottleConfig`; values in Open 1).
 
 ## Consequences
 
-- An attacker can slow an account's owner by failing against it, but never lock them out; the owner's passkey and
+- An attacker can slow an account's owner by failing against it, but never lock the account. The owner's passkey and
   their other authenticators still work.
+- **Stated cost: an attacker who knows an identifier can disable its password.** 100 failed guesses drive the password
+  authenticator to the ceiling of section 3. For an account that holds only a password and TOTP, TOTP alone is AAL1,
+  so the owner can no longer reach AAL2 and is left with a saved recovery code or email recovery (ADR 0007) until the
+  password is re-enabled (Open 7). An account with a passkey keeps AAL2 through it.
 - Every new method that checks a guessable secret joins the same four counters, so the IPv6 and race tests cover it.
 - Deployments behind a proxy must declare it; until they do, every request appears to come from the proxy and the IP
   counters throttle everyone together.
@@ -129,11 +153,15 @@ stuffing and targeted phishing.
 - **Only `X-Forwarded-For` is read.** `Forwarded`, `X-Real-IP` and vendor headers are ignored in the first build; see
   Open.
 - **The plan sets no thresholds.** Windows, delays and the detector's trigger are open.
+- **The failure ceiling can be triggered by anyone who knows an identifier.** It stops one authenticator, never the
+  account, but for a password plus TOTP account that is enough to force recovery; see Consequences. Neither the
+  account+IP key nor the throttle prevents it, because the ceiling counts every failure of the authenticator.
 
 ## Open
 
 1. **Throttle values.** Recommendation: no delay for the first 5 failures on a key in 15 minutes, then a delay that
    doubles per failure up to 15 minutes, shown to the person as a wait time (the UX contract's rate-limit message).
+   For email sends: at most 1 per destination address per minute and 5 per hour, and 20 per IP or /64 per hour.
 2. **What the account counter counts.** Recommendation: only failures of guessable secrets; a passkey ceremony is
    never delayed by password failures, so the owner keeps a way in during an attack on their password.
 3. **The detector's trigger.** Recommendation: a failure rate across distinct accounts from one IP or /64, or a

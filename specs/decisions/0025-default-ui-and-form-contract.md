@@ -9,13 +9,15 @@ F21 (default pages and client assets). Pinned by the UX contract table in sectio
 - `test/pages/progressive-enhancement.test.ts`
 - `test/e2e/default-pages-csp.spec.ts`
 - `test/pages/hashed-assets.test.ts`
-- `test/attacks/xss-reflected-default-pages.test.ts`
+- `test/attacks/reflected-xss-error-page.test.ts`
 - `test/forms/model.test.ts`
 - `test/react/components.test.tsx`
 - `test/client/conditional-mediation.test.ts`
 - `test/browser/flows.spec.ts`
 - `test/a11y/axe.test.tsx`
 - `test/a11y/pa11y.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -30,7 +32,8 @@ reply that reveals whether an account exists. The UI has to be safe by construct
 
 ### 1. One form model under every form
 
-`test-cap/forms` is a framework-free description of each form: its fields, validation, help and error text, submit
+`test-cap/forms` is a framework-free description of each form, a `FormModel` with one `FieldState` per field and its
+`Messages`: its fields, validation, help and error text, submit
 state and focus target. The React components and the default pages are both built on it, so they keep the same UX
 contract.
 
@@ -40,8 +43,8 @@ Override: an app builds its own UI on the form model, or on the core's routes di
 
 ### 2. The client
 
-`test-cap/client` wraps `@simplewebauthn/browser` and the core's routes, including conditional-mediation autofill for
-passkeys (F06).
+`test-cap/client` (`createAuthClient`) wraps `@simplewebauthn/browser` and the core's routes, including
+conditional-mediation autofill for passkeys (F06).
 
 Why: the browser half of a passkey ceremony is protocol work and comes from the established library (owner
 requirement 1).
@@ -74,25 +77,25 @@ Override: the app replaces any page with its own UI.
 
 Each point is tested. Unit tests use Testing Library; the browser tests run on Playwright.
 
-| #   | Promise                                                                                                                      | Test                                            |
-| --- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 1   | Elements are unstyled and carry `data-test-cap` hooks.                                                                       | `test/ux/unstyled-hooks.test.tsx`               |
-| 2   | Every field has a label, and help text linked by `aria-describedby`.                                                         | `test/ux/labels-and-help.test.tsx`              |
-| 3   | A field error replaces its help text and sets `aria-invalid`; the help text returns once it is fixed.                        | `test/ux/field-error-replaces-help.test.tsx`    |
-| 4   | Global errors go in a `role="alert"` row directly above the submit button.                                                   | `test/ux/global-error-row.test.tsx`             |
-| 5   | A failed submit moves focus to the first invalid field, or to the error row.                                                 | `test/ux/focus-after-submit.test.tsx`           |
-| 6   | `autocomplete` is correct (`username webauthn`, `current-password`, `new-password`, `one-time-code`), and so is `inputmode`. | `test/ux/autocomplete.test.tsx`                 |
-| 7   | An OTP is one input, never split boxes.                                                                                      | `test/ux/single-otp-input.test.tsx`             |
-| 8   | Passwords have a show-password toggle, and paste is always allowed.                                                          | `test/ux/password-toggle-and-paste.test.tsx`    |
-| 9   | The identifier comes first, and a passkey comes first when one exists.                                                       | `test/ux/identifier-and-passkey-first.test.tsx` |
-| 10  | Values are kept after an error, and fields validate on blur.                                                                 | `test/ux/values-kept-and-blur.test.tsx`         |
-| 11  | `aria-busy` is set while submitting, and a double submit is blocked.                                                         | `test/ux/busy-and-double-submit.test.tsx`       |
-| 12  | A wait time shows when rate-limited, and resend has a countdown.                                                             | `test/ux/rate-limit-and-resend.test.tsx`        |
-| 13  | Messages never reveal whether an account exists.                                                                             | `test/attacks/enumeration-messages.test.ts`     |
-| 14  | Every string is replaceable through `messages`.                                                                              | `test/ux/messages.test.tsx`                     |
-| 15  | Animation respects `prefers-reduced-motion`.                                                                                 | `test/browser/reduced-motion.spec.ts`           |
-| 16  | Targets meet WCAG 2.2 sizes with the optional stylesheet.                                                                    | `test/browser/target-size.spec.ts`              |
-| 17  | Every flow is usable by keyboard alone.                                                                                      | `test/browser/keyboard-only.spec.ts`            |
+| #   | Promise                                                                                                                      | Test                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| 1   | Elements are unstyled and carry `data-test-cap` hooks.                                                                       | `test/ux/unstyled-hooks.test.tsx`                 |
+| 2   | Every field has a label, and help text linked by `aria-describedby`.                                                         | `test/ux/labels-and-help.test.tsx`                |
+| 3   | A field error replaces its help text and sets `aria-invalid`; the help text returns once it is fixed.                        | `test/ux/field-error-replaces-help.test.tsx`      |
+| 4   | Global errors go in a `role="alert"` row directly above the submit button.                                                   | `test/ux/global-error-row.test.tsx`               |
+| 5   | A failed submit moves focus to the first invalid field, or to the error row.                                                 | `test/ux/focus-after-submit.test.tsx`             |
+| 6   | `autocomplete` is correct (`username webauthn`, `current-password`, `new-password`, `one-time-code`), and so is `inputmode`. | `test/ux/autocomplete.test.tsx`                   |
+| 7   | An OTP is one input, never split boxes.                                                                                      | `test/ux/single-otp-input.test.tsx`               |
+| 8   | Passwords have a show-password toggle, and paste is always allowed.                                                          | `test/ux/password-toggle-and-paste.test.tsx`      |
+| 9   | The identifier comes first, and a passkey comes first when one exists.                                                       | `test/ux/identifier-and-passkey-first.test.tsx`   |
+| 10  | Values are kept after an error, and fields validate on blur.                                                                 | `test/ux/values-kept-and-blur.test.tsx`           |
+| 11  | `aria-busy` is set while submitting, and a double submit is blocked.                                                         | `test/ux/busy-and-double-submit.test.tsx`         |
+| 12  | A wait time shows when rate-limited, and resend has a countdown.                                                             | `test/ux/rate-limit-and-resend.test.tsx`          |
+| 13  | Messages never reveal whether an account exists.                                                                             | `test/attacks/user-enumeration-responses.test.ts` |
+| 14  | Every string is replaceable through `messages`.                                                                              | `test/ux/messages.test.tsx`                       |
+| 15  | Animation respects `prefers-reduced-motion`.                                                                                 | `test/browser/reduced-motion.spec.ts`             |
+| 16  | Targets meet WCAG 2.2 sizes with the optional stylesheet.                                                                    | `test/browser/target-size.spec.ts`                |
+| 17  | Every flow is usable by keyboard alone.                                                                                      | `test/browser/keyboard-only.spec.ts`              |
 
 The glossary points to `specs/architecture.md` for this list; this table is the one owned copy, and architecture.md
 links here.
@@ -126,6 +129,10 @@ Why: unit tests prove the markup; only a real browser proves focus, autofill and
   app's, since the forms are unstyled.
 - **Passkeys need JavaScript.** Progressive enhancement covers password and email flows only.
 - **A replaced page leaves the contract.** UI an app writes itself is not covered by these tests.
+- **WebKit runs need HTTPS on localhost.** Every test-cap cookie is `__Host-` and so `Secure`, and WebKit does not store
+  or send `Secure` cookies to `http://localhost` (WebKit bug 232088, still open; MDN's compatibility data notes the
+  same for Safari). The WebKit Playwright runs, and anyone developing in Safari, use `https://localhost` with a local
+  certificate ([ADR 0026](0026-strict-defaults-and-deployment-mode.md)).
 - **Playwright's virtual authenticator** is driven through the Chrome DevTools Protocol, so passkey browser runs are
   expected to cover Chromium only; Firefox and WebKit run the other flows. See Open 3.
 

@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted (2026-11-15). Implemented in phase 8 (`test-cap/machine` and `test-cap/delegation`). Answers handoff
-question 13.
+Accepted (2026-11-15). Implemented in phase 8 (`test-cap/machine` and `test-cap/delegation`). Answers [handoff
+question](../../GLOSSARY.md) 13.
 
 Planned tests:
 
@@ -14,7 +14,11 @@ Planned tests:
 - `test/assurance/agent-never-borrows-aal.test.ts`
 - `test/delegation/lifetime-and-revocation.test.ts`
 - `test/attacks/delegation-scope-escalation.test.ts`
-- `test/attacks/api-key-created-without-session.test.ts`
+- `test/attacks/alternate-path-skips-second-factor.test.ts` (a pre-auth, recovery-only or below-AAL2 session cannot
+  create a key)
+- `test/attacks/api-key-owner-from-request.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -34,6 +38,8 @@ shape has to keep the three apart.
 
 ### 1. Three subject kinds
 
+A `Subject` is one of `UserSubject`, `ServiceSubject` or `AgentSubject`, told apart by its kind:
+
 - `user`: a person, carrying `SessionAssurance`.
 - `service`: an API key, carrying scopes and no assurance level.
 - `agent`: a delegation, carrying `actingFor` (the user it acts for) and its own scopes, and no assurance level of its
@@ -47,10 +53,17 @@ with its user's permissions because both are present and separate.
 ### 2. API keys: hashed, expiring, scoped
 
 An API key is a random secret shown once when it is created. The store keeps only its hash, never the key itself.
-Every key has an expiry and at least one scope; creating a key without either fails. Creating a key needs a signed-in
-`user` session. A request presenting a valid, unexpired key yields a `service` subject.
+Every key has an expiry and at least one scope; creating a key without either fails. `issueApiKey` creates one and
+returns the `ApiKey` record with the plaintext shown once.
 
-Why: a hash in the store means a database leak yields no usable key. A mandatory expiry bounds how long a leaked key
+Creating a key needs a `user` session whose assurance meets AAL2 and that is neither in the pre-auth nor in the
+recovery-only state. The key's owner is that session's subject; no request field names an owner. A request presenting
+a valid, unexpired key yields a `service` subject.
+
+Why: a key outlives the session that made it, so minting one is a privilege change. A session that has not finished
+its second factor, or one that holds only what a recovery code proved, must not be able to turn that into a
+long-lived secret. Taking the owner from the session closes the class where a body field chose it. A hash in the
+store means a database leak yields no usable key. A mandatory expiry bounds how long a leaked key
 works. Mandatory scopes stop a key from being a master key by default.
 
 Override: the app chooses each key's scopes and expiry within these rules.
@@ -65,8 +78,8 @@ who holds it. Giving it a level would let a leaked key pass for a signed-in pers
 
 ### 4. Delegations: short-lived, scoped, revocable, issued from a session
 
-A **delegation** is issued from a `user` session to an agent. It has a short lifetime, a set of scopes and can be
-revoked at any time, with the same immediate visibility as a session revoke
+A **delegation** (`Delegation`, created by `issueDelegation`) is issued from a `user` session to an agent. It has a
+short lifetime, a set of scopes and can be revoked at any time, with the same immediate visibility as a session revoke
 ([ADR 0002](0002-store-port-and-atomic-operations.md)). A request carrying a valid delegation yields an `agent` subject
 whose `actingFor` names the user. Deprovisioning the user revokes their delegations ([ADR 0012](0012-tenancy.md)).
 

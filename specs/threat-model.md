@@ -19,8 +19,9 @@ Each flow section lists:
   and its ADR. "Entry" names the attack-catalogue ids whose tests prove it; a docs test checks that every id exists.
 - **Residual risks**: what remains after the design, stated plainly.
 
-`O1`–`O16` point to [Open](#open) items: questions the plan leaves unsettled. Where a threat rests on one, the row
-describes the recommendation, and its test pins that recommendation until the owner decides.
+`O1`–`O16` point to [Open](#open) items: questions the plan leaves unsettled. Each recommendation there is a
+provisional default until the owner decides. Where a threat rests on one, the row describes the recommendation, and
+its test pins that recommendation until then.
 
 ## Attacker model
 
@@ -91,8 +92,8 @@ screening falls back to the bundled list, which is smaller.
 
 ## F02: Password sign-in
 
-argon2id verify at a fixed cost under a concurrency limit, with a dummy hash for unknown accounts. Evidence: one
-factor, AAL1.
+argon2id verify at a fixed cost under a concurrency limit, with a dummy hash whenever no stored password hash is
+verified. Evidence: one factor, AAL1.
 
 **Assets:** the password, the account, a session. **Boundaries:** B1, B2, B3, B4, B7.
 
@@ -101,7 +102,7 @@ factor, AAL1.
 | S      | Credential stuffing across many accounts.                                                | Throttles per account, account+IP, IP and /64; detector escalates to the challenge hook (ADR 0009) | `credential-stuffing`                                                             |
 | S      | Brute force against one account.                                                         | Per-account throttle; at most 100 consecutive failures per authenticator (ADR 0009)                | `password-brute-force`                                                            |
 | S      | The throttle is dodged by races, IPv6 rotation or a forged forwarded header.             | Atomic `increment`; /64 keys; socket address unless from `trustedProxies` (ADR 0002, 0009)         | `throttle-counter-race`, `ipv6-rotation-throttle-bypass`, `spoofed-forwarded-for` |
-| S      | A truncated or case-folded password verifies.                                            | Hashed exactly as received; over-long input rejected (ADR 0010)                                    | `password-altered-before-hashing`                                                 |
+| S      | A truncated or case-folded password verifies.                                            | Normalised once to NFC, then hashed whole; over-long input rejected (ADR 0010)                     | `password-altered-before-hashing`                                                 |
 | E      | A password alone reaches a route, or another path mints access before the second factor. | Password is AAL1; the session is `step-up` pending until TOTP or a passkey (ADR 0005)              | `assurance-downgrade`, `alternate-path-skips-second-factor`                       |
 | E      | A planted session token survives sign-in.                                                | Rotation on sign-in; unknown tokens never adopted (ADR 0006)                                       | `session-fixation`                                                                |
 | S      | The victim is signed in to the attacker's account.                                       | CSRF token and Origin check on the sign-in form (ADR 0011)                                         | `login-csrf`                                                                      |
@@ -146,6 +147,7 @@ session reaches AAL2.
 | S      | A code is replayed within its time step.                  | Last accepted step stored; equal or earlier rejected (ADR 0027) | `totp-code-replay`                                              |
 | S      | The client supplies the time the code is checked against. | Server clock only (ADR 0027, 0003)                              | `totp-client-supplied-time`                                     |
 | S      | Parallel guesses count as one attempt.                    | Atomic `increment` before checking (ADR 0002, 0009)             | `otp-attempt-limit-race`                                        |
+| S      | The 6-digit code is guessed within its window.            | Throttles; at most 100 consecutive failures (ADR 0009, 0027)    | `totp-brute-force`                                              |
 | E      | A session cache treats the user as signed in before TOTP. | No cache skips the assurance check (ADR 0006, 0005)             | `session-cache-skips-mfa`, `alternate-path-skips-second-factor` |
 | I      | Code comparison leaks matching digits through timing.     | Constant-time comparison (ADR 0006, 0011)                       | `secret-comparison-timing`                                      |
 | T      | A seed under a retired key id verifies after rotation.    | Key id checked on decrypt (ADR 0027, 0022)                      | `totp-key-rotation-confusion`                                   |
@@ -206,15 +208,16 @@ synced passkeys) cannot be detected by counter.
 
 **Assets:** the codes, the account's recovery path. **Boundaries:** B1, B3, B4.
 
-| STRIDE | Threat                                                      | Stopped by                                                           | Entry                                              |
-| ------ | ----------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- |
-| I      | Codes are short or predictable.                             | 80 bits from the random source (ADR 0003, 0007)                      | `weak-secret-generation`                           |
-| I      | A database read lets codes be recovered from their hashes.  | Hashed storage (ADR 0007; O3)                                        | `recovery-code-weak-storage`                       |
-| T      | One code is redeemed twice in parallel, or in another flow. | `consumeOnce`; secrets bound to purpose and account (ADR 0002, 0007) | `redemption-race`, `one-time-secret-cross-purpose` |
-| E      | Redeeming a code yields the account's full level.           | Recovery-only state (ADR 0007; O6)                                   | `recovery-below-account-level`                     |
-| E      | Codes issued before a recovery still work after it.         | Recovery consumes every outstanding recovery secret (ADR 0007)       | `outstanding-codes-survive-recovery`               |
-| T      | A user regenerates or deletes another user's codes.         | Store calls scoped to tenant and subject (ADR 0002, 0012)            | `idor-authenticator-removal`                       |
-| I      | Code comparison leaks through timing.                       | Lookup by hash (ADR 0006)                                            | `secret-comparison-timing`                         |
+| STRIDE | Threat                                                      | Stopped by                                                                 | Entry                                              |
+| ------ | ----------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------- |
+| I      | Codes are short or predictable.                             | 80 bits from the random source (ADR 0003, 0007)                            | `weak-secret-generation`                           |
+| I      | A database read lets codes be recovered from their hashes.  | argon2id with a per-code salt (ADR 0007)                                   | `recovery-code-weak-storage`                       |
+| T      | One code is redeemed twice in parallel, or in another flow. | `consumeOnce`; secrets bound to purpose and account (ADR 0002, 0007)       | `redemption-race`, `one-time-secret-cross-purpose` |
+| E      | Redeeming a code yields the account's full level.           | Recovery-only state (ADR 0007; O6)                                         | `recovery-below-account-level`                     |
+| E      | Codes issued before a recovery still work after it.         | Completing a recovery revokes outstanding emailed codes (ADR 0007)         | `outstanding-codes-survive-recovery`               |
+| T      | A user regenerates or deletes another user's codes.         | Store calls scoped to tenant and subject (ADR 0002, 0012)                  | `idor-authenticator-removal`                       |
+| I      | Code comparison leaks through timing.                       | Record chosen by public prefix; secret part checked by argon2id (ADR 0007) | `secret-comparison-timing`                         |
+| S      | Saved codes are guessed online.                             | Per-account and account+IP throttles (ADR 0009, 0007)                      | `recovery-code-brute-force`                        |
 
 **Residual risks.** Codes are only as safe as where the user keeps them. Anyone who finds a printed sheet reaches the
 recovery-only state.
@@ -242,8 +245,9 @@ keeps its confirmed status until the user changes it.
 
 ## F09: Account recovery by email, including password reset
 
-Same code rules as F08. Leads to the recovery-only state; a credential change rotates this session and revokes the
-others.
+Same code rules as F08. Leads to the recovery-only state. Completing the recovery revokes the account's other
+sessions and outstanding emailed codes; the recovery-only session then ends, and the person signs in with the new
+authenticators (ADR 0007, Open 5).
 
 **Assets:** the account itself; this is the usual weakest link. **Boundaries:** B1, B2, B3, B4, B5, B8.
 
@@ -257,7 +261,7 @@ others.
 | T      | The reset link's origin comes from the Host header, or carries a redirect.               | `APP_ORIGIN` only; no redirect target (ADR 0026, 0021)                                | `host-header-poisoning`, `email-link-redirect`                                          |
 | I      | A token in a URL leaks through Referer or logs.                                          | Codes typed in, not carried in URLs; `Referrer-Policy` (ADR 0021; O13)                | `token-in-url-leak`                                                                     |
 | I      | Replies or timing reveal whether the account exists.                                     | Uniform replies and timing (ADR 0009)                                                 | `user-enumeration-responses`, `user-enumeration-timing`                                 |
-| E      | After reset, the attacker's sessions or earlier codes still work.                        | Revoke other sessions; consume outstanding secrets (ADR 0006, 0007)                   | `sessions-survive-credential-change`, `outstanding-codes-survive-recovery`              |
+| E      | After reset, the attacker's sessions or earlier codes still work.                        | Revoke other sessions and outstanding emailed codes (ADR 0006, 0007)                  | `sessions-survive-credential-change`, `outstanding-codes-survive-recovery`              |
 | D      | A reset request locks or changes the account, or floods the inbox.                       | Nothing changes until a valid code; send throttles keyed per /64 too (ADR 0007, 0009) | `reset-request-changes-account`, `email-send-flooding`, `ipv6-rotation-throttle-bypass` |
 | E      | The new password is a breached one.                                                      | Blocklist and HIBP (ADR 0010)                                                         | `breached-password-accepted`                                                            |
 | I      | The code or new password appears in a security event.                                    | No secret-bearing event field (ADR 0015)                                              | `secret-in-security-event`                                                              |
@@ -269,7 +273,8 @@ The user learns of a recovery only if test-cap or the app tells them (O14).
 
 Off by default; turning it on is a deviation in the policy report, and its evidence never satisfies AAL2.
 
-**Assets:** an AAL1 session. **Boundaries:** B1, B2, B3, B4, B5.
+**Assets:** a session that holds no assurance level (ADR 0021, Open 1), accepted only by a requirement that names email
+sign-in in its own deviation. **Boundaries:** B1, B2, B3, B4, B5.
 
 | STRIDE | Threat                                                                       | Stopped by                                                      | Entry                                                                 |
 | ------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -280,8 +285,9 @@ Off by default; turning it on is a deviation in the policy report, and its evide
 | I      | The link's token leaks through Referer, logs or history.                     | `Referrer-Policy`; token consumed on first POST (ADR 0021; O13) | `token-in-url-leak`                                                   |
 | D      | Sign-in mail floods a victim.                                                | Send throttles (ADR 0009)                                       | `email-send-flooding`                                                 |
 
-**Residual risks.** Turning it on makes the mailbox an AAL1 sign-in path. A link opened on another device than the
-one that asked signs that other device in unless the binding in O5 is adopted.
+**Residual risks.** Turning it on makes the mailbox a sign-in path for every requirement that names email sign-in in its
+deviation; the session holds no level. A link opened on another device than the one that asked signs that other device
+in unless the binding in O5 is adopted.
 
 ## F11: OIDC sign-in and account linking
 
@@ -306,10 +312,11 @@ allowlist. AAL1 unless the trust config maps the issuer's `acr` / `amr`.
 | S      | The transaction is redeemed twice, or used as another kind of secret.                                                                   | `consumeOnce`; purpose-keyed secrets; one key per purpose (ADR 0002, 0022)             | `redemption-race`, `oauth-state-reused-as-magic-link`, `signing-oracle-key-reuse`                                     |
 | E      | A hijacked session links the attacker's IdP account.                                                                                    | Recent step-up for linking (ADR 0005; O2)                                              | `sensitive-change-without-reauth`                                                                                     |
 | E      | A deprovisioned account signs in through its linked identity.                                                                           | Account status checked before evidence (ADR 0012)                                      | `deprovisioned-account-signs-in`                                                                                      |
+| S      | An issuer configured for one tenant signs someone in to another.                                                                        | Issuers accepted only in the tenant that names them (ADR 0012)                         | `cross-tenant-issuer-accepted`                                                                                        |
 
-**Residual risks.** A trusted issuer can sign in as any account linked to it, at up to the level its mapping allows;
-the trust config is the boundary. Generic OAuth 2.0 sign-in is a stated gap. The OpenID conformance suite runs at
-release (phase 9), not on every pull request.
+**Residual risks.** A trusted issuer can sign in as any account linked to it, at up to the level its mapping allows,
+which is at most AAL2 (ADR 0005); the trust config is the boundary. Generic OAuth 2.0 sign-in is a stated gap. The
+OpenID conformance suite runs at release (phase 9), not on every pull request.
 
 ## F12: SAML SP sign-in
 
@@ -331,6 +338,7 @@ returns through the `__Host-test-cap-tx` cookie (SameSite=None, 10 minutes, a ra
 | D      | Transforms, DEFLATE or quadratic parsing exhaust the server.                                              | Body size limit; POST binding only (ADR 0003, 0028)                                                           | `saml-xml-resource-exhaustion`                                                                                                |
 | T      | `RelayState`, or an IdP-supplied URL, becomes a navigation target.                                        | `RelayState` is an opaque transaction id; same-origin targets only (ADR 0028, 0026)                           | `saml-relaystate-open-redirect`, `open-redirect-scheme`                                                                       |
 | S      | A NameID at one IdP signs in to the account linked at another; a tenant adds its own IdP.                 | Links keyed by issuer and subject; static trust config (ADR 0008; O11)                                        | `federated-identity-collision`, `self-registered-identity-provider`                                                           |
+| S      | An IdP configured for one tenant signs someone in to another.                                             | IdPs accepted only in the tenant that names them (ADR 0012)                                                   | `cross-tenant-issuer-accepted`                                                                                                |
 | E      | An `AuthnContextClassRef` raises the level without a mapping.                                             | Trust-config mapping only (ADR 0005, 0008)                                                                    | `untrusted-upstream-context-raises-level`                                                                                     |
 | T      | A sibling subdomain tosses the transaction cookie.                                                        | `__Host-` prefix (ADR 0006)                                                                                   | `cookie-tossing`                                                                                                              |
 
@@ -515,28 +523,28 @@ route not listed as public.
 
 **Assets:** the core's view of the request; every protected route. **Boundaries:** B1, B3.
 
-| STRIDE | Threat                                                                                         | Stopped by                                                                  | Entry                                                                               |
-| ------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| E      | A protected route is reached through `//`, a trailing slash, case, encoding or another method. | One canonical path; deny by default for every method (ADR 0003, 0024)       | `double-slash-path-bypass`, `deny-by-default-bypass`                                |
-| T      | The adapter and core disagree on headers, cookies, path or body.                               | Adapters convert bytes only; the adapter conformance suite (ADR 0003, 0024) | `adapter-core-parsing-differential`                                                 |
-| T      | An app body parser rewrites the body before the core sees it.                                  | Raw stream read; pre-parsed body refused (ADR 0003, 0024)                   | `upstream-body-parser-changes-core-view`                                            |
-| T      | The request sets fields the route does not declare.                                            | Declared fields only (ADR 0003)                                             | `mass-assignment-server-owned-fields`                                               |
-| E      | Next.js `proxy` is the only check.                                                             | Authoritative server helpers; `proxy` for redirects only (ADR 0024)         | `next-proxy-treated-as-protection`                                                  |
-| S      | A forwarded header or the Host header is trusted.                                              | `trustedProxies`; `APP_ORIGIN` (ADR 0009, 0026)                             | `spoofed-forwarded-for`, `host-header-poisoning`                                    |
-| T      | A cross-site request reaches a state-changing route.                                           | CSRF checks in the core (ADR 0011)                                          | `csrf-state-changing-route`                                                         |
-| D      | Oversized or deeply nested input exhausts the parser.                                          | Body limit before parsing; fuzzing (ADR 0003)                               | `request-parser-resource-exhaustion`                                                |
-| E      | Startup with dev defaults, missing or default secrets, or HTTP.                                | Missing `APP_ENV` means production (ADR 0026, 0022)                         | `production-runs-with-dev-defaults`, `missing-or-default-secret`, `https-downgrade` |
-| I      | An error returns internal configuration.                                                       | Fixed public error bodies (ADR 0003)                                        | `secret-in-response`                                                                |
-| E      | An error answers `allow`.                                                                      | Fail closed (ADR 0003, 0005)                                                | `fail-open-on-error`                                                                |
-| S      | A key shared across purposes signs something the adapter forwards.                             | One key per purpose (ADR 0022)                                              | `signing-oracle-key-reuse`                                                          |
+| STRIDE | Threat                                                                                         | Stopped by                                                                                                                                                                                          | Entry                                                                               |
+| ------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| E      | A protected route is reached through `//`, a trailing slash, case, encoding or another method. | Ambiguous paths refused with a 400 for every request, never normalised; public paths match clean raw paths only, exactly or by explicit wildcard; deny by default for every method (ADR 0003, 0024) | `double-slash-path-bypass`, `deny-by-default-bypass`                                |
+| T      | The adapter and core disagree on headers, cookies, path or body.                               | Adapters convert bytes only; the adapter conformance suite (ADR 0003, 0024)                                                                                                                         | `adapter-core-parsing-differential`                                                 |
+| T      | An app body parser rewrites the body before the core sees it.                                  | Raw stream read; pre-parsed body refused (ADR 0003, 0024)                                                                                                                                           | `upstream-body-parser-changes-core-view`                                            |
+| T      | The request sets fields the route does not declare.                                            | Declared fields only (ADR 0003)                                                                                                                                                                     | `mass-assignment-server-owned-fields`                                               |
+| E      | Next.js `proxy` is the only check.                                                             | Authoritative server helpers; `proxy` for redirects only (ADR 0024)                                                                                                                                 | `next-proxy-treated-as-protection`                                                  |
+| S      | A forwarded header or the Host header is trusted.                                              | `trustedProxies`; `APP_ORIGIN` (ADR 0009, 0026)                                                                                                                                                     | `spoofed-forwarded-for`, `host-header-poisoning`                                    |
+| T      | A cross-site request reaches a state-changing route.                                           | CSRF checks in the core (ADR 0011)                                                                                                                                                                  | `csrf-state-changing-route`                                                         |
+| D      | Oversized or deeply nested input exhausts the parser.                                          | Body limit before parsing; fuzzing (ADR 0003)                                                                                                                                                       | `request-parser-resource-exhaustion`                                                |
+| E      | Startup with dev defaults, missing or default secrets, or HTTP.                                | Missing `APP_ENV` means production (ADR 0026, 0022)                                                                                                                                                 | `production-runs-with-dev-defaults`, `missing-or-default-secret`, `https-downgrade` |
+| I      | An error returns internal configuration.                                                       | Fixed public error bodies (ADR 0003)                                                                                                                                                                | `secret-in-response`                                                                |
+| E      | An error answers `allow`.                                                                      | Fail closed (ADR 0003, 0005)                                                                                                                                                                        | `fail-open-on-error`                                                                |
+| S      | A key shared across purposes signs something the adapter forwards.                             | One key per purpose (ADR 0022)                                                                                                                                                                      | `signing-oracle-key-reuse`                                                          |
 
 **Residual risks.** A route the app lists as public is public. Edge runtimes are not claimed. A framework that
 rewrites requests before the adapter runs (a platform proxy, a rewrite rule) is outside the conformance suite.
 
 ## Open
 
-Questions the plan leaves unsettled, each with a recommendation. The orchestrator moves them to
-`Dev/auth-cap-design/questions-for-owner.md`.
+Questions the plan leaves unsettled, each with a recommendation that is a provisional default until the owner decides.
+The owner's copy of each question lives in `Dev/auth-cap-design/questions-for-owner.md`, outside this repository.
 
 - **O1. Account linking (ADR 0008).** When may an OIDC or SAML identity link to an existing account? Recommendation:
   never by a matching email, verified or not; only from a session signed in to that account at its level, after a
@@ -544,11 +552,10 @@ Questions the plan leaves unsettled, each with a recommendation. The orchestrato
   subject never attaches to an existing account.
 - **O2. Re-authentication for sensitive changes (ASVS 7.5.1).** Which requirement guards adding or removing an
   authenticator, changing an identifier, linking or unlinking, and revoking other sessions? Recommendation: a
-  built-in requirement of AAL2 with a ceremony at most 15 minutes old, configurable, listed in the policy report.
-- **O3. Recovery-code hashing (ASVS 6.5.2).** ASVS requires an approved password hash with a salt for lookup secrets
-  under 112 bits; the plan fixes 80-bit codes, "hashed". Recommendation: hash with argon2id at the password
-  parameters, and give each code a short non-secret id so a redemption runs one hash. The alternative is codes of at
-  least 112 bits under SHA-256.
+  built-in requirement, `account.credentials`, of AAL2 with a ceremony at most 10 minutes old, configurable, listed in
+  the policy report (the same requirement as `specs/requirements.md` Open 8).
+- **O3. Recovery-code hashing (ASVS 6.5.2).** Settled: ADR 0007 section 1 stores each code as argon2id with its own
+  salt, selected by a short non-secret prefix so a redemption runs one hash.
 - **O4. MySQL has no `RETURNING`.** MySQL 8.4 does not support `UPDATE … RETURNING` (MariaDB does), which the plan
   names as the single-statement form. Recommendation: on MySQL, `consumeOnce` is a conditional `UPDATE` whose
   affected-row count decides; ids are generated by test-cap and never read back with `LAST_INSERT_ID()`; the
@@ -565,8 +572,8 @@ Questions the plan leaves unsettled, each with a recommendation. The orchestrato
   expires with its 24-hour code, and is discarded when another sign-up confirms the address first.
 - **O8. SAML scope (ADR 0028).** Recommendation: the ACS accepts only the HTTP-POST binding; only SP-initiated
   responses with a matching `InResponseTo` are accepted; single logout is not in the first build.
-- **O9. What impersonation and break-glass block.** The plan says "credential changes". Recommendation: that also
-  covers identifier changes and linking or unlinking identities.
+- **O9. What impersonation and break-glass block.** Settled: the glossary's credential change covers identifier
+  changes and linking or unlinking identities, and ADR 0014 section 4 blocks every credential change.
 - **O10. Delegation consent and lifetime.** Recommendation: issuing a delegation goes through a step-up page that
   shows the agent and scopes from server data; a delegation never outlives the issuing session's absolute expiry, and
   ends when that session is revoked or signs out.

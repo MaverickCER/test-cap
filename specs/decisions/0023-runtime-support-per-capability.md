@@ -14,6 +14,8 @@ the release build). Pinned by:
 - `test/docs/runtime-table.test.ts`
 - `test/supply-chain/simplewebauthn-floor.test.ts`
 
+The recommendations under Open are provisional defaults until the owner decides.
+
 ## Context
 
 Owner requirement 6 asks for Node, Bun and Deno. A single "runs everywhere" line would over-claim: test-cap's

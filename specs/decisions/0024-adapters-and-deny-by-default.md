@@ -9,14 +9,17 @@ default). Pinned by:
 
 - `test/adapters/conformance/*.test.ts`
 - `test/adapters/deny-by-default.test.ts`
-- `test/adapters/public-paths.test.ts`
+- `test/adapters/public-paths.test.ts` (an exact entry matches only its own clean path; `/admin/x/../about` is a 400,
+  never the public `/about`)
 - `test/adapters/tanstack-start-server-functions.test.ts`
 - `test/adapters/next-surfaces.test.ts`
-- `test/attacks/upstream-body-parser.test.ts`
-- `test/attacks/double-slash-path.test.ts`
-- `test/attacks/adapter-core-parsing-difference.test.ts`
+- `test/attacks/upstream-body-parser-changes-core-view.test.ts`
+- `test/attacks/double-slash-path-bypass.test.ts`
+- `test/attacks/adapter-core-parsing-differential.test.ts`
 - `test/docs/next-proxy-not-protection.test.ts`
 - `test/docs/quick-start-lines.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -42,6 +45,11 @@ adding a place for authentication logic.
 | `test-cap/tanstack-start` | the Web `Request` and `Response`            | global middleware                      |
 | `test-cap/fetch`          | the Web `Request` and `Response`            | a wrapper around the app's handler     |
 
+The exports by entry: `expressAuth(auth, options)`; `TestCapModule`, the global `AuthGuard`, and the `@Public()` and
+`@RequireAuth()` decorators for Nest; `nextAuthHandler` (the route handler), `nextServerAuth` (the server helpers) and
+`nextProxy` (the optional `proxy`) for Next.js; `tanstackStartAuth` and `tanstackStartMiddleware` for TanStack Start;
+and `withAuth(auth, handler, options)` for `fetch`.
+
 Each adapter builds a `PlainRequest` (method, URL, headers, body bytes, client address, abort signal), calls the core,
 and writes the `PlainResponse` back. It keeps duplicate headers and every `Set-Cookie` value, and passes the abort
 signal through. It never parses a body, reads a cookie, or decides anything.
@@ -56,12 +64,17 @@ Override: an app that wants no adapter calls `auth.handle(req)` with its own `Pl
 ### 2. Deny by default, in every adapter
 
 Every adapter can protect every route at the default requirement (AAL2) unless the route is listed as public. The
-adapter passes the public list to the core, and the core matches it against the path it normalised itself, so the five
-adapters cannot disagree about which path is public. Routes under `/auth/*`, the default pages and their hashed assets
-are served by the dispatcher and need no listing.
+adapter passes the public list to the core, so the five adapters cannot disagree about which path is public. Routes
+under `/auth/*`, the default pages and their hashed assets are served by the dispatcher and need no listing.
 
-Why: an app that forgets to protect a route should get a protected route. Matching in the core keeps the double-slash
-class of bypass (a path the adapter and the core read differently) out of reach.
+The core first refuses an ambiguous path with a 400, for every request and every method, before any public-path match
+([ADR 0003](0003-byte-transport-and-dispatcher.md), section 2). A public path then matches only the clean raw path as
+received: exactly, or through an explicit wildcard (Open 1). The core never normalises a path to make it match.
+
+Why: an app that forgets to protect a route should get a protected route. Normalising before matching would itself be
+the bypass: `/admin/x/../about` normalises to a public `/about`, while Express dispatches the raw path to an
+`/admin/*` handler. Refusing every ambiguous path, and matching only clean raw paths, keeps the double-slash class (a
+path the adapter and the core read differently) out of reach.
 
 Override: the app lists public paths, and calls `auth.require(req, requirementId)` for a route that needs more than
 the default.
@@ -116,9 +129,11 @@ Why: requirement 10 names the number; a test keeps it.
 
 ## Open
 
-1. **How public paths match.** The plan's example `public: ["/", "/about"]` would make every route public if `/` were a
-   prefix. Recommendation: exact match after the core's normalisation (repeated slashes, encoded slashes, dot segments,
-   a trailing slash), with an explicit wildcard form such as `"/blog/*"` for prefixes.
+1. **The public-path wildcard.** Section 2 settles that a public path matches only a clean raw path, never a
+   normalised one. The plan's example `public: ["/", "/about"]` would make every route public if `/` were a prefix.
+   Recommendation: an entry matches exactly, so `"/"` is the root only; a prefix needs an explicit trailing wildcard
+   segment such as `"/blog/*"`, which matches `/blog/` followed by one or more clean segments; matching is
+   case-sensitive, so `/About` is not `/about` and stays protected.
 2. **A body parser that ran first.** When an app mounts a body parser before the Express adapter, the raw stream is
    already consumed. Recommendation: the adapter fails closed with a `500` and a clear development error, and never
    rebuilds the body from `req.body`.

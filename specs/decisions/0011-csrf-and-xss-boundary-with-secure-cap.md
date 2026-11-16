@@ -3,17 +3,18 @@
 ## Status
 
 Accepted (2026-11-15). Implemented in phase 3 (default sign-in pages, response headers and caching) and phase 4
-(CSRF). Answers handoff question 11.
+(CSRF). Answers [handoff question](../../GLOSSARY.md) 11.
 
 Planned tests:
 
-- `test/attacks/csrf-cross-site-post.test.ts`
-- `test/attacks/csrf-missing-token.test.ts`
+- `test/attacks/csrf-state-changing-route.test.ts`
 - `test/attacks/login-csrf.test.ts`
-- `test/attacks/xss-reflected-default-pages.test.ts`
+- `test/attacks/reflected-xss-error-page.test.ts`
 - `test/security/response-headers.test.ts`
 - `test/security/cache-control.test.ts`
 - `test/e2e/default-pages-csp.spec.ts` (Playwright, three engines: no CSP violation on any default page)
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 

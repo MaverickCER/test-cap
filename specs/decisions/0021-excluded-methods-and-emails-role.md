@@ -12,10 +12,15 @@ sign-in). Pinned by:
 - `test/report/email-sign-in-deviation.test.ts`
 - `test/email/confirmation-code-limits.test.ts`
 - `test/recovery/email-code-limits.test.ts`
-- `test/attacks/email-code-reuse.test.ts`
-- `test/attacks/otp-redemption-race.test.ts`
-- `test/attacks/oauth-state-as-magic-link.test.ts`
-- `test/attacks/magic-link-host-poisoning.test.ts`
+- `test/attacks/one-time-secret-cross-purpose.test.ts`
+- `test/attacks/redemption-race.test.ts`
+- `test/attacks/oauth-state-reused-as-magic-link.test.ts`
+- `test/attacks/host-header-poisoning.test.ts`
+- `test/attacks/identifier-normalisation-collision.test.ts`
+- `test/attacks/unverified-identifier-trusted.test.ts`
+- `test/attacks/email-raises-assurance.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -64,12 +69,16 @@ Email links are built from `APP_ORIGIN`, never from the `Host` header
 
 Why: these are the uses 800-63B-4 permits, and both need a single-use code that a race cannot redeem twice.
 
-Override: the app supplies `sendEmail` and the message text. The code length, lifetime and single use are fixed.
+Override: the app supplies `sendEmail`, a `SendEmail` function that receives each `EmailMessage`, and the message
+text. The code length, lifetime and single use are fixed.
 
 ### 3. Email never raises the assurance level
 
-Evidence from an email code or link is recorded, but contributes nothing to the assurance level. A session's assurance
-after confirming an address or redeeming an email recovery code is what its other, still-valid evidence supports.
+An email code or link produces no `AuthenticationEvidence` ([ADR 0005](0005-policy-and-evidence-based-assurance.md)),
+the same rule recovery follows ([ADR 0007](0007-recovery.md)). The fact that an address was confirmed, or that an
+email sign-in happened, is recorded on the account or the session and in a security event, never as evidence. A
+session's assurance after confirming an address or redeeming an email recovery code is what its other, still-valid
+evidence supports.
 
 Why: §3.1.3.1 says email is not an authentication process. Counting it would let anyone who controls an inbox reach
 whatever level email was counted for.
@@ -101,6 +110,23 @@ These are not built and are listed as gaps, not exclusions:
 Why: each is a real need, but none is required for the first build, and each would add a protocol surface that needs
 its own gate.
 
+### 6. One identifier normalisation, and only confirmed identifiers resolve
+
+An email identifier is normalised once, by one function in the core, wherever it enters: sign-up, sign-in, recovery,
+address change and linking. A value with surrounding whitespace, a control character or an invalid address form is
+refused, never trimmed or repaired. Stores compare the normalised value byte for byte (binary collation in the
+migrations, [ADR 0002](0002-store-port-and-atomic-operations.md)). The exact rules are Open 3.
+
+Only a confirmed identifier resolves to an account. Sign-in, recovery and linking look an account up by confirmed
+identifiers only; an identifier saved but never confirmed resolves to nothing, and the reply is the one any unknown
+identifier gets ([ADR 0009](0009-abuse-and-proxy-trust.md)).
+
+Why: two spellings of one address that reach two accounts, or one account through a look-alike, are the
+normalisation-collision class, and a database collation that folds case or padding re-creates it below test-cap. An
+identifier nobody has proved is the attacker's word, so it must not open recovery or sign-in for whoever typed it.
+
+Override: none.
+
 ## Consequences
 
 - An account's assurance never depends on who can read its inbox.
@@ -123,3 +149,6 @@ its own gate.
 2. **Magic links and mail scanners.** Link scanners fetch URLs in incoming mail, and a single-use link consumed by a
    `GET` is spent before the person clicks it. Recommendation: the link opens a confirmation page, and only that page's
    `POST` consumes the token.
+3. **The normalisation rules.** Recommendation: Unicode NFC over the whole address, the whole address lower-cased
+   (providers treat the local part case-insensitively in practice, and two accounts differing only in case are a
+   collision risk), and the domain converted to its IDNA A-label form.

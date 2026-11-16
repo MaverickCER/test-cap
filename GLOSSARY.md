@@ -45,8 +45,8 @@ arrives.
 assurance a route or operation needs. `auth.require(req, requirementId)` checks one. Requirement ids belong to test-cap;
 an app or access-cap maps its own capability ids to them.
 
-**Email sign-in.** The opt-in method (a code or magic link sent to a confirmed address). It is a deviation and adds
-no assurance.
+**Email sign-in.** The opt-in method (a code or magic link sent to a confirmed address). It is a deviation, produces no
+evidence and adds no assurance.
 
 **ASVS requirement** and **NIST statement.** An item of OWASP ASVS 5.0.0 or NIST SP 800-63B-4 that
 `specs/requirements.md` maps. Named apart from **requirement**, which always means a policy rule id here.
@@ -61,8 +61,7 @@ allows is access-cap's or the app's decision.
 is listed in the policy report. A deviation never raises what evidence is worth.
 
 **Indeterminate.** The answer when test-cap cannot prove something either way, for example a breached-password check
-whose service could not be reached. Indeterminate is reported as such and never counted as a pass. The rule comes from
-data-cap's policy model.
+whose service could not be reached. Indeterminate is reported as such and never counted as a pass.
 
 ## Who is signed in
 
@@ -85,20 +84,21 @@ policy requires. It can only enrol; `auth.require` answers `enroll`.
 assurance and can only replace authenticators; `auth.require` answers `recovery-only`. It ends once the change is
 made.
 
-**Recovery code.** Two kinds. A saved recovery code is 80-bit, shown once and stored hashed. An issued recovery code
-is at least 6 digits, sent by email, valid at most 24 hours and single use. Neither is authentication (800-63B-4
-§3.1.3.1).
+**Recovery code.** Two kinds. A saved recovery code is 80-bit, shown once and stored as a salted argon2id hash. An
+issued recovery code is at least 6 digits, sent by email, valid at most 24 hours and single use; 800-63B-4 §3.1.3.1
+says such a code is not an authentication process. test-cap treats neither kind as evidence (ADR 0007).
 
-**Credential change.** Setting a password, or adding or removing an authenticator or a linked identity. It rotates the
-session and revokes the account's other sessions.
+**Credential change.** Setting or changing a password; adding or removing a passkey, security key, TOTP secret or set
+of recovery codes; changing the confirmed email address; linking or unlinking a federated identity. It rotates the
+session and revokes the account's other sessions (ADR 0006).
 
 **Linked identity.** A federated identity, issuer plus `sub` for OIDC or IdP plus persistent NameID for SAML, bound to
 one account in one tenant.
 
 **Enforced SSO.** A tenant setting under which sign-in starts only at the tenant's identity provider.
 
-**Deprovision.** The admin call (F19) a SCIM server or the app makes to disable an account and revoke its sessions,
-delegations and API keys.
+**Deprovision.** The admin call (F19) a SCIM server or the app makes to mark an account disabled and revoke its
+sessions and delegations (ADR 0012). A disabled account produces no evidence in any ceremony.
 
 **Tenant.** An isolated group of accounts, such as one customer organisation. Every stored record and every store
 operation is scoped to one tenant.
@@ -128,14 +128,16 @@ start without an HTTPS origin, a real store and every secret.
 **Store.** The app-supplied persistence behind the `AuthStore` port. test-cap never opens a database connection.
 
 **Atomic operation.** A store operation whose guarantee is part of its name: `consumeOnce` (single use, even under
-concurrency), `increment` (a counter in a time window), `createUnique` (tenant-scoped uniqueness) and `appendAudit`
-(rejects a gap or a duplicate sequence number).
+concurrency), `increment` (a counter in a time window), `createUnique` (tenant-scoped uniqueness), `update` with an
+expected version (compare-and-set) and `appendAudit` (rejects a gap or a duplicate sequence number). ADR 0002 owns the
+full list.
 
 **Conformance kit.** `test-cap/conformance`: tests an app runs against its own store to prove the atomic operations and
 tenant isolation hold under real concurrency.
 
 **Trust config.** The explicit list of federation issuers test-cap accepts, with each issuer's `acr` and `amr` mapping
-and maximum authentication age. An issuer or context outside it never raises assurance.
+and maximum authentication age. A mapping names AAL1 or AAL2, never AAL3. An issuer or context outside it never raises
+assurance.
 
 **`returnTo`.** The path a person returns to after signing in. Accepted only as a same-origin relative path.
 
@@ -143,8 +145,8 @@ and maximum authentication age. An issuer or context outside it never raises ass
 OIDC or SAML round trip is bound to, referenced by the short-lived `__Host-test-cap-tx` cookie: SameSite=Lax for
 OIDC, SameSite=None only for SAML's POST binding.
 
-**Rotation.** Issuing a new session token and revoking the old one when trust changes: sign-in, step-up, privilege
-change, impersonation.
+**Rotation.** Issuing a new session token and revoking the old one when trust changes. ADR 0006 section 5 owns the list
+of triggers.
 
 **Throttle.** A delay on further attempts against a counter key after failures. It never disables an account.
 
@@ -161,8 +163,9 @@ hook is the app-supplied function (Turnstile, hCaptcha or the app's own) it esca
 are deterministic. `oauth4webapi` and `@simplewebauthn/server` also read the system clock internally; ADR 0003 states
 that limit.
 
-**Public path.** A route listed in an adapter's `public` option and so exempt from deny by default. Paths match
-exactly after normalisation, or through an explicit wildcard such as `/blog/*`.
+**Public path.** A route listed in an adapter's `public` option and so exempt from deny by default. It matches only a
+clean raw path, exactly or through an explicit wildcard such as `/blog/*`, and never after normalisation; an ambiguous
+path is refused with a 400 before any match (ADR 0003, ADR 0024).
 
 **Server helper.** In Next.js, test-cap's authoritative session and requirement check, called in route handlers,
 server functions and the data-access layer. `proxy` only redirects early and is never the protection.
@@ -194,8 +197,8 @@ the app recorded during the session. Separate from security events.
 8785 canonical JSON. An **activity record** is one the app writes with `audit.record`; the others are session facts
 test-cap writes.
 
-**Audit stream.** One numbered sequence of audit records, one per system and tenant. `appendAudit(stream, seq, record)`
-keeps it free of gaps and duplicates.
+**Audit stream.** One numbered sequence of audit records, one per system and tenant. `appendAudit(tenant, stream, seq,
+record)` keeps it free of gaps and duplicates.
 
 **Audit chain.** The audit records linked by HMAC-SHA-256 under the **chain key** `AUTH_AUDIT_KEY`, so a change to any
 record breaks every link after it. The **chain head** is the latest link.
@@ -209,6 +212,13 @@ as a whole prefix ending at an exported checkpoint. A legal hold suspends remova
 **Checkpoint.** An Ed25519 signature, under `AUTH_AUDIT_SIGNING_KEY`, over the chain head and its sequence number,
 exported by the app to storage outside the database. Verification detects tampering back to the last exported
 checkpoint.
+
+**Open item** and **provisional default.** An open item is a question the plan leaves unsettled, listed under a
+document's `## Open` heading with a recommendation. The recommendation is a provisional default: the build follows it
+until the owner decides.
+
+**Handoff question.** One of the 19 questions in the design handoff of 2026-11-15 (`Dev/AUTH_CAP_HANDOFF_2026-11-15.md`,
+kept outside this repository). ADRs 0001 to 0019 each answer the question with their own number.
 
 **Policy report.** The JSON and Markdown report `test-cap/report` produces from the policy: requirements, how
 assurance is computed, timeouts checked against 800-63B-4, and every deviation.

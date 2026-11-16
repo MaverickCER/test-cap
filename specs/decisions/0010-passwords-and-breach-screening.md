@@ -3,7 +3,7 @@
 ## Status
 
 Accepted (2026-11-15). Implemented in phase 3 (passwords in the first complete slice); the policy report line lands
-with the policy report in phase 8. Answers handoff question 10.
+with the policy report in phase 8. Answers [handoff question](../../GLOSSARY.md) 10.
 
 Planned tests:
 
@@ -12,6 +12,8 @@ Planned tests:
 - `test/methods/password-hibp-unreachable.test.ts`
 - `test/report/hibp-deviation.test.ts`
 - `test/attacks/breached-password-accepted.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -55,7 +57,7 @@ host is fixed in code; no configuration names another one.
 Why: the bundled list is small by necessity; the breach corpus is what catches a password that is uncommon yet already
 leaked. Padding removes the response-size side channel at no cost.
 
-Override: turning HIBP off is one declared line in the policy. It is a deviation
+Override: turning HIBP off is one declared line in the policy (its `BreachedPasswordConfig`). It is a deviation
 ([ADR 0026](0026-strict-defaults-and-deployment-mode.md)): the policy report lists it, and the bundled blocklist keeps
 running.
 
@@ -82,17 +84,22 @@ the password or its full hash. Turning the check off stops all traffic to HIBP.
 
 A password is at least 8 characters while the policy requires multi-factor authentication for every route that
 accepts it, and at least 15 when a deviation lets a password alone satisfy a requirement (800-63B-4 §3.1.1.2). The
-maximum accepted is 256 characters, which also bounds the argon2id input ([ADR 0018](0018-budgets.md)). Length counts
-Unicode code points after NFC normalisation. A password is verified exactly as received: never truncated, never
-case-folded, and with no composition rules.
+maximum accepted is 256 characters, which also bounds the argon2id input ([ADR 0018](0018-budgets.md)). A password is
+normalised once, to Unicode NFC, as soon as it is received; that one normalised string is what the length rules count
+(in code points) and what argon2id hashes, at sign-up, change, reset and sign-in alike. Beyond that one step it is
+used whole: never truncated, trimmed or case-folded, and with no composition rules.
 
-Why: NIST sets both minimums and counts each code point as one character; the 256 ceiling exceeds NIST's 64 while
+Why: NIST sets both minimums and counts each code point as one character. Normalising once, before both the count and
+the hash, means the length that was checked is the length of what was hashed, and the same password typed on two
+keyboards that emit different code-point sequences still verifies; the 256 ceiling exceeds NIST's 64 while
 keeping the hashing cost bounded. This ADR owns every password-verifier rule, so length lives beside the blocklist it
 filters.
 
 Override: the minimums can be raised, never lowered. A password-only requirement is itself a reported deviation.
 
-Planned tests: `test/methods/password-length.test.ts`, `test/methods/password-no-truncation.test.ts`.
+Planned tests: `test/methods/password-length.test.ts`, `test/methods/password-no-truncation.test.ts` (a password that
+differs only in normalisation form verifies; one that differs in any other way does not),
+`test/attacks/password-altered-before-hashing.test.ts`.
 
 ## Consequences
 

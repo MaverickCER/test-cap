@@ -6,7 +6,8 @@ Accepted (2026-11-15). Implemented in phase 2 (the transport contract, the parse
 phase 3 (the Express adapter) and phase 6 (the `fetch`, Nest, Next.js and TanStack Start adapters and the adapter
 conformance suite).
 
-Answers handoff question 3 (HTTP surface), together with ADR 0024, which owns the adapters and deny by default.
+Answers [handoff question](../../GLOSSARY.md) 3 (HTTP surface), together with ADR 0024, which owns the adapters and deny
+by default.
 
 Planned tests:
 
@@ -16,14 +17,20 @@ Planned tests:
 - `test/transport/set-cookie-multiple.test.ts` (several `Set-Cookie` values reach the client as separate headers);
 - `test/transport/duplicate-headers.test.ts` (repeated request headers keep every value);
 - `test/transport/abort-signal.test.ts` (an aborted request stops before its next store write);
+- `test/transport/ambiguous-path.test.ts` (every ambiguous path form is a 400, under `/auth/*` and outside it);
+- `test/transport/declared-fields.test.ts` (a body field the route does not declare is a 400);
+- `test/transport/error-responses.test.ts` (each `TransportErrorCode` answers its status with a fixed body that holds
+  no message);
 - `test/transport/parsers.fuzz.test.ts` (fast-check over the form, JSON, cookie and header parsers);
 - `test/adapters/conformance/*.test.ts` (every HTTP scenario through all five adapters);
-- `test/attacks/upstream-body-parser.test.ts` (an Express body parser mounted before test-cap cannot change what the
-  core sees);
-- `test/attacks/double-slash-path.test.ts` and `test/attacks/adapter-core-parsing-difference.test.ts`;
+- `test/attacks/upstream-body-parser-changes-core-view.test.ts` (an Express body parser mounted before test-cap cannot
+  change what the core sees);
+- `test/attacks/double-slash-path-bypass.test.ts` and `test/attacks/adapter-core-parsing-differential.test.ts`;
 - `test/core/injected-clock-and-random.test.ts` (every flow runs on the injected `Clock` and `RandomSource`; a scan
   of `src/` finds no other use of the global clock or random source);
 - `test/core/standard-globals-only.test.ts` (the core imports no `node:` module).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -67,8 +74,18 @@ request object would each carry that framework's parsing decisions into the core
 
 The core alone reads the content type, enforces the body size limit, parses forms and JSON, and parses and serialises
 cookies. A body over the limit is refused before parsing. A content type the route does not accept is refused.
+Each route declares the fields it reads; the core parses only those, and a body that carries any other field is
+refused with a 400, so a request can never set a server-owned field such as a verified flag, a tenant or a status.
 
-Why: one parser means one interpretation. The fuzz tests and the attack tests then cover every adapter at once.
+The core reads the path exactly as sent and never normalises it. A path that two parsers could read differently is
+refused with a 400, for every request, whether under `/auth/*` or not, before deny by default (ADR 0024) or any route
+sees it: an empty segment (`//`, or a trailing slash on any path but `/`), a dot segment, an encoded slash, dot or
+backslash, a backslash, whitespace or a control character.
+
+Why: one parser means one interpretation, and a declared field list means the request shape is the route's, not the
+caller's. Normalising a path would be a bypass: `/admin/x/../about` normalises to a public `/about`, while a framework
+may route the raw path to an `/admin/*` handler. Refusing it leaves nothing to disagree about. The fuzz tests and
+the attack tests then cover every adapter at once.
 
 ### 3. Repeated headers and cookies are preserved
 
@@ -100,9 +117,10 @@ Why: the conformance suite can only prove adapters equivalent if they differ in 
 
 ### 6. One dispatcher serves every auth route
 
-`auth.handle(req)` is the core's single entry for every `/auth/*` route, the default pages and their hashed assets
-(ADR 0025). Routing, CSRF checks (ADR 0011), headers and caching rules (`no-store` on auth responses, immutable on
-hashed assets, ADR 0026) all live behind it.
+`createAuth(config)` returns an `Auth`. Its `handle` member, `auth.handle(req)`, is the core's single entry for every
+`/auth/*` route, the default pages and their hashed assets (ADR 0025). Its other members are owned elsewhere: `session`
+by ADR 0006, `require` by ADR 0005, and `admin` by ADR 0012 and ADR 0014. Routing, CSRF checks (ADR 0011), headers and
+caching rules (`no-store` on auth responses, immutable on hashed assets, ADR 0026) all live behind it.
 
 Why: one entry gives one place to apply every check, and adapters stay a few lines long.
 
@@ -122,8 +140,33 @@ Why: an injected clock lets a test stand exactly on either side of every expiry,
 test and mutation testing can kill time- and randomness-dependent mutants. Standard globals are what lets the same
 `dist/` run on Node, Bun and Deno (ADR 0023).
 
-Override: tests and apps may pass their own `Clock` and `RandomSource`. A `RandomSource` must be cryptographically
-secure; a predictable one in production makes every token guessable, and the docs say so.
+For tests, `fixedClock(start)` returns a `FixedClock` that a test sets and advances by hand, and
+`sequenceRandom(bytes)` returns a `RandomSource` that replays fixed bytes.
+
+Override: tests only. A test passes its own `Clock` and `RandomSource`; any other deployment mode refuses to start
+with either (ADR 0026, section 4), because a frozen clock disables every expiry and a predictable random source makes
+every token guessable.
+
+### 8. One error model
+
+A request the core refuses before any flow runs raises a `TransportError`. Its `code` is a `TransportErrorCode`, and
+the dispatcher answers with the status that code maps to:
+
+| `TransportErrorCode`                                                                                  | Status |
+| ----------------------------------------------------------------------------------------------------- | ------ |
+| `aborted`, `ambiguous-header`, `duplicate-field`, `invalid-path`, `malformed-body`, `too-many-fields` | 400    |
+| `body-too-large`                                                                                      | 413    |
+| `unsupported-media-type`                                                                              | 415    |
+
+The response carries only the code, in a fixed public body; the error's message is for logs and never reaches the
+client. An error a flow throws (a store, library or hook failure) gets a generic 500 body and never an `allow`
+(ADR 0005). A configuration that cannot run raises one `ConfigError` at startup, whose `problems` list every reason at
+once (ADR 0026).
+
+Why: a fixed body per code leaks no configuration, stack, query, key or token, and listing every startup problem at
+once saves a deploy-fix-deploy loop per problem.
+
+Override: none.
 
 ## Consequences
 
@@ -140,6 +183,8 @@ secure; a predictable one in production makes every token guessable, and the doc
   clock, and the same holds for any other library that reads the clock itself (SAML is the likely case, ADR 0028). In
   production those libraries read the system clock, not the injected one, so an app that injects a skewed `Clock`
   gets test-cap's expiry checks and the libraries' checks on different times.
+- **The status codes are coarse.** A client learns that a request was refused and which code applies, not which
+  header or field caused it; the message in the log says.
 - **Abort cannot undo a write in flight.** A store write already sent completes or fails on its own; the atomic
   operations of ADR 0002 keep it whole.
 - **The Express adapter needs the raw stream.** If middleware mounted earlier has already consumed it, the adapter
@@ -153,9 +198,9 @@ secure; a predictable one in production makes every token guessable, and the doc
    the SAML assertion consumer route only (ADR 0028), and configurable downward only.
 2. **A consumed stream in Express.** Recommendation: fail closed with an error that names the middleware order
    problem, rather than fall back to `req.body`.
-3. **Ambiguous paths, repeated single-value headers and repeated fields.** Recommendation: the dispatcher refuses,
-   rather than normalises, a path with an empty segment (`//`), an encoded slash or a dot segment; a request with more
-   than one `Host`, `Origin`, `Content-Type` or `Content-Length`; and a form or JSON body that repeats a field. Each
-   refusal is a 400, so no two parsers can disagree on which value won.
+3. **Repeated single-value headers and repeated fields.** Recommendation: the dispatcher refuses, rather than picks
+   one of, a request with more than one `Host`, `Origin`, `Content-Type` or `Content-Length`, and a form or JSON body
+   that repeats a field. Each refusal is a 400, so no two parsers can disagree on which value won. Ambiguous paths are
+   no longer open: section 2 refuses them.
 4. **What `auth.handle` returns outside its routes.** Recommendation: `null`, so an adapter passes the request on to
    the app (after the deny by default check of ADR 0024) without guessing from a status code.

@@ -5,7 +5,7 @@
 Accepted (2026-11-15). Implemented in phase 5 (OIDC sign-in and linking, flow F11) and phase 8 (the same rules for
 SAML, flow F12).
 
-Answers handoff question 8 (account linking).
+Answers [handoff question](../../GLOSSARY.md) 8 (account linking).
 
 Planned tests:
 
@@ -16,14 +16,16 @@ Planned tests:
 - `test/linking/link-is-unique.test.ts` (one issuer and subject links to one account per tenant, also under
   concurrency);
 - `test/linking/link-revokes-other-sessions.test.ts`;
-- `test/attacks/auto-link-unverified-email.test.ts` (an OIDC sign-in whose email matches an account is never linked to
-  it, whether `email_verified` is false, missing or true);
-- `test/attacks/unverified-provider-email.test.ts` (`email_verified` from an issuer outside the trust config counts as
+- `test/attacks/oidc-auto-link-to-unverified-account.test.ts` (an OIDC sign-in whose email matches an account is never
+  linked to it, whether `email_verified` is false, missing or true);
+- `test/attacks/oidc-email-verified-string.test.ts` (`email_verified` from an issuer outside the trust config counts as
   unverified);
 - `test/attacks/pre-account-hijack.test.ts` (an unconfirmed sign-up never claims an address, and cannot be taken over
   by its real owner's later sign-up);
-- `test/attacks/federated-sign-in-as-another-user.test.ts` (a subject from one issuer can never sign in to an account
+- `test/attacks/federated-identity-collision.test.ts` (a subject from one issuer can never sign in to an account
   linked to another issuer's subject).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 

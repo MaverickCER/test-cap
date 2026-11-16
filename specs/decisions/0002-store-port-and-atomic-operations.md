@@ -5,7 +5,7 @@
 Accepted (2026-11-15). Implemented in phase 2 (the `AuthStore` port, `test-cap/store/memory` and the conformance
 kit), phase 3 (`test-cap/store/sql` on Postgres) and phase 6 (SQLite and MySQL).
 
-Answers handoff question 2 (storage ownership).
+Answers [handoff question](../../GLOSSARY.md) 2 (storage ownership).
 
 Planned tests:
 
@@ -20,6 +20,8 @@ Planned tests:
 - `test/store/sql/dialects.test.ts` (the kit against Postgres 15, 16 and 17, SQLite and MySQL 8.4 in CI service
   containers);
 - `test/store/sql/migrations.test.ts` (printed migrations apply cleanly to an empty database of each dialect).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -46,31 +48,43 @@ own connection would duplicate all of it and add a second set of database secret
 
 ### 2. The port's guarantees are its operations
 
-Every operation is scoped to one tenant (ADR 0012).
+Records are JSON documents (`JsonValue`) addressed by tenant, collection and key. A stored record
+(`StoredRecord`) carries an optional owner, a `version` that every change increments, and the times flows check:
+`expiresAt`, `revokedAt` and `consumedAt`. `createUnique` takes a `NewRecord`, and `update` takes a `RecordChange`.
+Every operation takes the tenant as its first argument (ADR 0012). `StoreOperations` names the operations below;
+`AuthStore` adds `kind`, `durable` and the optional `transaction`, and `StoreTransaction` is the handle a transaction's
+steps receive.
 
-| Operation                          | Guarantee                                                                                    | Used for                                                                                |
-| ---------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `consumeOnce`                      | Atomic single use: of any number of concurrent calls on one key, exactly one gets the record | Email and recovery codes, WebAuthn challenges, federation transactions, TOTP time steps |
-| `increment`                        | Atomic counter in a time window: concurrent increments are never lost                        | Throttling counters and the failure ceiling (ADR 0009)                                  |
-| `createUnique`                     | Tenant-scoped uniqueness: concurrent creates of one key, exactly one succeeds                | Identifiers, authenticator ids, linked identities (ADR 0008)                            |
-| `appendAudit(stream, seq, record)` | Rejects a gap or a duplicate `seq` in a stream                                               | The audit chain (ADR 0020)                                                              |
-| session revoke                     | Immediate visibility: once revoke resolves, no later read returns the session as valid       | Sign-out, remote revoke, credential change (ADR 0006)                                   |
-| `transaction(fn)` (optional)       | The steps inside `fn` commit together or not at all                                          | A credential change plus revoking the account's other sessions                          |
+| Operation                                                  | Guarantee                                                                                          | Used for                                                                   |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `consumeOnce(tenant, collection, key, now)`                | Atomic single use: of any number of concurrent calls on one key, exactly one gets the record       | Email and recovery codes, WebAuthn challenges, federation transactions     |
+| `increment(tenant, counter, windowMs, now)`                | Atomic counter in a fixed window, returning a `CounterState`: concurrent increments are never lost | Throttling counters and the failure ceiling (ADR 0009)                     |
+| `resetCounter(tenant, counter)`                            | Clears a counter                                                                                   | A success that resets a failure count (ADR 0009)                           |
+| `createUnique(tenant, record)`                             | Tenant-scoped uniqueness: of concurrent creates of one key, exactly one gets `created`             | Identifiers, authenticator ids, linked identities (ADR 0008)               |
+| `update(tenant, collection, key, expectedVersion, change)` | Compare-and-set: applies only when the stored version is `expectedVersion`, else `conflict`        | The last accepted TOTP step (ADR 0027), any read-check-write on one record |
+| `revoke(tenant, collection, key, at)`                      | Immediate visibility: once revoke resolves, no later read returns the record unrevoked             | Sign-out, remote revoke, delegation revoke (ADR 0006, ADR 0013)            |
+| `revokeByOwner(tenant, collection, owner, at, { except })` | One operation over every unrevoked record of an owner, with the same visibility                    | Credential change, recovery, deprovision (ADR 0006, ADR 0007, ADR 0012)    |
+| `get`, `listByOwner`, `delete`                             | Plain reads and removal, tenant-scoped; `listByOwner` includes revoked and consumed records        | Session lookup, the session list, cleanup                                  |
+| `appendAudit(tenant, stream, seq, record)`                 | Returns `appended`, `gap` or `duplicate`: the first `seq` is 1 and each next one the last plus one | The audit chain (ADR 0020)                                                 |
+| `readAudit(tenant, stream, fromSeq, limit)`                | Up to `limit` entries (`AuditEntry`) from `fromSeq`, in `seq` order                                | Verification and reports (ADR 0020)                                        |
+| `transaction(fn)` (optional)                               | The steps inside `fn` commit together or not at all                                                | A credential change plus revoking the account's other sessions             |
 
 Why: naming the guarantee in the operation puts the hard part (atomicity) where it can be tested once, in the store,
 instead of in every flow. A flow that needs single use calls `consumeOnce`; it never reads, checks and deletes.
 
 ### 3. `store/memory` is for development only
 
-`test-cap/store/memory` passes the conformance kit within one process. It is refused in production deployment mode:
-when `APP_ENV` is missing, unknown or production, `createAuth` refuses to start with it (ADR 0026).
+`test-cap/store/memory` (`memoryStore()`) passes the conformance kit within one process. Every store declares a
+`durable` trait, and the memory store's is `false`. Production and staging refuse to start with any store whose
+`durable` is `false` (ADR 0026), so the refusal follows the trait, not the store's name.
 
 Why: memory loses every session and every counter on restart and is not shared between processes, so throttling and
 single use would hold per process only.
 
 ### 4. `store/sql` implements every guarantee as a single statement backed by a constraint
 
-`sqlStore({ dialect, query, transaction? })` runs over the app's own `query(sql, params)` function and its optional
+`sqlStore({ dialect, query, transaction? })`, where `dialect` is a `SqlDialect` (`postgres`, `sqlite` or `mysql`), runs
+over the app's own `query(sql, params)` function and its optional
 `transaction` function. Each guarantee is one statement whose atomicity the database enforces:
 
 - `consumeOnce`: a conditional `UPDATE … RETURNING` (or `DELETE … RETURNING`) that only the first caller matches;
@@ -88,14 +102,17 @@ Override: an app may bring its own store (an ORM, a key-value database) if it pa
 
 ### 5. Migrations are printed, not run
 
-`store/sql` ships the schema for each dialect as SQL text. test-cap prints it; the app applies it with its own
-migration tool. test-cap never runs DDL.
+`store/sql` ships the schema for each dialect as SQL text, returned by `migrations(dialect)`. test-cap prints it; the
+app applies it with its own migration tool. test-cap never runs DDL.
 
 Why: section 1. Running migrations needs a connection with DDL rights, which test-cap must not hold.
 
 ### 6. The conformance kit runs real concurrency against real databases
 
-`test-cap/conformance` is a set of tests an app runs against its own store. Each guarantee in section 2 is exercised
+`test-cap/conformance` is a set of tests an app runs against its own store. `runAuthStoreConformance(createStore,
+options)` returns a `ConformanceReport` holding one `ConformanceResult` per check, instead of depending on a test
+framework, so it runs under Vitest, `node:test`, Bun and Deno alike; `ConformanceOptions` sets how many parallel calls
+each race check makes. Each guarantee in section 2 is exercised
 by many parallel calls, not by sequential calls that only look concurrent, and tenant isolation is checked on every
 operation. CI runs the kit against `store/memory`, and against `store/sql` on Postgres 15, 16 and 17, SQLite and MySQL
 8.4 as service containers.
@@ -105,7 +122,7 @@ Why: a race only shows up under concurrency. A store that passes sequential test
 ## Consequences
 
 - Every flow is written against named guarantees, so the attack tests for redemption races and lost counters
-  (`test/attacks/otp-redemption-race.test.ts`) test the flow and the store together.
+  (`test/attacks/redemption-race.test.ts`) test the flow and the store together.
 - test-cap maintains SQL for three dialects, and the migrations that go with them.
 - An app that uses an ORM passes its raw-query function; nothing in test-cap depends on the ORM.
 - A custom store is possible, and the kit is the one way to show that it is safe.

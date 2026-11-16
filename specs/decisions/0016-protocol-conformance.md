@@ -4,19 +4,25 @@
 
 Accepted (2026-11-15). Implemented across phases: the RFC 4226 and RFC 6238 vectors in phase 3 (TOTP); the WebAuthn
 vectors and OIDC interoperability in phase 5; the Playwright virtual authenticator in phase 7; the SAML test IdP and
-negative cases in phase 8; the OpenID conformance suite in phase 9. Answers handoff question 16.
+negative cases in phase 8; the OpenID conformance suite in phase 9. The ZAP scans and Playwright attack scripts of
+section 8 first run against the slice in phase 4 and become a release gate in phase 9. Answers [handoff
+question](../../GLOSSARY.md) 16.
 
 Planned tests:
 
-- `test/protocols/hotp-rfc4226-vectors.test.ts`
-- `test/protocols/totp-rfc6238-vectors.test.ts`
+- `test/otp/hotp-rfc4226-vectors.test.ts` and `test/otp/totp-rfc6238-vectors.test.ts` (owned by
+  [ADR 0027](0027-otp-on-web-crypto-and-encrypted-secrets.md))
 - `test/protocols/webauthn-l3-vectors.test.ts`
 - `test/e2e/passkey-virtual-authenticator.spec.ts` (Playwright, three engines)
 - `test/protocols/oidc-provider-interop.test.ts` (against `oidc-provider`)
-- `test/saml/interop-local-idp.test.ts` and `test/attacks/saml/*.test.ts` (listed and owned by
+- `test/saml/interop-local-idp.test.ts` and the SAML attack tests (listed and owned by
   [ADR 0028](0028-saml-library-and-its-own-gate.md))
 - `test/support/frozen-time.ts` (the test-time clock shim of section 6, with its own tests)
 - the `openid-conformance` CI job (section 2)
+- the `zap-scan` CI job (section 8: ZAP baseline and active scans against an example app)
+- `test/e2e/attack-scripts.spec.ts` (section 8: Playwright attack scripts against the same example)
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -109,7 +115,27 @@ default is the protocol's minimum, not test-cap's bar.
 Override: none. An issuer whose tokens cannot be verified is not added to the trust config.
 
 Planned tests: `test/attacks/id-token-unsigned-or-alg-confusion.test.ts`,
-`test/methods/oidc-id-token-signature.test.ts`.
+`test/oidc/id-token-signature.test.ts`.
+
+### 8. ZAP and Playwright attack scripts gate the release
+
+Two free tools attack a running example app (one of phase 7's examples, or the phase 3 slice before those exist):
+
+- **ZAP**, the OWASP Zed Attack Proxy, runs a baseline scan (passive checks) and an active scan (injected attacks)
+  against the default pages and every `/auth/*` route;
+- **Playwright attack scripts** drive real browsers through the attacks a scanner cannot model, such as a cross-site
+  form post, a framed sign-in page and a replayed callback.
+
+The first scan runs against the slice in phase 4 (Hardening), and its findings are fixed or recorded there. From phase 9
+the scans are a release gate: release verification fails when ZAP reports any alert at risk medium or above, or when
+an attack script succeeds. A false positive is recorded with its reason in the release report, never silenced in the
+tool's configuration alone.
+
+Why: the plan lists ZAP and Playwright attack scripts among the free tooling and requires "nothing at medium or above"
+at release. A scanner tests the deployed behaviour (headers, cookies, redirects) that unit tests reach only piece by
+piece.
+
+Override: none.
 
 ## Consequences
 
@@ -127,6 +153,8 @@ Planned tests: `test/attacks/id-token-unsigned-or-alg-confusion.test.ts`,
   platform quirks of real authenticators, are not tested.
 - SAML is checked against one test IdP. Interoperability with every enterprise IdP is not claimed, and SAML is
   Node-only ([ADR 0023](0023-runtime-support-per-capability.md)).
+- ZAP finds the classes its rules know, against the routes it reaches. A clean scan is evidence for those rules on
+  that example app, not for every deployment, and the phase 4 scan gates nothing until phase 9.
 - None of this is a pen test or a certification. test-cap is not submitted for OpenID certification.
 
 ## Open

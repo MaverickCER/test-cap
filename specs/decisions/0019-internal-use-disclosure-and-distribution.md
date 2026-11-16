@@ -3,17 +3,19 @@
 ## Status
 
 Accepted (2026-11-15). The repository settings are applied in phase 1; the GitHub Release tarball is built in phase 9.
-Answers handoff question 19.
+Answers [handoff question](../../GLOSSARY.md) 19.
 
 Planned tests:
 
 - `test/release/no-install-scripts.test.ts` (the packed `package.json` has no `preinstall`, `install`, `postinstall`
   or `prepare` that a consumer would run)
 - `test/package/tarball-install.test.ts` (shared with [ADR 0004](0004-package-entries-and-capability-gates.md))
-- `test/docs/no-public-security-claims.test.ts` (the README, the landing page and `specs/` contain no compliance,
-  certification or pen-test claim)
+- `test/docs/no-public-security-claims.test.ts` (the README, the landing page and `specs/` relate test-cap to a
+  standard only with "maps to", and describe its testing only as what each test checks)
 
 The contract's existing `SecuritySecrets` and `PackedConsumer` checks also apply.
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -59,12 +61,12 @@ The published package has no script that runs on install. Everything a consumer 
 
 Why: IPC forbids them, and an install script is code that runs with the installer's rights before anyone reviews it.
 
-### 5. No public security claims, no positioning table, no external pen test
+### 5. Internal evidence only: "maps to", no positioning table, no external review
 
-The README, the IPC landing page and `specs/` describe what is tested and what is not, for internal readers. They
-never call test-cap compliant, certified or pen-tested, and they say what the free tooling (ZAP, fuzzing, CodeQL and
-the rest) does not cover. The handoff's "How it differs" table is not written. There is no external pen test, by owner
-decision.
+The README, the IPC landing page and `specs/` describe what is tested and what is not, for internal readers. They relate
+test-cap to a standard only with "maps to", describe its testing as what each test and tool checks, and say what the
+free tooling (ZAP, fuzzing, CodeQL and the rest) does not cover. The handoff's "How it differs" table is not written.
+There is no external pen test, by owner decision.
 
 Why: a public claim invites reliance from people the package does not serve, and the evidence behind any claim is
 test-cap's own tests. A positioning table is for an audience test-cap does not have.

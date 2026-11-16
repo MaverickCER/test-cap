@@ -6,7 +6,7 @@ Accepted (2026-11-15). Implemented in phase 3 (sessions, the `__Host-test-cap` c
 session list and remote revoke), phase 5 (the federation transaction cookie for OIDC) and phase 8 (its SameSite=None
 form for SAML's POST binding).
 
-Answers handoff question 6 (sessions).
+Answers [handoff question](../../GLOSSARY.md) 6 (sessions).
 
 Planned tests:
 
@@ -15,17 +15,19 @@ Planned tests:
 - `test/sessions/cookie-attributes.test.ts` (`__Host-test-cap` with Secure, HttpOnly, SameSite=Lax, `Path=/`, no
   Domain);
 - `test/sessions/timeouts.test.ts` (idle and absolute limits at AAL2 and AAL3, on both sides of each boundary);
-- `test/sessions/rotation.test.ts` (a new token on sign-in, step-up, privilege change and impersonation; the old token
-  stops working);
+- `test/sessions/rotation.test.ts` (a new token on each trigger of section 5, including the end of enrolment and of the
+  recovery-only state; the old token stops working);
 - `test/sessions/revocation-immediate.test.ts` (sign-out and remote revoke take effect on the next request);
 - `test/sessions/session-list.test.ts` (a user sees and revokes their own sessions, never another user's);
 - `test/sessions/credential-change-revokes-others.test.ts`;
 - `test/sessions/tx-cookie.test.ts` (`__Host-test-cap-tx` holds only a random id, lasts 10 minutes, and its
   transaction is consumed once);
 - `test/attacks/session-fixation.test.ts` (a token the client chose is never accepted);
-- `test/attacks/session-cache-2fa-bypass.test.ts` and `test/attacks/revoked-session-still-valid.test.ts`;
+- `test/attacks/session-cache-skips-mfa.test.ts` and `test/attacks/cached-session-survives-revocation.test.ts`;
 - `test/attacks/cookie-tossing.test.ts` (a cookie set by a sibling subdomain cannot replace the session cookie);
-- `test/attacks/tx-cookie-replay.test.ts` (a federation transaction cannot be completed twice).
+- `test/attacks/redemption-race.test.ts` (a federation transaction cannot be completed twice).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -92,15 +94,26 @@ Override: an app may shorten any limit. Lengthening one is a deviation, listed i
 
 ### 5. Tokens rotate on every change of trust
 
-A new token is issued, and the old one revoked, on sign-in, step-up, privilege change and the start of impersonation
-(ADR 0014). A token the client presents that the store did not issue is never adopted.
+A new token is issued, and the old one revoked, on every change of trust:
+
+- sign-in;
+- the end of enrolment, when a pre-auth session becomes authenticated;
+- the end of the recovery-only state (under ADR 0007 Open 5 that state ends the session instead, which also leaves no
+  recovery-only token carrying later trust);
+- step-up;
+- a credential change (section 7);
+- a privilege change;
+- the start and the end of impersonation or break-glass (ADR 0014).
+
+A token the client presents that the store did not issue is never adopted.
 
 Why: rotation is the defence against session fixation. A token known before a change of trust must not carry the
 trust gained after it.
 
 ### 6. Nothing skips revocation or the assurance check
 
-Every `auth.session`, `auth.require` and dispatcher request reads the session from the store and recomputes its
+`auth.session(req)` returns a `SessionInfo` or `null`. Every `auth.session`, `auth.require` and dispatcher request
+reads the session from the store and recomputes its
 assurance (ADR 0005). There is no cookie cache, no signed session snapshot and no in-process cache that answers in its
 place. Revocation is visible on the next request because the store guarantees it (ADR 0002).
 
@@ -110,7 +123,7 @@ the price.
 ### 7. People can see and end their sessions
 
 A user can list their own sessions and revoke any of them (`<Sessions/>`, flow F14). Signing out revokes the server
-record and clears the cookie. A credential change (a new password, an authenticator added or removed) revokes the
+record and clears the cookie. A credential change (as the glossary defines it) rotates this session and revokes the
 account's other sessions, in one `transaction` where the store offers it (ADR 0002).
 
 Why: remote sign-out is how a person recovers from a lost device without an administrator. Revoking other sessions on

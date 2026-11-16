@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted (2026-11-15). Implemented in phase 8, with the other admin calls. Answers handoff question 14.
+Accepted (2026-11-15). Implemented in phase 8, with the other admin calls. Answers
+[handoff question](../../GLOSSARY.md) 14.
 
 Planned tests:
 
@@ -12,7 +13,9 @@ Planned tests:
 - `test/admin/break-glass-time-limit.test.ts`
 - `test/events/impersonation-and-break-glass-flags.test.ts`
 - `test/report/break-glass-review.test.ts`
-- `test/attacks/impersonation-session-fixation.test.ts`
+- `test/attacks/impersonation-exceeds-grant.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -42,7 +45,7 @@ present now, not that they signed in this morning.
 ### 2. A reason and a time limit, always
 
 Each call requires a non-empty reason and a time limit. When the limit passes, the impersonation or break-glass session
-ends. The session token rotates when it starts ([ADR 0006](0006-sessions-and-cookies.md)).
+ends. The session token rotates when it starts and when it ends ([ADR 0006](0006-sessions-and-cookies.md)).
 
 Why: the reason is what a reviewer reads later; the time limit bounds the damage of a forgotten or stolen session.
 Rotating the token stops a token from before the switch from carrying the new powers.
@@ -54,16 +57,17 @@ Override: the administrator sets the reason and the limit within the policy's ma
 While an impersonation or break-glass session lasts, every security event it causes names the administrator, the target
 user (for impersonation), the reason and the flag ([ADR 0015](0015-security-events.md)). Starting impersonation is an
 OCSF Authentication event with activity 7 Account Switch and `account_switch_type_id` 2 (Impersonate). The subject
-carries the impersonator, so `auth.require` callers and access-cap see it too.
+carries the `Impersonator` (or, for break-glass, the `BreakGlassGrant`: administrator, reason and time limit), so
+`auth.require` callers and access-cap see it too.
 
 Why: an action taken by an administrator in someone else's name must never be indistinguishable from the person's
 own.
 
 ### 4. Credential changes are blocked
 
-An impersonation or break-glass session cannot change any credential of the account it acts in: password, TOTP,
-passkeys and security keys, recovery codes, email address, API keys and delegations. The attempt is refused and
-emitted as a failed event.
+An impersonation or break-glass session can make no credential change (as the glossary defines it) on the account it
+acts in, and can create or revoke none of its API keys or delegations. The attempt is refused and emitted as a failed
+event.
 
 Why: a credential change is how temporary access becomes permanent. Blocking it keeps the account's owner in control,
 and removes the obvious way for a malicious administrator to keep access after the time limit.

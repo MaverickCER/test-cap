@@ -6,7 +6,7 @@ Accepted (2026-11-15). Implemented in phase 3 (evidence, session assurance, the 
 `defineAuthPolicy` and `auth.require`), phase 5 (the rules for passkeys, email and OIDC) and phase 8 (the policy
 report that recomputes and checks them).
 
-Answers handoff question 5 (policy model).
+Answers [handoff question](../../GLOSSARY.md) 5 (policy model).
 
 Planned tests:
 
@@ -17,6 +17,8 @@ Planned tests:
   attestation alone never gives AAL3);
 - `test/assurance/email-never-raises.test.ts` (email codes and magic links add no level, with or without the
   deviation);
+- `test/assurance/federated-aal-capped.test.ts` (a mapped `acr` yields at most AAL2; a trust config that maps any
+  value to AAL3 is refused at startup);
 - `test/assurance/untrusted-acr.test.ts` (an issuer outside the trust config, or an unmapped `acr`, never raises the
   level; an authentication older than the issuer's maximum age counts as AAL1);
 - `test/assurance/evidence-decay.test.ts` (expired evidence lowers the level);
@@ -25,6 +27,8 @@ Planned tests:
 - `test/policy/default-requirement-aal2.test.ts`;
 - `test/policy/deviations-reported.test.ts` (every relaxation appears in the policy report);
 - `test/report/recomputes-assurance.test.ts` (the report's levels match the model's for every rule above).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -81,7 +85,7 @@ and makes the session cache bypass of ADR 0001 impossible by construction: there
 | Passkey meeting every AAL3 condition (below)                                                        | AAL3                     |
 | Email sign-in code or magic link                                                                    | Adds nothing (section 5) |
 | OIDC, issuer not in the trust config or context unmapped                                            | AAL1                     |
-| OIDC, issuer in the trust config with an `acr`/`amr` mapping, within its maximum authentication age | The mapped level         |
+| OIDC, issuer in the trust config with an `acr`/`amr` mapping, within its maximum authentication age | The mapped level, ≤ AAL2 |
 
 AAL3 needs all four of:
 
@@ -92,18 +96,31 @@ AAL3 needs all four of:
 
 Attestation alone never establishes AAL3, and a synced passkey (backup-eligible) stops at AAL2.
 
+Federated evidence stops at AAL2. The trust config (`TrustConfig`, one `TrustedIssuer` per issuer, scoped to a tenant
+by ADR 0012) maps an issuer's `acr` or `amr` values to AAL1 or AAL2 only. A mapping that names AAL3 is refused when
+`createAuth` starts, with a `ConfigError` (ADR 0003). The same rule applies to SAML's `AuthnContextClassRef`
+(ADR 0028).
+
+The evidence records its key protection as a `KeyProtection` value, and a level is an `AssuranceLevel` (`AAL1`, `AAL2`
+or `AAL3`).
+
 Why: each rule restates a NIST property as a check on evidence. Combining evidence (password plus TOTP) is how two
 single-factor ceremonies make a multi-factor session, and how step-up adds to a session instead of replacing it.
 
 Override: none. An app cannot move a method to another level. The trust config is the only way to let an
-upstream `acr` count, and it is listed in the policy report.
+upstream `acr` count, up to AAL2, and it is listed in the policy report.
+
+Why federation stops at AAL2: AAL3 needs a non-exportable key, attestation to a trusted root, user verification and
+phishing resistance, and test-cap observes none of the four for a sign-in that happened at an identity provider. An
+`acr` that claims AAL3 is the provider's word, and raising a level on a word without evidence is what this model
+exists to prevent.
 
 ### 4. The policy declares requirements by test-cap's own ids
 
-`defineAuthPolicy` holds the requirements, each under a requirement id owned by test-cap, such as `billing.update`. A
-requirement states the session assurance a route or operation needs: a level, and optionally how recent the last
-multi-factor or phishing-resistant ceremony must be. The default requirement, used by deny by default (ADR 0024), is
-AAL2.
+`defineAuthPolicy` returns an `AuthPolicy` that holds the requirements (each a `Requirement`), each under a requirement
+id owned by test-cap, such as `billing.update`. A requirement states the session assurance a route or operation needs: a
+level, and optionally how recent the last multi-factor or phishing-resistant ceremony must be. The default requirement,
+used by deny by default (ADR 0024), is AAL2.
 
 An app, or access-cap, maps its own capability ids to these requirement ids. Neither package imports the other.
 
@@ -116,23 +133,24 @@ Override: the app defines its own requirements. Raising one is free. Lowering th
 
 ### 5. Email never raises the level
 
-Email sign-in codes and magic links are off by default. Turning them on is a deviation, and the evidence they produce
-cannot satisfy AAL2 or contribute a factor to it. ADR 0021 owns email's role.
+Email sign-in codes and magic links are off by default. Turning them on is a deviation. Email produces no
+`AuthenticationEvidence`, so it can neither satisfy AAL2 nor contribute a factor to it. ADR 0021 owns email's role.
 
 Why: §3.1.3.1, quoted above. A deviation can make email usable; it cannot make it worth more.
 
 ### 6. Every relaxation is a deviation
 
-A deviation is a line in the policy that relaxes a strict default: turning on email sign-in, lowering the default
-requirement, lengthening a timeout past the limits of ADR 0006. The policy report lists every deviation. A deviation
-never raises what evidence is worth: the level rules of section 3 hold whatever the policy says.
+A deviation (`Deviation`) is a line in the policy that relaxes a strict default: turning on email sign-in, lowering the
+default requirement, lengthening a timeout past the limits of ADR 0006. The policy report, a `PolicyReport` that
+`renderPolicyReport` turns into Markdown, lists every deviation. A deviation never raises what evidence is worth: the
+level rules of section 3 hold whatever the policy says.
 
 Why: an internal reader of the policy report should see every place the app chose to be weaker than the default,
 in one list, without reading code.
 
 ### 7. `auth.require` answers with one of five outcomes
 
-`auth.require(req, requirementId)` returns exactly one of:
+`auth.require(req, requirementId)` returns a `RequireResult`, exactly one of:
 
 | Outcome           | When                                                     | Carries              |
 | ----------------- | -------------------------------------------------------- | -------------------- |
@@ -168,6 +186,8 @@ Why: five explicit outcomes leave an adapter nothing to infer. A boolean would c
   is access-cap's decision.
 - **Machine and agent subjects carry no level.** `auth.require` for a `service` or `agent` subject follows ADR 0013.
 - **The plan names what decays but not each evidence lifetime.** See Open.
+- **Federated sign-in never reaches AAL3.** An app whose IdP really does meet AAL3 still gets AAL2 from it; a
+  requirement at AAL3 needs a local passkey that meets every AAL3 condition, by step-up if need be.
 
 ## Open
 

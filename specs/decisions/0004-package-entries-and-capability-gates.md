@@ -5,7 +5,7 @@
 Accepted (2026-11-15). Each entry is implemented in the phase the table in section 1 names; the gate rule applies from
 phase 2; the release tarball is built in phase 9.
 
-Answers handoff question 4 (package shape).
+Answers [handoff question](../../GLOSSARY.md) 4 (package shape).
 
 Planned tests:
 
@@ -16,6 +16,8 @@ Planned tests:
 - `test/package/peer-dependencies.test.ts` (framework packages are optional peers of the entry that needs them);
 - `test/package/tarball-install.test.ts` (the release tarball installs with scripts disabled and every entry resolves);
 - `test/package/size-budgets.test.ts` (each entry within its budget, ADR 0018).
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -34,26 +36,26 @@ npm (ADR 0019).
 
 ### 1. One entry per capability
 
-| Entry                     | Holds                                                                                   | Phase |
-| ------------------------- | --------------------------------------------------------------------------------------- | ----- |
-| `test-cap`                | `createAuth`, the dispatcher, sessions, assurance, policy, events and the human methods | 3, 5  |
-| `test-cap/env`            | The env-cap schema for `APP_*` and `AUTH_*` variables (ADR 0022)                        | 2     |
-| `test-cap/store/memory`   | The development store (ADR 0002)                                                        | 2     |
-| `test-cap/conformance`    | The store conformance kit (ADR 0002)                                                    | 2     |
-| `test-cap/store/sql`      | The SQL store and its migrations: Postgres first, then SQLite and MySQL (ADR 0002)      | 3, 6  |
-| `test-cap/express`        | Express adapter (ADR 0003, ADR 0024)                                                    | 3     |
-| `test-cap/fetch`          | `fetch` handler wrapper                                                                 | 6     |
-| `test-cap/nest`           | Nest global guard and `@Public()`                                                       | 6     |
-| `test-cap/next`           | Next.js route handler, server helpers and optional `proxy`                              | 6     |
-| `test-cap/tanstack-start` | TanStack Start global middleware                                                        | 6     |
-| `test-cap/client`         | Browser client on `@simplewebauthn/browser`, with conditional-mediation autofill        | 7     |
-| `test-cap/forms`          | The framework-free form model (ADR 0025)                                                | 7     |
-| `test-cap/react`          | `<SignInForm/>`, `<SignUpForm/>`, `<RecoverForm/>` and the other components (ADR 0025)  | 7     |
-| `test-cap/machine`        | API keys and the `service` subject (ADR 0013)                                           | 8     |
-| `test-cap/delegation`     | Delegations and the `agent` subject (ADR 0013)                                          | 8     |
-| `test-cap/audit`          | The opt-in audit trail, checkpoints and `verifyAudit` (ADR 0020)                        | 8     |
-| `test-cap/report`         | The policy report, `sessionTimeline` and `accessReport`                                 | 8     |
-| SAML entry (name open)    | The SAML 2.0 SP, Node only at first (ADR 0028)                                          | 8     |
+| Entry                     | Holds                                                                                               | Phase |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ----- |
+| `test-cap`                | `createAuth`, the dispatcher, sessions, assurance, policy, events and the human methods             | 3, 5  |
+| `test-cap/env`            | The env-cap schema for `APP_*` and `AUTH_*` variables (ADR 0022)                                    | 2     |
+| `test-cap/store/memory`   | The development store (ADR 0002)                                                                    | 2     |
+| `test-cap/conformance`    | The store conformance kit (ADR 0002)                                                                | 2     |
+| `test-cap/store/sql`      | The SQL store and its migrations: Postgres first, then SQLite and MySQL (ADR 0002)                  | 3, 6  |
+| `test-cap/express`        | Express adapter (ADR 0003, ADR 0024)                                                                | 3     |
+| `test-cap/fetch`          | `fetch` handler wrapper                                                                             | 6     |
+| `test-cap/nest`           | Nest global guard and `@Public()`                                                                   | 6     |
+| `test-cap/next`           | Next.js route handler, server helpers and optional `proxy`                                          | 6     |
+| `test-cap/tanstack-start` | TanStack Start global middleware                                                                    | 6     |
+| `test-cap/client`         | Browser client on `@simplewebauthn/browser`, with conditional-mediation autofill                    | 7     |
+| `test-cap/forms`          | The framework-free form model (ADR 0025)                                                            | 7     |
+| `test-cap/react`          | `<SignInForm/>`, `<SignUpForm/>`, `<RecoverForm/>` and the other components (ADR 0025)              | 7     |
+| `test-cap/machine`        | API keys and the `service` subject (ADR 0013)                                                       | 8     |
+| `test-cap/delegation`     | Delegations and the `agent` subject (ADR 0013)                                                      | 8     |
+| `test-cap/audit`          | The opt-in audit trail, checkpoints, `verifyAudit`, `sessionTimeline` and `accessReport` (ADR 0020) | 8     |
+| `test-cap/report`         | The policy report (ADR 0005)                                                                        | 8     |
+| SAML entry (name open)    | The SAML 2.0 SP, Node only at first (ADR 0028)                                                      | 8     |
 
 `./package.json` is also exported. The package is ESM with `"sideEffects": false`.
 

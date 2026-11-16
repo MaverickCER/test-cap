@@ -4,7 +4,7 @@
 
 Accepted (2026-11-15). The event model, the `onEvent` sink, redaction and the events of password and TOTP sign-in and
 the session lifecycle are implemented in phase 3; each later phase adds the events of the flows it builds. Answers
-handoff question 15.
+[handoff question](../../GLOSSARY.md) 15.
 
 Planned tests:
 
@@ -13,7 +13,9 @@ Planned tests:
 - `test/events/redaction.test.ts` (fast-check: no secret, code or full token appears in any serialised event)
 - `test/events/always-on.test.ts`
 - `test/events/separate-from-audit.test.ts`
-- `test/attacks/event-token-leak.test.ts`
+- `test/attacks/secret-in-security-event.test.ts`
+
+The recommendations under Open are provisional defaults until the owner decides.
 
 ## Context
 
@@ -87,8 +89,10 @@ without deciding its events.
 
 ### 3. Delivered to the app's `onEvent` sink, always
 
-Every event goes to the `onEvent` function the app passes to `createAuth`. Events cannot be turned off. test-cap does
-not store, sample or batch them; storing and filtering are the app's job.
+Every event is a `SecurityEvent` and goes to the `onEvent` function, an `EventSink`, that the app passes to
+`createAuth`. Events cannot be turned off. test-cap does not store or batch them, and emits every event every time,
+with one possible exception: whether successful API-key and delegation use is sampled is Open 3. Storing and
+filtering are the app's job.
 
 Why: authentication without a record of failures and account changes is unreviewable. Leaving storage to the app
 keeps test-cap free of a log backend, the same way it never opens a database connection.
