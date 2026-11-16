@@ -196,6 +196,33 @@ describe("parseForm", () => {
   it("treats an empty body as no fields", () => {
     expect(Object.keys(parseForm(new Uint8Array(0)))).toEqual([])
   })
+
+  it("keeps a leading question mark as part of the first field name", () => {
+    expect({ ...parseForm(utf8Encode("?code=1&code=2")) }).toEqual({ "?code": "1", code: "2" })
+    expect({ ...parseForm(utf8Encode("%3Fcode=1&code=2")) }).toEqual({ "?code": "1", code: "2" })
+    expect(refusal(() => parseForm(utf8Encode("?code=1&%3Fcode=2")))).toBe(
+      'duplicate-field 400: The field "?code" is repeated.',
+    )
+  })
+
+  it("splits on & and the first =, skips empty pairs, and reads + as a space", () => {
+    expect({ ...parseForm(utf8Encode("&a=1=2&&b&=c&d=x+y%2B&")) }).toEqual({
+      a: "1=2",
+      b: "",
+      "": "c",
+      d: "x y+",
+    })
+  })
+
+  it("refuses a percent escape that is malformed or does not decode to UTF-8", () => {
+    for (const form of ["code=%FF", "%FF=1", "code=%C3", "code=%ED%A0%80", "code=%zz", "code=%"]) {
+      expect(
+        refusal(() => parseForm(utf8Encode(form))),
+        form,
+      ).toBe("malformed-body 400: A form field is not valid percent-encoded UTF-8.")
+    }
+    expect({ ...parseForm(utf8Encode("code=%EF%BF%BD")) }).toEqual({ code: "\uFFFD" })
+  })
 })
 
 describe("parseJsonObject", () => {

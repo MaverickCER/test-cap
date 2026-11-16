@@ -99,6 +99,30 @@ describe("architecture", () => {
       expect(decisionNumbers.has(adr), row).toBe(true)
     }
   })
+
+  it("has a test-cap row for every name the main entry exports", () => {
+    const section = architecture.slice(
+      architecture.indexOf("## Public types"),
+      architecture.indexOf("## Core API"),
+    )
+    const listed = new Set(
+      section
+        .split("\n")
+        .filter((line) => /^\| `/.test(line) && line.split("|").at(-3)?.trim() === "`test-cap`")
+        .flatMap((line) =>
+          [...(line.split("|")[1] ?? "").matchAll(/`([A-Za-z]+)/g)].map((m) => m[1]),
+        ),
+    )
+    const entry = read(path.join(root, "src/index.ts"))
+    const exported = [...entry.matchAll(/^export (?:type )?\{([^}]+)\}/gm)].flatMap((match) =>
+      (match[1] ?? "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name !== ""),
+    )
+    expect(exported.length).toBeGreaterThan(20)
+    expect(exported.filter((name) => !listed.has(name))).toEqual([])
+  })
 })
 
 describe("requirement mapping", () => {

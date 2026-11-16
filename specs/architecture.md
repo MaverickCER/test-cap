@@ -70,6 +70,7 @@ and from phase 2 on, when an exported type is missing from this table.
 | `TransportErrorCode`                                                               | `test-cap`                | 0003 |
 | `FixedClock`, `fixedClock`, `sequenceRandom`                                       | `test-cap`                | 0003 |
 | `DeploymentMode`                                                                   | `test-cap`                | 0026 |
+| `StoreTraits`                                                                      | `test-cap`                | 0002 |
 | `RingKey`                                                                          | `test-cap`                | 0022 |
 | `AuthenticationEvidence`, `KeyProtection`                                          | `test-cap`                | 0005 |
 | `SessionAssurance`, `AssuranceLevel`                                               | `test-cap`                | 0005 |

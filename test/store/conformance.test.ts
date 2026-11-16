@@ -135,7 +135,22 @@ describe("runAuthStoreConformance", () => {
 
   it("fails a resetCounter that does nothing", async () => {
     const noReset = brokenStore(() => ({ resetCounter: async () => undefined }))
-    expect(await failedChecks(noReset)).toEqual(["counter-reset"])
+    expect(await failedChecks(noReset)).toEqual(["counter-reset", "tenant-isolation"])
+  })
+
+  it("fails a resetCounter that clears the counter in every tenant", async () => {
+    const resetsAll = brokenStore((inner) => ({
+      async resetCounter(_tenant, counter) {
+        await inner.resetCounter("conformance-tenant-a", counter)
+        await inner.resetCounter("conformance-tenant-b", counter)
+      },
+    }))
+    const report = await runAuthStoreConformance(resetsAll)
+    expect(report.results.filter((r) => !r.passed).map((r) => r.id)).toEqual(["tenant-isolation"])
+    const detail = report.results.find((r) => r.id === "tenant-isolation")?.detail ?? ""
+    expect(detail).toMatch(
+      /^Required .*"counters":\{"a":2,"b":1\}.*; the store gave .*"counters":\{"a":1,"b":1\}/,
+    )
   })
 
   it("fails a createUnique that checks then inserts with a yield in between", async () => {
@@ -208,6 +223,25 @@ describe("runAuthStoreConformance", () => {
       },
     }))
     expect(await failedChecks(blind)).toContain("update-version")
+  })
+
+  it("fails an update that checks the version, yields, then writes", async () => {
+    const racy = brokenStore((inner) => ({
+      async update(tenant, collection, key, expectedVersion, change) {
+        const record = await inner.get(tenant, collection, key)
+        if (record === null) return "missing"
+        if (record.version !== expectedVersion) return "conflict"
+        await tick()
+        const current = await inner.get(tenant, collection, key)
+        return inner.update(tenant, collection, key, current?.version ?? expectedVersion, change)
+      },
+    }))
+    expect(await failedChecks(racy)).toEqual(["update-concurrent"])
+    const report = await runAuthStoreConformance(racy, { concurrency: 2 })
+    expect(report.results.find((r) => r.id === "update-concurrent")?.detail).toBe(
+      'Required {"conflict":1,"data":0,"updated":1,"version":2}; ' +
+        'the store gave {"conflict":0,"data":1,"updated":2,"version":3}.',
+    )
   })
 
   it("fails a store that lets one tenant read another tenant's records", async () => {
@@ -391,6 +425,7 @@ describe("runAuthStoreConformance", () => {
       "revoke-visible",
       "revoke-by-owner",
       "update-version",
+      "update-concurrent",
       "returns-copies",
       "tenant-isolation",
       "tenant-isolation-concurrent",

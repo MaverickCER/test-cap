@@ -8,9 +8,10 @@ kit), phase 3 (`test-cap/store/sql` on Postgres) and phase 6 (SQLite and MySQL).
 Answers [handoff question](../../GLOSSARY.md) 2 (storage ownership).
 
 Landed in phase 2: the port, `memoryStore()` and the conformance kit. The kit's checks for `consumeOnce`,
-`increment`, `createUnique`, `appendAudit`, revoke visibility, transactions and tenant isolation run in one file,
-`test/store/conformance.test.ts`, which also runs the kit against 16 deliberately broken stores to prove each check
-catches its fault; `test/store/memory.test.ts` covers the memory store, and `test/core/mode.test.ts` the production
+`increment`, `resetCounter`, `createUnique`, `update` (also concurrent updates at one expected version),
+`appendAudit`, revoke visibility, transactions and tenant isolation (`resetCounter` included) run in one file,
+`test/store/conformance.test.ts`, which also runs the kit against deliberately broken stores, at least one per check,
+to prove each check catches its fault; `test/store/memory.test.ts` covers the memory store, and `test/core/mode.test.ts` the production
 refusal of a non-durable store. The file names below are the original plan; the SQL rows remain for phase 3.
 
 Planned tests:

@@ -89,10 +89,14 @@ describe("missing-or-default-secret", () => {
     ).toEqual(["AUTH_CSRF_KEY is missing."])
   })
 
-  it("refuses missing audit keys once the audit contract is in the manifest", async () => {
+  it("refuses missing audit keys once the app turns the audit trail on", async () => {
     await expect(
-      validateEnv({ values: base, manifest: [testCapEnv, testCapAuditEnv] }),
-    ).rejects.toThrow(/AUTH_AUDIT_KEY/)
+      validateEnv({
+        values: base,
+        manifest: [testCapEnv, testCapAuditEnv],
+        activeContexts: ["test-cap-audit"],
+      }),
+    ).rejects.toThrow(/AUTH_AUDIT_KEY is missing\./)
   })
 
   it("accepts real random keys", async () => {

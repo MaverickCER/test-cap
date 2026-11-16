@@ -150,7 +150,19 @@ describe("checkReadiness", () => {
       "https://app.example#x",
     ]) {
       expect(checkReadiness({ mode: "test", origin, store: memory, secrets: {} }), origin).toEqual([
-        "APP_ORIGIN must be a bare origin such as https://app.example (scheme, host and optional port).",
+        "APP_ORIGIN must be a bare origin exactly as browsers send it, such as https://app.example (scheme, lowercase host, and a port only if not the default).",
+      ])
+    }
+  })
+
+  it("refuses a default port or an uppercase host, which no browser's Origin header ever equals", () => {
+    for (const [mode, origin] of [
+      ["production", "https://app.example:443"],
+      ["development", "http://localhost:80"],
+      ["production", "https://App.example"],
+    ] as const) {
+      expect(checkReadiness({ mode, origin, store: durable, secrets: {} }), origin).toEqual([
+        "APP_ORIGIN must be a bare origin exactly as browsers send it, such as https://app.example (scheme, lowercase host, and a port only if not the default).",
       ])
     }
   })

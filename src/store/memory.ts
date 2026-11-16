@@ -24,8 +24,12 @@ interface State {
   audit: Map<string, AuditEntry[]>
 }
 
-const SEPARATOR = "\u0000"
-const id = (...parts: string[]): string => parts.join(SEPARATOR)
+/**
+ * A map key for a sequence of names. Each name is written as its length, a colon and the name, and the entries are
+ * joined with commas, so no two sequences share a key whatever characters the names hold, and the key of a sequence
+ * starts with the key of each of its prefixes and of nothing else.
+ */
+const id = (...parts: string[]): string => parts.map((part) => `${part.length}:${part}`).join()
 
 function copy<T>(value: T): T {
   return structuredClone(value)
@@ -40,6 +44,16 @@ function operations(state: State): StoreOperations {
   }
   const write = (tenant: string, record: StoredRecord): void => {
     state.records.set(id(tenant, record.collection, record.key), record)
+  }
+  // Synchronous, so `revokeByOwner` reads and writes in one step that no other call on a transaction handle can split.
+  const owned = (tenant: string, collection: string, owner: string): StoredRecord[] => {
+    assertName(tenant, "The tenant")
+    assertName(collection, "The collection")
+    assertName(owner, "The owner")
+    const prefix = id(tenant, collection)
+    return [...state.records.entries()]
+      .filter(([key, record]) => key.startsWith(prefix) && record.owner === owner)
+      .map(([, record]) => record)
   }
 
   return {
@@ -66,13 +80,7 @@ function operations(state: State): StoreOperations {
     },
 
     async listByOwner(tenant, collection, owner) {
-      assertName(tenant, "The tenant")
-      assertName(collection, "The collection")
-      assertName(owner, "The owner")
-      const prefix = id(tenant, collection, "")
-      return [...state.records.entries()]
-        .filter(([key, record]) => key.startsWith(prefix) && record.owner === owner)
-        .map(([, record]) => copy(record))
+      return owned(tenant, collection, owner).map(copy)
     },
 
     async update(tenant, collection, key, expectedVersion, change) {
@@ -103,9 +111,8 @@ function operations(state: State): StoreOperations {
 
     async revokeByOwner(tenant, collection, owner, at, options = {}) {
       assertWhole(at, "The revocation time")
-      const owned = await this.listByOwner(tenant, collection, owner)
       let revoked = 0
-      for (const record of owned) {
+      for (const record of owned(tenant, collection, owner)) {
         if (record.revokedAt !== null || record.key === options.except) continue
         write(tenant, { ...record, revokedAt: at, version: record.version + 1 })
         revoked += 1

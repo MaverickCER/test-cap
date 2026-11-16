@@ -45,14 +45,17 @@ export function keyRingVariableProblem(
   return problems.length === 0 ? true : problems.join(" ")
 }
 
-/** A PEM variable: required outside development and test, and exactly one block with the expected label. */
+/**
+ * A PEM variable: required outside development and test, and exactly one block with the expected label. Lines may end
+ * in CRLF or LF. RFC 7468 also allows a bare CR, but OpenSSL, which loads the key, cannot read it, so it is refused.
+ */
 export function pemProblem(
   variable: string,
   label: string,
   value: string,
   raw: RawValues,
 ): true | string {
-  const trimmed = value.trim()
+  const trimmed = value.trim().replace(/\r\n/g, "\n")
   if (trimmed === "") return isProductionLike(modeOf(raw)) ? `${variable} is missing.` : true
   const block = new RegExp(
     `^-----BEGIN ${label}-----\\n[A-Za-z0-9+/=\\n]+\\n-----END ${label}-----$`,

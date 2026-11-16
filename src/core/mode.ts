@@ -127,13 +127,14 @@ export function originProblem(origin: string, mode: DeploymentMode): string | un
   } catch {
     url = new URL("invalid:")
   }
-  // Rebuilding the origin from scheme and host leaves out any user info, path, query or fragment, so an origin that
-  // carried one never equals its rebuilt form.
+  // Rebuilding the origin from scheme and host leaves out any user info, path, query or fragment, and drops a default
+  // port and an uppercase host, so only the exact form a browser sends in `Origin` equals its rebuilt form. The CSRF
+  // check compares `Origin` with APP_ORIGIN as strings (ADR 0011), so any other spelling would refuse every request.
   const bare =
     (url.protocol === "https:" || url.protocol === "http:") &&
     `${url.protocol}//${url.host}` === origin
   if (!bare) {
-    return "APP_ORIGIN must be a bare origin such as https://app.example (scheme, host and optional port)."
+    return "APP_ORIGIN must be a bare origin exactly as browsers send it, such as https://app.example (scheme, lowercase host, and a port only if not the default)."
   }
   if (url.protocol === "https:") return undefined
   if (isProductionLike(mode)) return `APP_ORIGIN must use https in ${mode}.`

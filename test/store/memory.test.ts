@@ -249,14 +249,60 @@ describe("memoryStore", () => {
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+    let entered: () => void = () => undefined
+    const written = new Promise<void>((resolve) => {
+      entered = resolve
+    })
     const running = store.transaction(async (tx) => {
       await tx.createUnique(T, { collection: "c", key: "k", owner: null, data: 1 })
+      entered()
       await gate
       throw new Error("abandon")
     })
-    const outside = store.get(T, "c", "k")
+    // Only ask once the transaction has written, so a store without the lock would answer with the partial record.
+    await written
+    let settled = false
+    const outside = store.get(T, "c", "k").then((record) => {
+      settled = true
+      return record
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(settled).toBe(false)
     release()
     await expect(running).rejects.toThrow("abandon")
     expect(await outside).toBeNull()
+  })
+
+  it("lets an update beside revokeByOwner in one transaction lose cleanly, never be overwritten", async () => {
+    const store = memoryStore()
+    await store.createUnique(T, { collection: "session", key: "s1", owner: "a", data: 1 })
+    const results = await store.transaction((tx) =>
+      Promise.all([
+        tx.revokeByOwner(T, "session", "a", 10),
+        tx.update(T, "session", "s1", 1, { data: 2 }),
+      ]),
+    )
+    const record = await store.get(T, "session", "s1")
+    expect([results, record?.data, record?.revokedAt, record?.version]).toEqual([
+      [1, "conflict"],
+      1,
+      10,
+      2,
+    ])
+  })
+
+  it("keeps names that contain U+0000 apart, in records, owner lists, counters and audit", async () => {
+    const store = memoryStore()
+    await store.createUnique("a", { collection: "b\u0000c", key: "k", owner: "o", data: 1 })
+    expect(
+      await store.createUnique("a\u0000b", { collection: "c", key: "k", owner: "o", data: 2 }),
+    ).toBe("created")
+    expect((await store.get("a", "b\u0000c", "k"))?.data).toBe(1)
+    expect((await store.get("a\u0000b", "c", "k"))?.data).toBe(2)
+    expect(await store.listByOwner("a", "b", "o")).toEqual([])
+    await store.increment("a", "b\u0000c", 1000, 0)
+    expect((await store.increment("a\u0000b", "c", 1000, 0)).count).toBe(1)
+    await store.appendAudit("a", "b\u0000c", 1, 1)
+    expect(await store.appendAudit("a\u0000b", "c", 1, 2)).toBe("appended")
   })
 })

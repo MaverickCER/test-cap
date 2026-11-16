@@ -78,15 +78,35 @@ function decode(bytes: Uint8Array): string {
   }
 }
 
-/** Parses a URL-encoded form. A repeated field is refused, so no two parsers can disagree on which value won. */
+/**
+ * One name or value of a form: `+` is a space, then percent escapes are decoded. A malformed escape, or escapes whose
+ * bytes are not UTF-8, are refused rather than replaced with U+FFFD, so two different bodies never parse alike.
+ */
+function formComponent(raw: string): string {
+  try {
+    return decodeURIComponent(raw.replaceAll("+", " "))
+  } catch {
+    throw new TransportError("malformed-body", "A form field is not valid percent-encoded UTF-8.")
+  }
+}
+
+/**
+ * Parses a URL-encoded form (the WHATWG `application/x-www-form-urlencoded` parser, with fatal UTF-8). A repeated
+ * field is refused, so no two parsers can disagree on which value won. `URLSearchParams` is not used: its string
+ * constructor drops a leading `?`, and it decodes bad UTF-8 to U+FFFD.
+ */
 export function parseForm(bytes: Uint8Array, options: { maxFields?: number } = {}): Fields {
   const maxFields = options.maxFields ?? DEFAULT_MAX_FIELDS
   const fields: Fields = Object.create(null) as Fields
   let count = 0
-  for (const [name, value] of new URLSearchParams(decode(bytes))) {
+  for (const pair of decode(bytes).split("&")) {
+    if (pair === "") continue
     count += 1
     if (count > maxFields)
       throw new TransportError("too-many-fields", "The form has too many fields.")
+    const equals = pair.indexOf("=")
+    const name = formComponent(equals === -1 ? pair : pair.slice(0, equals))
+    const value = equals === -1 ? "" : formComponent(pair.slice(equals + 1))
     if (Object.hasOwn(fields, name))
       throw new TransportError("duplicate-field", `The field "${name}" is repeated.`)
     fields[name] = value
