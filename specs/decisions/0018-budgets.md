@@ -31,7 +31,7 @@ carry SAML ([ADR 0004](0004-package-entries-and-capability-gates.md)).
 What the repository already measures. internal-package-contract's benchmarks run each function over a ladder of input
 sizes, gate the measured big-O against the documented one and the overhead as a ratio to a bare baseline, and set no
 threshold on a raw time, because times are not comparable between machines (`benchmarks/README.md`). They record
-each bundle file's bytes and gzip bytes, but do not gate them.
+each bundle file's bytes and gzip bytes; size is gated separately by the `Size` check (below).
 
 What `hash-wasm` 4.13.0 argon2id costs, measured on 2026-11-15 on an Apple M3 with Node 22.23.2 (median of 10 after
 a warm-up, 32-byte output):
@@ -80,8 +80,9 @@ Why: the cap removes very long inputs as a way to make each hash more expensive.
 
 Phase 9 sets a latency budget for each sign-in method and a gzip size budget for each `exports` entry, and the release
 verification checks them. Latency is judged the way the repository already judges it (big-O and overhead ratio
-through the benchmark suite) plus the argon2id parameter test above; bundle size is checked by
-`test/budgets/bundle-size.test.ts`, because the contract records sizes but does not gate them.
+through the benchmark suite) plus the argon2id parameter test above; bundle size is gated by
+the contract's `Size` check over `ci/size-budgets.mjs`, one budget per `exports` entry, and
+`test/budgets/size-budgets.test.ts` fails when an entry has no budget.
 
 Why: the plan puts "size and benchmark budgets" in release verification. Gating size inside test-cap closes the one
 gap the shared benchmarks leave.

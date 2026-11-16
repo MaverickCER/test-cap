@@ -3,7 +3,9 @@
 ## Status
 
 Accepted (2026-11-15). Implemented in phase 6 (Bun and Deno CI) and verified in phase 9 (the cross-runtime matrix over
-the release build). Pinned by:
+the release build). The `cross-runtime` CI job runs `test/cross-runtime/run.mjs` over the built `dist/` on Node 22 and
+24, Bun 1.3.14 and Deno 2.9.4, and `test/cross-runtime/coverage.test.ts` makes its coverage grow with every value the
+package exports. Pinned by:
 
 - `test/cross-runtime/core.test.ts`
 - `test/cross-runtime/passwords.test.ts`
