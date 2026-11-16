@@ -5,6 +5,152 @@
 ```ts
 
 // @public
-export function packageName(): string;
+export interface AuditEntry {
+    readonly record: JsonValue;
+    readonly seq: number;
+    readonly stream: string;
+}
+
+// @public
+export interface AuthStore extends StoreOperations {
+    readonly durable: boolean;
+    readonly kind: string;
+    transaction?<T>(fn: (tx: StoreTransaction) => Promise<T>): Promise<T>;
+}
+
+// @public
+export interface Clock {
+    now(): number;
+}
+
+// @public
+export class ConfigError extends Error {
+    constructor(problems: readonly string[]);
+    readonly problems: readonly string[];
+}
+
+// @public
+export interface ConformanceOptions {
+    readonly concurrency?: number;
+}
+
+// @public
+export interface ConformanceReport {
+    readonly passed: boolean;
+    readonly results: readonly ConformanceResult[];
+}
+
+// @public
+export interface ConformanceResult {
+    readonly detail?: string;
+    readonly id: string;
+    readonly passed: boolean;
+    readonly skipped?: boolean;
+    readonly title: string;
+}
+
+// @public
+export interface CounterState {
+    readonly count: number;
+    readonly resetAt: number;
+    readonly windowStart: number;
+}
+
+// @public
+export type DeploymentMode = "production" | "staging" | "development" | "test";
+
+// @public
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | {
+    readonly [key: string]: JsonValue;
+};
+
+// @public
+export interface NewRecord {
+    readonly collection: string;
+    readonly data: JsonValue;
+    readonly expiresAt?: number | null | undefined;
+    readonly key: string;
+    readonly owner: string | null;
+}
+
+// @public
+export interface PlainRequest {
+    readonly body: Uint8Array | null;
+    readonly clientAddress?: string | undefined;
+    readonly headers: Headers;
+    readonly method: string;
+    readonly signal?: AbortSignal | undefined;
+    readonly url: string;
+}
+
+// @public
+export interface PlainResponse {
+    readonly body: Uint8Array | null;
+    readonly headers: Headers;
+    readonly status: number;
+}
+
+// @public
+export interface RandomSource {
+    fill(bytes: Uint8Array): Uint8Array;
+}
+
+// @public
+export interface RecordChange {
+    readonly data?: JsonValue;
+    readonly expiresAt?: number | null;
+}
+
+// @public
+export interface StoredRecord {
+    readonly collection: string;
+    readonly consumedAt: number | null;
+    readonly data: JsonValue;
+    readonly expiresAt: number | null;
+    readonly key: string;
+    readonly owner: string | null;
+    readonly revokedAt: number | null;
+    readonly version: number;
+}
+
+// @public
+export interface StoreOperations {
+    appendAudit(tenant: TenantId, stream: string, seq: number, record: JsonValue): Promise<"appended" | "gap" | "duplicate">;
+    consumeOnce(tenant: TenantId, collection: string, key: string, now: number): Promise<StoredRecord | null>;
+    createUnique(tenant: TenantId, record: NewRecord): Promise<"created" | "exists">;
+    delete(tenant: TenantId, collection: string, key: string): Promise<boolean>;
+    get(tenant: TenantId, collection: string, key: string): Promise<StoredRecord | null>;
+    increment(tenant: TenantId, counter: string, windowMs: number, now: number): Promise<CounterState>;
+    listByOwner(tenant: TenantId, collection: string, owner: string): Promise<readonly StoredRecord[]>;
+    readAudit(tenant: TenantId, stream: string, fromSeq: number, limit: number): Promise<readonly AuditEntry[]>;
+    resetCounter(tenant: TenantId, counter: string): Promise<void>;
+    revoke(tenant: TenantId, collection: string, key: string, at: number): Promise<boolean>;
+    revokeByOwner(tenant: TenantId, collection: string, owner: string, at: number, options?: {
+        readonly except?: string | undefined;
+    }): Promise<number>;
+    update(tenant: TenantId, collection: string, key: string, expectedVersion: number, change: RecordChange): Promise<"updated" | "conflict" | "missing">;
+}
+
+// @public
+export interface StoreTraits {
+    readonly durable: boolean;
+    readonly kind: string;
+}
+
+// @public
+export type StoreTransaction = StoreOperations;
+
+// @public
+export type TenantId = string;
+
+// @public
+export class TransportError extends Error {
+    constructor(code: TransportErrorCode, message: string);
+    readonly code: TransportErrorCode;
+    readonly status: number;
+}
+
+// @public
+export type TransportErrorCode = "aborted" | "ambiguous-header" | "body-too-large" | "duplicate-field" | "invalid-path" | "malformed-body" | "too-many-fields" | "unsupported-media-type";
 
 ```

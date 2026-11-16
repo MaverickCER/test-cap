@@ -86,9 +86,9 @@ and from phase 2 on, when an exported type is missing from this table.
 | `SecurityEvent`, `EventSink`                                                       | `test-cap`                | 0015 |
 | `AuthStore`, `StoreTransaction`                                                    | `test-cap`                | 0002 |
 | `StoredRecord`, `NewRecord`, `JsonValue`                                           | `test-cap`                | 0002 |
-| `ConformanceReport`, `ConformanceResult`                                           | `test-cap/conformance`    | 0002 |
+| `ConformanceReport`, `ConformanceResult`                                           | `test-cap`                | 0002 |
 | `StoreOperations`, `RecordChange`, `CounterState`, `AuditEntry`                    | `test-cap`                | 0002 |
-| `ConformanceOptions`                                                               | `test-cap/conformance`    | 0002 |
+| `ConformanceOptions`                                                               | `test-cap`                | 0002 |
 | `memoryStore()`                                                                    | `test-cap/store/memory`   | 0002 |
 | `sqlStore(options)`, `SqlDialect`, `migrations(dialect)`                           | `test-cap/store/sql`      | 0002 |
 | `runAuthStoreConformance(createStore)`                                             | `test-cap/conformance`    | 0002 |

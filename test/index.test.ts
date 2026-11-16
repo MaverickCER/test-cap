@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest"
-import { packageName } from "../src/index.js"
+import * as entry from "../src/index.js"
 
-describe("packageName", () => {
-  it("names the package", () => {
-    expect(packageName()).toBe("test-cap")
+describe("the test-cap entry", () => {
+  it("exports exactly the foundation's runtime values: the two error types", () => {
+    expect(Object.keys(entry).sort()).toEqual(["ConfigError", "TransportError"])
+  })
+
+  it("maps a transport refusal to its status and keeps the code", () => {
+    const error = new entry.TransportError("body-too-large", "over the limit")
+    expect([error.name, error.code, error.status]).toEqual([
+      "TransportError",
+      "body-too-large",
+      413,
+    ])
+  })
+
+  it("lists every configuration problem at once", () => {
+    const error = new entry.ConfigError(["APP_ORIGIN is not https", "AUTH_CSRF_KEY is missing"])
+    expect(error.problems).toHaveLength(2)
+    expect(error.message).toBe(
+      "test-cap refused to start:\n- APP_ORIGIN is not https\n- AUTH_CSRF_KEY is missing",
+    )
   })
 })
