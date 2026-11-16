@@ -1,0 +1,98 @@
+{
+  "name": "test-cap",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal authentication package for MaverickCER apps.",
+  "keywords": [],
+  "homepage": "https://github.com/MaverickCER/test-cap#readme",
+  "bugs": {
+    "url": "https://github.com/MaverickCER/test-cap/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MaverickCER/test-cap.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "MaverickCER",
+    "url": "https://github.com/MaverickCER"
+  },
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "/*.md",
+    "specs",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "npm run clean && tsup && tsc -p tsconfig.build.json && node scripts/emit-dts-shims.mjs",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docs:api": "typedoc",
+    "docs:api:report": "typedoc --options typedoc.markdown.json",
+    "docs:env": "internal-package-contract env",
+    "contract": "internal-package-contract",
+    "version": "changeset version && npm install --package-lock-only --ignore-scripts && npm run build && internal-package-contract update-baseline",
+    "release": "changeset publish",
+    "benchmark": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs",
+    "benchmark:check": "node node_modules/internal-package-contract/scripts/benchmark/run-suite.mjs benchmarks/suite.mjs --check",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run build && npm run test:coverage",
+    "prepublishOnly": "npm run verify"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "10.1.8",
+    "internal-package-contract": "github:MaverickCER/internal-package-contract#v0.20.0",
+    "prettier": "3.9.9",
+    "tsup": "^8.0.0",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "4.13.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "internal-package-contract": {
+    "copies": [
+      "benchmark-budgets",
+      "code-of-conduct",
+      "editorconfig",
+      "reading-benchmarks",
+      "releasing",
+      "support",
+      "typedoc-markdown",
+      "writing-benchmarks"
+    ]
+  },
+  "overrides": {
+    "adm-zip": "0.6.1"
+  }
+}

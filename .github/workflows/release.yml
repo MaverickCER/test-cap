@@ -1,0 +1,49 @@
+# internal-package-contract caller workflow. It runs the shared release flow on every push to main.
+# That flow uses Changesets and npm OIDC trusted publishing. Do not inline the release logic here.
+# It lives in the reusable workflow this calls, pinned below by commit SHA. A fix there reaches this
+# repository only when `dependency-pin-sync` moves the SHA. It does so in a reviewed pull request.
+# The reusable workflow:
+# https://github.com/MaverickCER/internal-package-contract/blob/main/.github/workflows/release-npm-changesets.yml
+#
+# It needs a `version` script (`changeset version` plus whatever regenerates), and runs `verify`
+# before packing when the package defines it, `build` otherwise. It also needs this repo's own npm
+# trusted publisher, registered on npmjs.com. `internal-package-contract init` writes
+# `.changeset/config.json`. In an existing package it does not write the `version` script, and it never
+# registers the publisher.
+#
+# Read the reusable workflow's `roll-floating-major-tag` input (linked above) before your first
+# release. It defaults to true. Then every successful publish moves the floating `v<major>` git tag
+# (`v0` while the package is 0.x). A plain npm package with no action.yml does not want that tag.
+# For one, uncomment the `with:` block below.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+# Each job grants only what it needs; nothing is granted workflow-wide.
+permissions: {}
+
+jobs:
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+      # Enables npm's OIDC trusted publishing (see the called workflow's own
+      # comment). Required here too: GitHub caps the called workflow's effective
+      # permissions at the intersection of what this caller grants and what it
+      # itself declares.
+      id-token: write
+      # The shared workflow dispatches this repo's CI on the release PR's branch and watches it,
+      # which needs `actions: write`. A caller granting less than the called workflow declares makes
+      # GitHub refuse to start the run at all (`startup_failure`), so no release ever runs.
+      actions: write
+    # Pinned by commit SHA, never a branch: whoever can push to that branch could otherwise publish this
+    # package. `dependency-pin-sync` moves the SHA together with the devDependency.
+    uses: MaverickCER/internal-package-contract/.github/workflows/release-npm-changesets.yml@06350a159d3a1e68beea70a035421492f0203f3c # v0.20.0
+    # An npm-only package (no action.yml to version) uncomments this, so a successful
+    # release does not push an unwanted floating major tag.
+    # with:
+    #   roll-floating-major-tag: false
