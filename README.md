@@ -1,16 +1,8 @@
 # test-cap
 
-[![CI](https://github.com/MaverickCER/test-cap/actions/workflows/ci.yml/badge.svg)](https://github.com/MaverickCER/test-cap/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/test-cap.svg)](https://www.npmjs.com/package/test-cap)
-[![Coverage: the lowest of line, statement, function and branch coverage](https://img.shields.io/endpoint?url=https://MaverickCER.github.io/test-cap/coverage-badge.json)](https://MaverickCER.github.io/test-cap/coverage.json)
-[![Mutation score: the share of applicable mutants the tests detect](https://img.shields.io/endpoint?url=https://MaverickCER.github.io/test-cap/mutation-badge.json)](https://MaverickCER.github.io/test-cap/mutation.json)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MaverickCER/test-cap/badge)](https://scorecard.dev/viewer/?uri=github.com/MaverickCER/test-cap)
-[![Socket Badge](https://badge.socket.dev/npm/package/test-cap/latest)](https://socket.dev/npm/package/test-cap)
-[![License](https://img.shields.io/npm/l/test-cap.svg)](LICENSE)
+[![CI](https://github.com/MaverickCER/test-cap/actions/workflows/contract.yml/badge.svg)](https://github.com/MaverickCER/test-cap/actions/workflows/contract.yml)
 
 **Internal authentication package for MaverickCER apps.**
-
-<!-- The coverage and mutation badges read docs/coverage-badge.json and docs/mutation-badge.json from your Pages site (write the mutation one with internal-package-contract's run-mutation-badge.mjs); the Scorecard badge reads the result .github/workflows/scorecard.yml publishes. They stay blank until the first run on main. -->
 
 ## Why it exists
 
