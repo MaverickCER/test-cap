@@ -47,8 +47,8 @@ One row per entry point `package.json` exports. The table is generated: describe
 
 <!-- ipc:begin entry-points -->
 
-| Export     | Source | Environment           | Tier   | Purpose                                             |
-| ---------- | ------ | --------------------- | ------ | --------------------------------------------------- |
-| `test-cap` | `src/` | isomorphic, zero deps | Stable | TODO: say what a reader gets from this entry point. |
+| Export     | Source | Environment                   | Tier   | Purpose                                                                                                                                                                                                                             |
+| ---------- | ------ | ----------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test-cap` | `src/` | isomorphic, zero runtime deps | Stable | The foundation's public contract: the `PlainRequest` and `PlainResponse` transport types, the `AuthStore` port and its record types, `Clock`, `RandomSource`, `DeploymentMode`, and the `TransportError` and `ConfigError` classes. |
 
 <!-- ipc:end entry-points -->

@@ -2,10 +2,12 @@
   "entries": {
     ".": {
       "source": "src/",
-      "environment": "isomorphic, zero deps",
+      "environment": "isomorphic, zero runtime deps",
       "tier": "Stable",
-      "purpose": "TODO: say what a reader gets from this entry point."
+      "purpose": "The foundation's public contract: the `PlainRequest` and `PlainResponse` transport types, the `AuthStore` port and its record types, `Clock`, `RandomSource`, `DeploymentMode`, and the `TransportError` and `ConfigError` classes."
     }
   },
-  "dependencies": {}
+  "dependencies": {
+    "@maverickcer/env-cap": "Optional peer. Only `src/env.schema.ts` imports it, so env-cap can document and validate test-cap's variables in an app that uses env-cap; without it, `createAuth` takes plain values (ADR 0022)."
+  }
 }

@@ -19,6 +19,10 @@ Generated from `package.json` by `internal-package-contract generate`; give each
 
 <!-- ipc:begin dependencies -->
 
-Installing `test-cap` installs no other packages.
+Installing `test-cap` installs no other packages. It names 1 optional peer, which you install yourself when you use the part that needs it.
+
+| Package                | Kind          | Range    | Why                                                                                                                                                                                                |
+| ---------------------- | ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@maverickcer/env-cap` | optional peer | `^0.7.7` | Optional peer. Only `src/env.schema.ts` imports it, so env-cap can document and validate test-cap's variables in an app that uses env-cap; without it, `createAuth` takes plain values (ADR 0022). |
 
 <!-- ipc:end dependencies -->

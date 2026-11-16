@@ -74,13 +74,14 @@ Override: none for the declarations. The app sets the values.
 | `AUTH_SAML_SP_PRIVATE_KEY` | the SAML service provider's signing key (ADR 0028) | SAML is on        |
 | `AUTH_SAML_SP_CERT`        | the certificate for that key (ADR 0028)            | SAML is on        |
 
-Every key is documented with `sensitivity: "secret"`, refresh instructions, and an `expiresAt`. The certificate is
-public, but it expires, so it carries an `expiresAt` too. Following env-cap ADR 0050, test-cap's declaration holds
-the explanation, and the app adds only what is its own, such as `{ expiresAt: "2027-01-01" }` for its copy of a key.
-Test keys are generated at run time and never committed.
+Every key is documented with `sensitivity: "secret"`, a `rotationPeriod`, and setup and refresh instructions. The
+certificate is public and is documented without a sensitivity. A key's expiry belongs to the app's copy of it, which
+test-cap cannot know, so test-cap's declaration carries no `expiresAt`. Following env-cap ADR 0050, the app adds what
+is its own, such as `{ expiresAt: "2027-01-01" }` for its copy of a key or the certificate's `notAfter`, and env-cap
+merges it with test-cap's declaration. Test keys are generated at run time and never committed.
 
-Why: each secret has one job, so leaking one does not grant another's power, and an `expiresAt` lets env-cap warn
-before a key lapses.
+Why: each secret has one job, so leaking one does not grant another's power. The rotation period states test-cap's
+expectation; the app's `expiresAt` lets env-cap warn before its key lapses.
 
 Override: the app supplies every value and its expiry.
 
@@ -112,10 +113,12 @@ Override: the app passes plain values.
 
 ## Open
 
-1. **Main entry versus `test-cap/env`.** env-cap ADR 0014 imports the contract by the bare package name, so it must be
-   exported from `test-cap` itself, not only from `test-cap/env`. That makes env-cap a runtime dependency of the main
-   entry. Recommendation: re-export the contract from the main entry, keep `test-cap/env` as the documented import,
-   make `@maverickcer/env-cap` a regular dependency, and count it in the main entry's size budget (ADR 0018).
+1. **Main entry versus `test-cap/env`.** Settled in phase 2. env-cap discovers the contracts through
+   `"envCap": { "schema": "./src/env.schema.ts" }` in `package.json`, and the schema file ships in the tarball, so
+   the main entry does not need to re-export them. `@maverickcer/env-cap` is an optional peer dependency: an app that
+   uses env-cap already has it, and an app that does not passes plain values (section 4). A regular dependency was
+   tried and rejected, because it put env-cap's own build-time dependencies (its TypeScript scanner and `minimatch`)
+   into every app's production tree, which the `Licenses` and `SecurityDeps` checks refused.
 2. **Where the shared fixture lives.** The plan pins the three shared variables to "one fixture" without naming its
    home. Recommendation: internal-package-contract, which every cap already depends on, with each cap's test comparing
    its own declarations against it.

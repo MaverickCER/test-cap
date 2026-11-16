@@ -9,6 +9,12 @@ conformance suite).
 Answers [handoff question](../../GLOSSARY.md) 3 (HTTP surface), together with ADR 0024, which owns the adapters and deny
 by default.
 
+Landed in phase 2: the transport cases are grouped in `test/transport/body.test.ts` and
+`test/transport/headers-cookies-path.test.ts`, the clock, random and standard-globals scans in
+`test/core/source-rules.test.ts`, and the parser exhaustion cases in
+`test/attacks/request-parser-resource-exhaustion.test.ts` (a seeded generator; the fast-check port is phase 4). The
+file names below are the original plan; the adapter and dispatcher rows remain for phases 3 and 6.
+
 Planned tests:
 
 - `test/transport/body-limit.test.ts` (a body over the limit is refused before it is parsed);
