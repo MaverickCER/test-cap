@@ -14,7 +14,7 @@ Planned tests:
 - `test/docs/attack-catalogue.test.ts` (each of the 49 advisory ids appears in the attack catalogue, with a test or
   a "not applicable" reason, and an entry without a test fails the build);
 - the attack tests named in section 3;
-- `test/core/injected-clock-and-random.test.ts` (no call to the global clock or random source outside the defaults
+- `test/core/source-rules.test.ts` (no call to the global clock or random source outside the defaults
   ADR 0003 names).
 
 ## Context

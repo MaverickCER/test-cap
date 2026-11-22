@@ -3,6 +3,8 @@
 // Stopped by: both layers refuse it. env-cap's validation fails startup naming the variable (never the value), and
 // createAuth's readiness check refuses it too, for apps that pass plain values (ADR 0022, ADR 0026).
 import { EnvValidationError, resetEnvCache, validateEnv } from "@maverickcer/env-cap"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 // Capture what env.schema.ts hands to documentEnv when it loads, so the declarations are checked as values, not as
@@ -101,6 +103,98 @@ describe("missing-or-default-secret", () => {
 
   it("accepts real random keys", async () => {
     await expect(validateEnv({ values: base, manifest: [testCapEnv] })).resolves.toBeDefined()
+  })
+})
+
+describe("missing-or-default-secret: the keys the examples commit", () => {
+  // Each example ships a committed .env for local development (examples/<name>/.env). Its keys are public, so
+  // production and staging refuse them at both layers; development and test accept them, so the examples run.
+  const examples = ["nextjs", "tanstack-start"].map((name) => {
+    const text = readFileSync(
+      path.resolve(import.meta.dirname, "../../examples", name, ".env"),
+      "utf8",
+    )
+    const values = Object.fromEntries(
+      text
+        .split("\n")
+        .filter((line) => /^[A-Z_]+=/.test(line))
+        .map((line) => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]),
+    )
+    return { name, text, values }
+  })
+
+  it.each(examples)(
+    "$name: says on its first line that the values are for local development only",
+    ({ text, values }) => {
+      expect(text.split("\n")[0]).toBe(
+        "# These values work for local development only. Never use them in production: they are public, and production refuses these keys.",
+      )
+      expect(values).toMatchObject({ APP_ENV: "development", APP_ORIGIN: "http://localhost:3000" })
+      expect(Object.keys(values).sort()).toEqual([
+        "APP_ENV",
+        "APP_ORIGIN",
+        "APP_SYSTEM_ID",
+        "AUTH_CSRF_KEY",
+        "AUTH_ENCRYPTION_KEY",
+      ])
+    },
+  )
+
+  it.each(examples)(
+    "$name: its keys are refused in production and staging, naming each",
+    async ({ values }) => {
+      for (const mode of ["production", "staging"] as const) {
+        expect(
+          checkReadiness({
+            mode,
+            origin: "https://app.example",
+            store: { kind: "sql", durable: true },
+            secrets: {
+              AUTH_ENCRYPTION_KEY: values["AUTH_ENCRYPTION_KEY"],
+              AUTH_CSRF_KEY: values["AUTH_CSRF_KEY"],
+            },
+          }),
+        ).toEqual([
+          "AUTH_ENCRYPTION_KEY entry 1 is a published example key; generate a new one.",
+          "AUTH_CSRF_KEY entry 1 is a published example key; generate a new one.",
+        ])
+      }
+      // Behind a fresh key it is still refused, wherever it sits in the ring.
+      const ring = `${random(9).replace("k1", "k2")},${values["AUTH_CSRF_KEY"] as string}`
+      expect(
+        checkReadiness({
+          mode: "production",
+          origin: "https://app.example",
+          store: { kind: "sql", durable: true },
+          secrets: { AUTH_CSRF_KEY: ring },
+        }),
+      ).toEqual(["AUTH_CSRF_KEY entry 2 is a published example key; generate a new one."])
+      await expect(
+        validateEnv({
+          values: { ...base, AUTH_CSRF_KEY: values["AUTH_CSRF_KEY"] },
+          manifest: [testCapEnv],
+        }),
+      ).rejects.toThrow(/AUTH_CSRF_KEY/)
+    },
+  )
+
+  it.each(examples)("$name: its keys are accepted in development and test", async ({ values }) => {
+    for (const mode of ["development", "test"] as const) {
+      expect(
+        checkReadiness({
+          mode,
+          origin: "http://localhost:3000",
+          store: { kind: "memory", durable: false },
+          secrets: {
+            AUTH_ENCRYPTION_KEY: values["AUTH_ENCRYPTION_KEY"],
+            AUTH_CSRF_KEY: values["AUTH_CSRF_KEY"],
+          },
+        }),
+      ).toEqual([])
+    }
+    await expect(
+      validateEnv({ values: { ...values, APP_ENV: "development" }, manifest: [testCapEnv] }),
+    ).resolves.toBeDefined()
   })
 })
 

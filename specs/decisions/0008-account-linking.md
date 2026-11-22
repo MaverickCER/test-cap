@@ -57,7 +57,7 @@ Why: `sub` is stable and issued by the party that authenticated the person; an e
 
 An identity is linked to an existing account only from a session signed in to that account that meets the default
 requirement (AAL2), as an explicit action the person takes (flow F11). Linking is a credential change: it revokes the
-account's other sessions and emits an Account Change event (ADR 0006, ADR 0015).
+account's other sessions and emits a User Management event (ADR 0006, ADR 0015).
 
 Why: proof of the existing account is the only evidence that the person linking is its owner. The OIDC evidence alone
 is AAL1 unless the issuer is in the trust config (ADR 0005), so it could not authorise a link to an AAL2 account even

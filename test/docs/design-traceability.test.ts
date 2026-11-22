@@ -48,8 +48,8 @@ const designDocuments = [
 ]
 
 describe("decision records", () => {
-  it("number 0001 to 0028 with no gap and no duplicate", () => {
-    const expected = Array.from({ length: 28 }, (_, index) => String(index + 1).padStart(4, "0"))
+  it("number 0001 to 0029 with no gap and no duplicate", () => {
+    const expected = Array.from({ length: 29 }, (_, index) => String(index + 1).padStart(4, "0"))
     expect(decisionFiles.map((file) => file.slice(0, 4))).toEqual(expected)
   })
 
@@ -110,7 +110,7 @@ describe("architecture", () => {
         .split("\n")
         .filter((line) => /^\| `/.test(line) && line.split("|").at(-3)?.trim() === "`test-cap`")
         .flatMap((line) =>
-          [...(line.split("|")[1] ?? "").matchAll(/`([A-Za-z]+)/g)].map((m) => m[1]),
+          [...(line.split("|")[1] ?? "").matchAll(/`([A-Za-z][A-Za-z0-9]*)/g)].map((m) => m[1]),
         ),
     )
     const entry = read(path.join(root, "src/index.ts"))
@@ -156,10 +156,14 @@ describe("requirement mapping", () => {
 })
 
 describe("design documents exist", () => {
-  it.each(["architecture.md", "threat-model.md", "attack-catalogue.md", "requirements.md"])(
-    "specs/%s",
-    (file) => {
-      expect(existsSync(path.join(specs, file))).toBe(true)
-    },
-  )
+  it.each([
+    "architecture.md",
+    "threat-model.md",
+    "attack-catalogue.md",
+    "requirements.md",
+    "security-invariants.md",
+    "dependency-failures.md",
+  ])("specs/%s", (file) => {
+    expect(existsSync(path.join(specs, file))).toBe(true)
+  })
 })

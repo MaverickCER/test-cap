@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>test-cap: a one-page brief</title>
+    <meta
+      name="description"
+      content="test-cap signs people in to the owner&#39;s apps with two factors by default, and records how strongly each session was proven."
+    />
+    <link rel="canonical" href="https://maverickcer.github.io/test-cap/brief.html" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="brief-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <main id="main" class="brief">
+      <p class="brief-back"><a href="index.html">&larr; test-cap</a></p>
+      <h1>test-cap: a one-page brief</h1>
+      <p class="brief-oneline">
+        test-cap signs people in to the owner&#39;s apps with two factors by default, and records
+        how strongly each session was proven.
+      </p>
+      <section class="brief-block">
+        <h2>The problem</h2>
+        <p>
+          The previous library published 49 advisories in about 23 months and patches only its
+          latest release. Its clock cannot be controlled in tests.
+        </p>
+      </section>
+      <section class="brief-block">
+        <h2>What it does</h2>
+        <p>
+          It serves sign-up, sign-in, TOTP and sessions. On Express, fetch and TanStack Start, it
+          protects every route that is not listed as public. It sends an OCSF security event for
+          each sign-in.
+        </p>
+      </section>
+      <section class="brief-block">
+        <h2>Why it matters</h2>
+        <ul>
+          <li>
+            On Express, fetch and TanStack Start, a route someone forgot to protect is protected
+            anyway.
+          </li>
+          <li>
+            Each session says which factors proved it, so a sensitive action can ask for more.
+          </li>
+          <li>The owner decides when to patch, because the code is the owner&#39;s.</li>
+        </ul>
+      </section>
+      <section class="brief-block">
+        <h2>What it costs</h2>
+        <p>
+          An app adds one adapter line, a store over its database and two keys. Each person enrols a
+          second factor at sign-up.
+        </p>
+      </section>
+      <section class="brief-block">
+        <h2>What could go wrong</h2>
+        <ul>
+          <li>
+            test-cap is pre-1.0 and has not cut its first release. Before 1.0, a minor release may
+            break the API (<a href="https://github.com/MaverickCER/test-cap/blob/main/VERSIONING.md"
+              >VERSIONING.md</a
+            >). It is phase 3 of 9: passwords and TOTP are the only sign-in methods so far.
+          </li>
+          <li>
+            It is phase 3 of 9, so passkeys, email recovery and social sign-in are not built yet.
+          </li>
+          <li>No durable store is exported yet, so it is ready for development and tests only.</li>
+          <li>There has been no external penetration test, by the owner&#39;s decision.</li>
+        </ul>
+      </section>
+      <section class="brief-block">
+        <h2>What we are asking for</h2>
+        <p>
+          Agree that new work in the owner&#39;s apps uses test-cap once a durable store is
+          exported.
+        </p>
+      </section>
+      <p class="brief-next">
+        To judge it yourself:
+        <a href="https://github.com/MaverickCER/test-cap#readme">Read the README</a> ·
+        <a href="https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md">Read the Guide</a>
+      </p>
+      <p class="brief-print">Print this page or save it as a PDF to share.</p>
+    </main>
+  </body>
+</html>

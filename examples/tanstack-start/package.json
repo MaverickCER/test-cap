@@ -1,0 +1,31 @@
+{
+  "name": "test-cap-example-tanstack-start",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A TanStack Start app protected by test-cap: a public home page, a protected billing page and server functions that check their own requirement.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "start": "node server.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "1.170.46",
+    "@tanstack/react-start": "1.169.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "srvx": "1.0.8",
+    "test-cap": "file:test-cap-0.0.0.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "typescript": "6.0.3",
+    "vite": "8.3.8"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

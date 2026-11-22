@@ -1,0 +1,43 @@
+{
+  "exceptions": [
+    {
+      "id": "skipped-test:test/store/sql/sql-store.test.ts",
+      "version": 2,
+      "justification": "Two cases run the conformance kit against a real Postgres server and a real MySQL 8.4 server; they skip unless TEST_CAP_POSTGRES_URL or TEST_CAP_MYSQL_URL names one. The same file runs the kit on real SQLite and on Postgres through PGlite in every run.",
+      "file": "test/store/sql/sql-store.test.ts",
+      "ruleBroken": "Tests are not skipped.",
+      "attempted": "Running the kit on PGlite (Postgres compiled to WASM) and node:sqlite, which need no server; both run unskipped.",
+      "constraint": "A Postgres or MySQL server cannot run inside the contract job without service containers, and this machine has no Docker.",
+      "whyPreferable": "Mocking a server would prove nothing about lock contention or MySQL's semantics, which are exactly what these cases exist to prove.",
+      "residualRisk": "Real. Until CI's service-container jobs for Postgres 15, 16 and 17 and MySQL 8.4 exist and are required, the MySQL dialect has never run against MySQL and Postgres has not run under real lock contention. ADR 0002 records both claims as partly met, and the store stays out of exports until those jobs pass.",
+      "revisitWhen": "The phase 3 pull request adds the service-container jobs and makes them required.",
+      "expires": ""
+    },
+    {
+      "id": "skipped-test:test/examples/nextjs.test.ts",
+      "version": 2,
+      "justification": "The Next.js example is its own npm project with its own node_modules, and it runs against the packed test-cap tarball. Only the `examples` CI job installs it; without it this file skips. That job runs the file for real: next build, next start and the whole journey over HTTP.",
+      "file": "test/examples/nextjs.test.ts",
+      "ruleBroken": "Tests are not skipped.",
+      "attempted": "Installing the example inside the contract job and inside the root install.",
+      "constraint": "The example needs next, react and react-dom, which test-cap must not depend on, and the tarball of the package under test, which exists only after a build and an npm pack.",
+      "whyPreferable": "A separate project installed from the packed tarball tests what an app would install, not the source tree, and keeps Next.js out of test-cap's own dependencies.",
+      "residualRisk": "Real but bounded. The contract job and local gate runs skip this file, so a change that breaks the example passes them; it fails the `examples` job, which `required` names, so it cannot merge while the ruleset requires `required`. Until the ruleset names `required` (see contract.yml), a broken example could merge. Drafted by an agent on 2026-11-16; it awaits the owner's review.",
+      "revisitWhen": "The contract job installs the examples, or the ruleset requires `required`.",
+      "expires": ""
+    },
+    {
+      "id": "skipped-test:test/examples/tanstack-start.test.ts",
+      "version": 2,
+      "justification": "Skipped in the contract job because examples/tanstack-start is its own npm project, with its own node_modules, which only the examples CI job installs; that job packs this package, installs the tarball, builds the app and runs this file for real.",
+      "file": "test/examples/tanstack-start.test.ts",
+      "ruleBroken": "Tests are not skipped.",
+      "attempted": "Installing the example inside the contract job.",
+      "constraint": "The example is a separate npm project that installs the packed tarball, and the contract job installs only the root package.",
+      "whyPreferable": "Installing and building a TanStack Start app again in the contract job would duplicate the examples job and slow the gate that also runs mutation testing.",
+      "residualRisk": "Real until the ruleset names the `required` check: `required` needs the examples job, but the repository is not pushed yet, so a failure there does not block a merge until the owner sets the ruleset. The example's breached-password check runs against a local HIBP stand-in the test starts, so the job never calls the real service. This record awaits the owner's review.",
+      "revisitWhen": "The ruleset requires `required`, or the examples are installed by the root install.",
+      "expires": ""
+    }
+  ]
+}

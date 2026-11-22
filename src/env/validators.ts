@@ -5,6 +5,7 @@
  */
 
 import {
+  exampleKeyProblems,
   isProductionLike,
   parseKeyRing,
   resolveDeploymentMode,
@@ -34,14 +35,21 @@ export function systemIdProblem(value: string): true | string {
     : "APP_SYSTEM_ID must be 1-64 letters, digits, dots, dashes or underscores, starting with a letter or digit."
 }
 
-/** A key ring variable: required outside development and test, and well formed whenever it is set. */
+/**
+ * A key ring variable: required outside development and test, well formed whenever it is set, and never a published
+ * example key in production or staging.
+ */
 export function keyRingVariableProblem(
   variable: string,
   value: string,
   raw: RawValues,
 ): true | string {
-  if (value === "") return isProductionLike(modeOf(raw)) ? `${variable} is missing.` : true
-  const { problems } = parseKeyRing(variable, value)
+  const mode = modeOf(raw)
+  if (value === "") return isProductionLike(mode) ? `${variable} is missing.` : true
+  const problems = [
+    ...parseKeyRing(variable, value).problems,
+    ...exampleKeyProblems(variable, value, mode),
+  ]
   return problems.length === 0 ? true : problems.join(" ")
 }
 

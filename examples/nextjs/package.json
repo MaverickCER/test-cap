@@ -1,0 +1,21 @@
+{
+  "name": "test-cap-example-nextjs",
+  "private": true,
+  "type": "module",
+  "description": "A Next.js 16 App Router app on test-cap: the route handler, the server helper on /billing, and a proxy for redirects only. Its journey is test-cap's end-to-end test.",
+  "scripts": {
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/react": "19.3.0",
+    "typescript": "5.9.3"
+  }
+}

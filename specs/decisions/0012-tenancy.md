@@ -90,7 +90,7 @@ test-cap ships a `deprovision` admin call (flow F19). Called for an account, it:
 2. revokes every session of that account with immediate visibility (`revokeByOwner`,
    [ADR 0002](0002-store-port-and-atomic-operations.md));
 3. revokes the delegations issued from them ([ADR 0013](0013-human-machine-and-delegation-separation.md));
-4. emits a security event ([ADR 0015](0015-security-events.md), Account Change Disable).
+4. emits a security event ([ADR 0015](0015-security-events.md), User Management Disable).
 
 Every ceremony reads the account's status before it produces any evidence, and a disabled account produces none:
 password, TOTP, passkey, OIDC, SAML and recovery alike fail with the same reply as a wrong credential (ADR 0009). Every
@@ -136,5 +136,5 @@ the next minute through a passkey or a linked identity; the `disabled` status is
    an API key, which [ADR 0013](0013-human-machine-and-delegation-separation.md) leaves open. Recommendation: yes,
    revoke them in the same call.
 5. **Re-enabling a disabled account.** Recommendation: an admin `enable` call that needs a fresh AAL2 administrator
-   session (as ADR 0014 section 1), emits Account Change Enable, and restores sign-in without restoring any revoked
+   session (as ADR 0014 section 1), emits User Management Enable, and restores sign-in without restoring any revoked
    session or delegation.

@@ -162,6 +162,11 @@ Override: the throttle values, with the others, are configuration (a `ThrottleCo
 1. **Throttle values.** Recommendation: no delay for the first 5 failures on a key in 15 minutes, then a delay that
    doubles per failure up to 15 minutes, shown to the person as a wait time (the UX contract's rate-limit message).
    For email sends: at most 1 per destination address per minute and 5 per hour, and 20 per IP or /64 per hour.
+   Email confirmation codes (built in phase 3) take no 15-minute window: 5 wrong attempts per code over the code's
+   whole 24-hour life. The fifth kills the code, and the count alone refuses a sixth, so a
+   store that fails the kill write buys no fresh guesses (finding F-2 in
+   [dependency-failures.md](../dependency-failures.md#findings)). A new code starts a new count once the codes before
+   it are revoked; a further try on a dead code answers `429` with the wait to the end of its life.
 2. **What the account counter counts.** Recommendation: only failures of guessable secrets; a passkey ceremony is
    never delayed by password failures, so the owner keeps a way in during an attack on their password.
 3. **The detector's trigger.** Recommendation: a failure rate across distinct accounts from one IP or /64, or a

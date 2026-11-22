@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted (2026-11-15). Implemented in phase 5 (email confirmation, recovery and opt-in email sign-in); the exclusions
-hold from phase 2. Flows: F08 (email address confirmation), F09 (account recovery by email), F10 (opt-in email
+Accepted (2026-11-15). Implemented in phase 3 (email address confirmation, which the owner moved there on
+2026-11-16) and phase 5 (recovery and opt-in email sign-in); the exclusions hold from phase 2. Flows: F08 (email address confirmation), F09 (account recovery by email), F10 (opt-in email
 sign-in). Pinned by:
 
 - `test/surface/excluded-methods.test.ts`
@@ -66,6 +66,19 @@ Email has two jobs:
 
 Email links are built from `APP_ORIGIN`, never from the `Host` header
 ([ADR 0026](0026-strict-defaults-and-deployment-mode.md)).
+
+How a confirmation code is stored (phase 3): never as the code, and not as a plain hash, which anyone who reads the
+database could reverse by trying all 10^6 codes. The record's key is an HMAC-SHA-256 over the purpose, account, address
+and code, under a key HKDF-SHA-256 derives from the current `AUTH_ENCRYPTION_KEY` ring key with the info
+`email-confirm`; the record keeps that key's id, and a code issued before a rotation redeems while its key is still in
+the ring. A database read alone therefore cannot recover or forge a code (`test/core/email-code-storage.test.ts`).
+
+How a confirmation code is guessed at most five times (phase 3): every attempt counts with the atomic `increment`
+before the code is checked, in a window as long as the code's 24-hour life, starting at the first attempt. The fifth
+wrong attempt revokes the code, and the count alone refuses every later attempt until the code has expired, so a store
+that fails that revoke buys no fresh guesses (finding F-2 in [dependency-failures.md](../dependency-failures.md#findings);
+ADR 0009 Open 1). A send resets the count only after it has revoked every earlier code of the account, so each code
+gets its own five.
 
 Why: these are the uses 800-63B-4 permits, and both need a single-use code that a race cannot redeem twice.
 
@@ -141,6 +154,12 @@ Override: none.
   decision only stops email from raising the level.
 - **The gaps in section 5 are unmet requirements**, not decided non-goals.
 
+- **A confirmed address tells its mailbox owner that it already has an account.** When another account confirmed the
+  address first, `POST /auth/email/confirm` answers as it does for a first confirmation and claims nothing, but the
+  next step, `POST /auth/password`, answers `409 confirm-email-first`. Accepted as designed (owner, 2026-11-16): only
+  the person who holds the mailbox's code reaches that step, so it tells nothing to a stranger, and the uniform replies
+  of ADR 0009 §6 still hold for everyone who does not read the mailbox.
+
 ## Open
 
 1. **What a session from email sign-in alone holds.** The plan says email sign-in "cannot satisfy AAL2" but not whether
@@ -152,3 +171,12 @@ Override: none.
 3. **The normalisation rules.** Recommendation: Unicode NFC over the whole address, the whole address lower-cased
    (providers treat the local part case-insensitively in practice, and two accounts differing only in case are a
    collision risk), and the domain converted to its IDNA A-label form.
+4. **Code lifetime and the pre-auth session.** A confirmation code is valid for 24 hours, but the pre-auth session that
+   redeems it ends after 15 idle minutes or one hour (ADR 0006), so a person who returns later signs up again and gets
+   a new code. Recommendation: keep the 24-hour ceiling for recovery codes (F09), and decide in phase 4 whether a
+   confirmation can be redeemed from a fresh session that names the address, or whether the code's lifetime should
+   match the session's.
+5. **Which client address the send throttle counts.** The per-IP and /64 send limits count the socket address
+   (`PlainRequest.clientAddress`) only; behind a proxy every client shares the proxy's count until `trustedProxies`
+   is read (ADR 0009 §5, phase 4). Recommendation: route the send throttle through the same client-address function the
+   phase 4 throttles use.

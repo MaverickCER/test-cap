@@ -187,7 +187,7 @@ owns the list.
 
 ## Evidence after the fact
 
-**Security event.** An OCSF 1.9.0 record (Authentication 3002 or Account Change 3001) that test-cap always emits to the
+**Security event.** An OCSF 1.9.0 record (Authentication 3002 or User Management 3007) that test-cap always emits to the
 app's `onEvent` sink. Storing events is the app's job. Events never contain a secret, a code or a full token.
 
 **Audit trail.** The opt-in `test-cap/audit` record of who signed in to which system, when, at what level, and what
@@ -224,4 +224,16 @@ kept outside this repository). ADRs 0001 to 0019 each answer the question with t
 assurance is computed, timeouts checked against 800-63B-4, and every deviation.
 
 **Attack catalogue.** `specs/attack-catalogue.md`: each attack test-cap is designed against, the design element that
-stops it, and the negative test in `test/attacks/` that proves it.
+stops it, the negative test in `test/attacks/` that proves it, and the security invariant it breaks.
+
+**Security invariant.** A property test-cap keeps whatever adapter, store, framework or provider surrounds it, such as
+"a revoked session is refused on the next request". Each has an `INV-` id in `specs/security-invariants.md`, which
+names its enforcement point in a core module (never an adapter), the attacks that would break it, its positive and
+negative tests, the source files whose cold mutation proves those tests bite, and its limitations (ADR 0029).
+
+**Failure policy.** What test-cap does when one dependency it does not control fails: the store, mail, HIBP, the
+clock, the random source, the key material or the event sink. Each policy in `specs/dependency-failures.md` states
+the expected failures, whether test-cap fails closed or runs in a narrow degraded mode, what stops working, what a
+reply may reveal, recovery, operator diagnostics and the events, and names the failure-injection tests in
+`test/failure/` that prove it (ADR 0029). Fail closed is the default: a failing dependency never yields an
+authentication, a higher level or a silent downgrade.

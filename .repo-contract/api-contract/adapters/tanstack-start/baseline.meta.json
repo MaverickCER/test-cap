@@ -1,0 +1,9 @@
+{
+  "packageName": "test-cap",
+  "packageVersion": "0.0.0",
+  "apiExtractorVersion": "7.60.1",
+  "apiJsonSchemaVersion": 1011,
+  "apiJsonHash": "12734053f7df709d83e92aa35fbc986fba943a0f737f2a68a02e13beb41f9474",
+  "dtsHash": "04f30288c0533e993b1a1d1bf64402e0a0de2cfae0ae0111df9f759974558980",
+  "generatedAt": "2026-11-17T22:03:43.881Z"
+}

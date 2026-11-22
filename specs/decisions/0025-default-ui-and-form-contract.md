@@ -68,6 +68,9 @@ The dispatcher serves server-rendered sign-in, sign-up, recovery and account pag
 - **Hashed assets.** Asset names carry a content hash and are served immutable; auth responses are `no-store`
   ([ADR 0026](0026-strict-defaults-and-deployment-mode.md)).
 - **One escaping renderer** writes every page (ADR 0011).
+- **Sign-up follows the API's steps.** The sign-up page posts the identifier alone to `/auth/sign-up`, the next page
+  posts the new password to `/auth/password`, then the TOTP enrolment page confirms the app. Each page's form posts
+  exactly the fields its route declares; `test/pages/dispatcher-contract.test.ts` submits each one to its route.
 
 Why: an app gets working pages with no UI code, and the pages carry the same protections as the rest of the core.
 
@@ -148,3 +151,13 @@ Why: unit tests prove the markup; only a real browser proves focus, autofill and
 3. **Passkeys on Firefox and WebKit.** The plan lists the virtual authenticator among the three-engine runs.
    Recommendation: state Chromium-only coverage for passkey browser runs, and rely on the WebAuthn L3 §16 vectors and
    the software authenticator ([ADR 0016](0016-protocol-conformance.md)) for the protocol on every engine.
+4. **`returnTo` through the default pages.** The pages served by `auth.handle` (phase 3) post no `returnTo`, so a
+   sign-in from a page ends at `/`. Recommendation: a page `GET` takes `returnTo` from its query, validates it as the
+   routes do (ADR 0026 §5), and posts it back as a hidden field.
+5. **Strings of the served pages.** The pages `auth.handle` serves use the default English messages; the form model
+   takes replacements, but `createAuth` has no option to pass them. Recommendation: a `messages` option on `createAuth`
+   in phase 7, alongside the React components.
+6. **State written on a `GET`.** Opening `/auth/totp/enrol` begins an enrolment (an unconfirmed authenticator that
+   expires in 10 minutes), and opening `/auth/step-up` opens a challenge. Neither changes what the session may do, and
+   both need the session cookie, but a cross-site top-level navigation can still create them. Recommendation: keep
+   them on `GET` for no-JavaScript pages, and revisit if an expired-record sweep (ADR 0002) shows them piling up.

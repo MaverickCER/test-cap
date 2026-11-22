@@ -1,0 +1,13 @@
+{
+  "root": "../..",
+  "bundleFiles": [
+    "dist/index.js",
+    "dist/express.js",
+    "dist/fetch.js",
+    "dist/next.js",
+    "dist/tanstack-start.js",
+    "dist/store/memory.js"
+  ],
+  "costRates": {},
+  "docsPath": ".."
+}

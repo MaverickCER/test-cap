@@ -5,7 +5,14 @@ import { defineConfig } from "tsup"
 // declarations (with working declaration maps) are emitted by `tsc -p tsconfig.build.json` and
 // shimmed into place by scripts/emit-dts-shims.mjs.
 export default defineConfig({
-  entry: { index: "src/index.ts" },
+  entry: {
+    index: "src/index.ts",
+    express: "src/adapters/express/index.ts",
+    fetch: "src/adapters/fetch/index.ts",
+    next: "src/adapters/next/index.ts",
+    "tanstack-start": "src/adapters/tanstack-start/index.ts",
+    "store/memory": "src/store/memory.ts",
+  },
   format: ["esm", "cjs"],
   platform: "node",
   target: "node20",

@@ -1,0 +1,3212 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "test-cap /auth routes",
+    "version": "0.0.0",
+    "description": "The routes `auth.handle` serves. Internal use only. Every `POST` needs the app's `Origin` and the synchronizer token from `GET /auth/session`, sent as the `X-CSRF-Token` header or a `csrfToken` field. Every reply carries `Cache-Control: no-store` and the security headers. Generated from the dispatcher's route table."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "The README quick start"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-test-cap"
+      },
+      "csrfHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "The synchronizer token. A `POST` may send it as the `csrfToken` body field instead, never both."
+      }
+    }
+  },
+  "paths": {
+    "/auth/session": {
+      "get": {
+        "operationId": "session",
+        "summary": "Read the session and get a CSRF token",
+        "description": "Returns the request's session, or `null`, and a synchronizer token for the next `POST`. A browser with no cookie gets a pre-session cookie the token is bound to.",
+        "responses": {
+          "200": {
+            "description": "`{ session, csrfToken }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A path two parsers could read differently. Codes: `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sign-up": {
+      "post": {
+        "operationId": "sign-up",
+        "summary": "Start an account",
+        "description": "Creates an account in the `pre-auth` state and mails the address a confirmation code, within the send limits of `/auth/email/resend`. Never looks an account up, so the reply says nothing about whether the address is taken.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identifier"
+                ],
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identifier"
+                ],
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "A session was issued or changed. `outcome` is what the default requirement now says; a form post that ends at `allow` is a 303 to `returnTo` instead. The next CSRF token is in the `X-CSRF-Token` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The identifier or `returnTo` is not acceptable. Codes: `invalid-identifier`, `invalid-return-to`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-identifier",
+                        "invalid-return-to",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The `Origin` or the synchronizer token was refused. Codes: `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/email/confirm": {
+      "post": {
+        "operationId": "email-confirm",
+        "summary": "Confirm the address with the emailed code",
+        "description": "Redeems the 6-digit code sign-up mailed, once, within 24 hours, and claims the address for the `pre-auth` session's account. The reply is the same when another account already confirmed the address; then nothing is claimed. Each attempt counts, over the code's whole life: after 5 the code dies, and further attempts answer 429 until a resend issues a new code. Confirming adds no assurance.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ outcome: \"enroll\" }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The code was refused. Codes: `invalid-code`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-code",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session is not enrolling. Codes: `not-enrolling`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "not-enrolling",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The account typed no address. Codes: `no-identifier`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "no-identifier"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts; `Retry-After` gives the wait in seconds. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/email/resend": {
+      "post": {
+        "operationId": "email-resend",
+        "summary": "Send a new confirmation code",
+        "description": "Mails a new code to the address and retires the old one, at most once a minute and 5 times an hour per address, and 20 times an hour per IP address or IPv6 /64. Over a limit nothing is sent and the reply is the same; `retryAfterMs` is the wait before the next send.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ outcome: \"enroll\", retryAfterMs }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session is not enrolling. Codes: `not-enrolling`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "not-enrolling",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The address is already confirmed, or the account typed none. Codes: `already-confirmed`, `no-identifier`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "already-confirmed",
+                        "no-identifier"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "operationId": "password",
+        "summary": "Set the password during enrolment",
+        "description": "Sets the password of a `pre-auth` session's account once its address is confirmed. At least 8 characters inside MFA (15 when a deviation lets a password alone pass), at most 256, screened against a blocklist and HIBP.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "password"
+                ],
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ outcome: \"enroll\", enrolled: [\"password\"] }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The password was refused. Codes: `too-short`, `too-long`, `too-common`, `breached`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "too-short",
+                        "too-long",
+                        "too-common",
+                        "breached",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session is not enrolling. Codes: `not-enrolling`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "not-enrolling",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The address is not confirmed yet, or a concurrent change won. Codes: `confirm-email-first`, `conflict`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "confirm-email-first",
+                        "conflict"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The argon2id concurrency limit is full. Codes: `busy`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "busy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/totp/enrol": {
+      "post": {
+        "operationId": "totp-enrol",
+        "summary": "Begin TOTP enrolment",
+        "description": "Creates an unconfirmed authenticator and returns its secret for the authenticator app, replacing any enrolment of the account still waiting for its code. An account holds at most 5 TOTP authenticators.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ authenticatorId, secret }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session neither is enrolling nor meets the default requirement. Codes: `recovery-only`, `step-up`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "recovery-only",
+                        "step-up",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Enrolment sets the password first, or the account already holds 5 TOTP authenticators. Codes: `password-first`, `too-many-authenticators`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "password-first",
+                        "too-many-authenticators"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/totp/confirm": {
+      "post": {
+        "operationId": "totp-confirm",
+        "summary": "Confirm TOTP enrolment",
+        "description": "Confirms the authenticator with a current code. During enrolment this completes the account and the session reaches AAL2.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "authenticatorId",
+                  "code"
+                ],
+                "properties": {
+                  "authenticatorId": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "authenticatorId",
+                  "code"
+                ],
+                "properties": {
+                  "authenticatorId": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "A session was issued or changed. `outcome` is what the default requirement now says; a form post that ends at `allow` is a 303 to `returnTo` instead. The next CSRF token is in the `X-CSRF-Token` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The code or `returnTo` is not acceptable. Codes: `invalid-code`, `invalid-return-to`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-code",
+                        "invalid-return-to",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session neither is enrolling nor meets the default requirement. Codes: `recovery-only`, `step-up`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "recovery-only",
+                        "step-up",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Enrolment sets the password first. Codes: `password-first`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "password-first"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sign-in": {
+      "post": {
+        "operationId": "sign-in",
+        "summary": "Sign in with a password",
+        "description": "Signs in with a confirmed identifier and a password. Every failure is the same 401 after the same argon2id work, whether or not the account exists.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identifier",
+                  "password"
+                ],
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identifier",
+                  "password"
+                ],
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "A session was issued or changed. `outcome` is what the default requirement now says; a form post that ends at `allow` is a 303 to `returnTo` instead. The next CSRF token is in the `X-CSRF-Token` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`returnTo` is not a same-origin relative path. Codes: `invalid-return-to`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-return-to",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The identifier and password do not match. Codes: `invalid-credentials`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-credentials"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The `Origin` or the synchronizer token was refused. Codes: `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The argon2id concurrency limit is full. Codes: `busy`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "busy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/totp/verify": {
+      "post": {
+        "operationId": "totp-verify",
+        "summary": "Add a TOTP code after a password",
+        "description": "Adds the second factor to a signed-in session. A code from a time step already used is refused.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "A session was issued or changed. `outcome` is what the default requirement now says; a form post that ends at `allow` is a 303 to `returnTo` instead. The next CSRF token is in the `X-CSRF-Token` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`returnTo` is not a same-origin relative path. Codes: `invalid-return-to`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-return-to",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, or the code was refused. Codes: `unauthenticated`, `invalid-code`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated",
+                        "invalid-code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session has not finished enrolment. Codes: `enroll`, `recovery-only`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "enroll",
+                        "recovery-only",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/step-up/start": {
+      "post": {
+        "operationId": "step-up-start",
+        "summary": "Open a step-up",
+        "description": "Returns a single-use challenge bound to this session.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ challenge }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, or one that has not finished enrolment. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session has not finished enrolment. Codes: `enroll`, `recovery-only`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "enroll",
+                        "recovery-only",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/step-up": {
+      "post": {
+        "operationId": "step-up",
+        "summary": "Complete a step-up",
+        "description": "Adds fresh evidence with either `password` or `code`, never both, and rotates the session token.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "challenge"
+                ],
+                "properties": {
+                  "challenge": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "challenge"
+                ],
+                "properties": {
+                  "challenge": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "returnTo": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "A session was issued or changed. `outcome` is what the default requirement now says; a form post that ends at `allow` is a 303 to `returnTo` instead. The next CSRF token is in the `X-CSRF-Token` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Both secrets were sent, or `returnTo` is not acceptable. Codes: `one-secret`, `invalid-return-to`, `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "one-secret",
+                        "invalid-return-to",
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, or the secret was refused. Codes: `unauthenticated`, `invalid-credentials`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated",
+                        "invalid-credentials"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The challenge is not this session's, or the session has not finished enrolment. Codes: `invalid-challenge`, `enroll`, `recovery-only`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-challenge",
+                        "enroll",
+                        "recovery-only",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The argon2id concurrency limit is full. Codes: `busy`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "busy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sign-out": {
+      "post": {
+        "operationId": "sign-out",
+        "summary": "Sign out",
+        "description": "Ends the current session, if any, and clears its cookie.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ outcome: \"unauthenticated\" }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The `Origin` or the synchronizer token was refused. Codes: `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sessions": {
+      "get": {
+        "operationId": "sessions",
+        "summary": "List the account's sessions",
+        "description": "Every session of the account: `id`, `current`, `state`, `startedAt`, `lastSeenAt`, `methods`.",
+        "responses": {
+          "200": {
+            "description": "`{ sessions }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A path two parsers could read differently. Codes: `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session does not meet the default requirement. Codes: `enroll`, `recovery-only`, `step-up`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "enroll",
+                        "recovery-only",
+                        "step-up"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/sessions/revoke": {
+      "post": {
+        "operationId": "sessions-revoke",
+        "summary": "Revoke one session",
+        "description": "Ends one of the account's sessions. The next request on it fails, with no cache in between.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sessionId"
+                ],
+                "properties": {
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sessionId"
+                ],
+                "properties": {
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ revoked: true }`; revoking the current session also clears its cookie.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session does not meet the default requirement. Codes: `enroll`, `recovery-only`, `step-up`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "enroll",
+                        "recovery-only",
+                        "step-up",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session on this account. Codes: `not-found`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "not-found"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

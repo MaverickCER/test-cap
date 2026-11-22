@@ -1,0 +1,807 @@
+{
+  "metadata": {
+    "toolPackage": "@microsoft/api-extractor",
+    "toolVersion": "7.60.1",
+    "schemaVersion": 1011,
+    "oldestForwardsCompatibleVersion": 1001,
+    "tsdocConfig": {
+      "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+      "noStandardTags": true,
+      "tagDefinitions": [
+        {
+          "tagName": "@alpha",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@beta",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@defaultValue",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@decorator",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@deprecated",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@eventProperty",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@example",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@experimental",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@inheritDoc",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@internal",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@label",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@link",
+          "syntaxKind": "inline",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@override",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@packageDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@param",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@privateRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@public",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@readonly",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@remarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@returns",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@sealed",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@see",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@throws",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@typeParam",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@virtual",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@jsx",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxRuntime",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxFrag",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxImportSource",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@betaDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@internalRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@preapproved",
+          "syntaxKind": "modifier"
+        }
+      ],
+      "supportForTags": {
+        "@alpha": true,
+        "@beta": true,
+        "@defaultValue": true,
+        "@decorator": true,
+        "@deprecated": true,
+        "@eventProperty": true,
+        "@example": true,
+        "@experimental": true,
+        "@inheritDoc": true,
+        "@internal": true,
+        "@label": true,
+        "@link": true,
+        "@override": true,
+        "@packageDocumentation": true,
+        "@param": true,
+        "@privateRemarks": true,
+        "@public": true,
+        "@readonly": true,
+        "@remarks": true,
+        "@returns": true,
+        "@sealed": true,
+        "@see": true,
+        "@throws": true,
+        "@typeParam": true,
+        "@virtual": true,
+        "@betaDocumentation": true,
+        "@internalRemarks": true,
+        "@preapproved": true
+      },
+      "reportUnsupportedHtmlElements": false
+    }
+  },
+  "kind": "Package",
+  "canonicalReference": "test-cap!",
+  "docComment": "/**\n * test-cap/fetch: the adapter for any runtime whose server hands the app a Web `Request` and takes a `Response` back,\n * such as `Bun.serve` and `Deno.serve` (ADR 0024). It converts and decides nothing:\n *\n * - `withAuth(auth, handler, { public })` wraps the app's handler with deny by default: every request first goes to\n *  the core's gate, which refuses an ambiguous path with a 400; a path under `/auth/` is served by the core; a public\n *  path reaches the handler with a `null` subject; any other path reaches it only for a session meeting the default\n *  requirement, with that session's subject.\n * - `fetchAuth(auth)` serves the `/auth/` routes alone and answers `null` for every other path, for an app that\n *  routes by itself.\n *\n * The body of an `/auth/` request is read once, as bytes, and at most one chunk past the core's limit; the body of\n * every other request is left unread for the app. Every `Set-Cookie` value stays its own header line. The client's\n * address comes only from the `clientAddress` option, which reads what the runtime hands its handler, never from a\n * header (ADR 0009).\n *\n * The runtime has parsed the URL before the adapter sees it, and the app's router reads that same `req.url`, so the\n * two cannot disagree about the path; the core still refuses any ambiguous path the parsed URL keeps, such as `//`.\n *\n * @packageDocumentation\n */\n",
+  "name": "test-cap",
+  "preserveMemberOrder": false,
+  "members": [
+    {
+      "kind": "EntryPoint",
+      "canonicalReference": "test-cap!",
+      "name": "",
+      "preserveMemberOrder": false,
+      "members": [
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!ClientAddress:type",
+          "docComment": "/**\n * Reads the client's address from what the runtime hands its fetch handler, never from a header (ADR 0009): Deno's\n * `info.remoteAddr.hostname`, Bun's `server.requestIP(req)?.address`. `Args` are the arguments after the request.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ClientAddress<Args extends "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown[]"
+            },
+            {
+              "kind": "Content",
+              "text": "> = "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", ...args: Args) => string | undefined"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/convert.ts",
+          "releaseTag": "Public",
+          "name": "ClientAddress",
+          "typeParameters": [
+            {
+              "typeParameterName": "Args",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "typeTokenRange": {
+            "startIndex": 3,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!fetchAuth:function(1)",
+          "docComment": "/**\n * Serves test-cap's `/auth/*` routes from a `Request`, and answers `null` for any other path, leaving its body unread,\n * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function fetchAuth<Args extends "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown[]"
+            },
+            {
+              "kind": "Content",
+              "text": " = "
+            },
+            {
+              "kind": "Content",
+              "text": "[]"
+            },
+            {
+              "kind": "Content",
+              "text": ">(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<string>"
+            },
+            {
+              "kind": "Content",
+              "text": ", options?: "
+            },
+            {
+              "kind": "Reference",
+              "text": "FetchAuthOptions",
+              "canonicalReference": "test-cap!FetchAuthOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Args>"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", ...args: Args) => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " | null>"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 11,
+            "endIndex": 18
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 8,
+                "endIndex": 10
+              },
+              "isOptional": true
+            }
+          ],
+          "typeParameters": [
+            {
+              "typeParameterName": "Args",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              }
+            }
+          ],
+          "name": "fetchAuth"
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!FetchAuthInfo:type",
+          "docComment": "/**\n * What the handler receives with each request: the subject on a protected route, `null` on a public one.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type FetchAuthInfo = "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly subject: string;\n} | null"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/index.ts",
+          "releaseTag": "Public",
+          "name": "FetchAuthInfo",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!FetchAuthOptions:interface",
+          "docComment": "/**\n * What `fetchAuth` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface FetchAuthOptions<Args extends "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown[]"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/index.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "Args",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "FetchAuthOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!FetchAuthOptions#clientAddress:member",
+              "docComment": "/**\n * Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,\n * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly clientAddress?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ClientAddress",
+                  "canonicalReference": "test-cap!ClientAddress:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<Args> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "clientAddress",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!FetchHandler:type",
+          "docComment": "/**\n * The app's handler. `Args` are the runtime's own arguments after the request (Deno's `info`, Bun's `server`), passed\n * on unchanged after the auth info.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type FetchHandler<Args extends "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown[]"
+            },
+            {
+              "kind": "Content",
+              "text": "> = "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "FetchAuthInfo",
+              "canonicalReference": "test-cap!FetchAuthInfo:type"
+            },
+            {
+              "kind": "Content",
+              "text": ", ...args: Args) => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " | "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ">"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/index.ts",
+          "releaseTag": "Public",
+          "name": "FetchHandler",
+          "typeParameters": [
+            {
+              "typeParameterName": "Args",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "typeTokenRange": {
+            "startIndex": 3,
+            "endIndex": 14
+          }
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!withAuth:function(1)",
+          "docComment": "/**\n * Wraps the app's fetch handler with test-cap: serves `/auth/*` and protects every other route at the default\n * requirement unless `options.public` lists it. A malformed public list throws a `ConfigError` here. An error the\n * app's handler throws reaches the runtime untouched; any other failure is a fixed 500.\n * ```ts\n * Deno.serve(withAuth(auth, handler, { public: [\"/\"], clientAddress: (req, info) => info.remoteAddr.hostname }))\n * ```\n *\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function withAuth<Args extends "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown[]"
+            },
+            {
+              "kind": "Content",
+              "text": " = "
+            },
+            {
+              "kind": "Content",
+              "text": "[]"
+            },
+            {
+              "kind": "Content",
+              "text": ">(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<string>"
+            },
+            {
+              "kind": "Content",
+              "text": ", handler: "
+            },
+            {
+              "kind": "Reference",
+              "text": "NoInfer",
+              "canonicalReference": "!NoInfer:type"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "FetchHandler",
+              "canonicalReference": "test-cap!FetchHandler:type"
+            },
+            {
+              "kind": "Content",
+              "text": "<Args>>"
+            },
+            {
+              "kind": "Content",
+              "text": ", options?: "
+            },
+            {
+              "kind": "Reference",
+              "text": "WithAuthOptions",
+              "canonicalReference": "test-cap!WithAuthOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Args>"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", ...args: Args) => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ">"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 16,
+            "endIndex": 23
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "handler",
+              "parameterTypeTokenRange": {
+                "startIndex": 8,
+                "endIndex": 12
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 13,
+                "endIndex": 15
+              },
+              "isOptional": true
+            }
+          ],
+          "typeParameters": [
+            {
+              "typeParameterName": "Args",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              }
+            }
+          ],
+          "name": "withAuth"
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!WithAuthOptions:interface",
+          "docComment": "/**\n * What `withAuth` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface WithAuthOptions<Args extends "
+            },
+            {
+              "kind": "Content",
+              "text": "unknown[]"
+            },
+            {
+              "kind": "Content",
+              "text": "> extends "
+            },
+            {
+              "kind": "Reference",
+              "text": "FetchAuthOptions",
+              "canonicalReference": "test-cap!FetchAuthOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Args>"
+            },
+            {
+              "kind": "Content",
+              "text": " "
+            }
+          ],
+          "fileUrlPath": "src/adapters/fetch/index.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "Args",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "WithAuthOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!WithAuthOptions#public:member",
+              "docComment": "/**\n * The paths that need no session. An entry matches exactly (`\"/\"` is the root only), or ends in `/*` to match one or\n * more segments below it (`\"/blog/*\"`). Matching is case-sensitive. Everything else needs the default requirement.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly public?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly string[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "public",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": [
+            {
+              "startIndex": 3,
+              "endIndex": 5
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

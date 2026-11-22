@@ -1,7 +1,14 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "extends": ["internal-package-contract/config/typedoc"],
-  "entryPoints": ["src/index.ts"],
+  "entryPoints": [
+    "src/index.ts",
+    "src/adapters/express/index.ts",
+    "src/adapters/fetch/index.ts",
+    "src/adapters/next/index.ts",
+    "src/adapters/tanstack-start/index.ts",
+    "src/store/memory.ts"
+  ],
   "out": "docs/api",
   "readme": "none",
   "treatValidationWarningsAsErrors": true

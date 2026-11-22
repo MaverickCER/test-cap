@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>test-cap /auth API reference</title>
+    <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <!--
+      The /auth routes, rendered by Scalar from openapi.json, which test/docs/openapi.test.ts generates from the
+      dispatcher's route table. Scalar is pinned to an exact version with Subresource Integrity, and its telemetry,
+      default fonts, AI agent, MCP, request client and developer toolbar are off, so the page sends nothing to scalar.com.
+    -->
+    <main id="app"></main>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.76.4/dist/browser/standalone.js"
+      integrity="sha384-hwB9WroDTpZaI38gr+u9CXA6ksz5gUYgD2GxXazKl/agT1L2GWUiRFWGJYNiFu4Q"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      Scalar.createApiReference("#app", {
+        url: "openapi.json",
+        telemetry: false,
+        withDefaultFonts: false,
+        agent: { disabled: true },
+        mcp: { disabled: true },
+        hideClientButton: true,
+        hideTestRequestButton: true,
+        showDeveloperTools: "never",
+        showToolbar: "never",
+        hideDarkModeToggle: true,
+        forceDarkModeState: "dark",
+        // Scalar's muted text is 4.4:1 on its dark surface; WCAG 2.2 AA asks for 4.5:1.
+        customCss: ".dark-mode { --scalar-color-3: #a8a8a8; }",
+      })
+    </script>
+  </body>
+</html>

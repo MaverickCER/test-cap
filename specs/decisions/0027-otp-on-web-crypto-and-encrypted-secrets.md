@@ -83,6 +83,18 @@ goes beyond it. They do not say NIST requires encryption.
 Why: stating a requirement NIST does not make would be an over-claim, and ADR 0019 (section 5) holds every document to
 what test-cap's own evidence shows.
 
+### 6. At most five TOTP authenticators per account, and one enrolment waiting
+
+An account holds at most 5 confirmed, unrevoked TOTP authenticators; beginning a sixth enrolment answers
+`409 too-many-authenticators`, from the API and the default enrolment page. Beginning an enrolment removes any other
+enrolment of the account still waiting for its code, so at most one waits; the page that shows a setup key once
+therefore begins a new enrolment after a wrong code rather than showing the key again.
+
+Why: every TOTP verification reads the account's authenticators, so without a limit a signed-in attacker could grow
+that list, and the store, without end (`test/attacks/totp-authenticator-flood.test.ts`). Five covers a phone, a spare
+and a password manager with room to replace one. Two enrolments begun at the same moment can each pass the check, so
+the limit can be passed by as many enrolments as race; the next enrolment after that is refused.
+
 ## Consequences
 
 - No OTP library is a dependency, and no deprecated one is.

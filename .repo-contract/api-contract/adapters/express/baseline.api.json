@@ -1,0 +1,1085 @@
+{
+  "metadata": {
+    "toolPackage": "@microsoft/api-extractor",
+    "toolVersion": "7.60.1",
+    "schemaVersion": 1011,
+    "oldestForwardsCompatibleVersion": 1001,
+    "tsdocConfig": {
+      "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+      "noStandardTags": true,
+      "tagDefinitions": [
+        {
+          "tagName": "@alpha",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@beta",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@defaultValue",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@decorator",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@deprecated",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@eventProperty",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@example",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@experimental",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@inheritDoc",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@internal",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@label",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@link",
+          "syntaxKind": "inline",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@override",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@packageDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@param",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@privateRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@public",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@readonly",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@remarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@returns",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@sealed",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@see",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@throws",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@typeParam",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@virtual",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@jsx",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxRuntime",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxFrag",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxImportSource",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@betaDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@internalRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@preapproved",
+          "syntaxKind": "modifier"
+        }
+      ],
+      "supportForTags": {
+        "@alpha": true,
+        "@beta": true,
+        "@defaultValue": true,
+        "@decorator": true,
+        "@deprecated": true,
+        "@eventProperty": true,
+        "@example": true,
+        "@experimental": true,
+        "@inheritDoc": true,
+        "@internal": true,
+        "@label": true,
+        "@link": true,
+        "@override": true,
+        "@packageDocumentation": true,
+        "@param": true,
+        "@privateRemarks": true,
+        "@public": true,
+        "@readonly": true,
+        "@remarks": true,
+        "@returns": true,
+        "@sealed": true,
+        "@see": true,
+        "@throws": true,
+        "@typeParam": true,
+        "@virtual": true,
+        "@betaDocumentation": true,
+        "@internalRemarks": true,
+        "@preapproved": true
+      },
+      "reportUnsupportedHtmlElements": false
+    }
+  },
+  "kind": "Package",
+  "canonicalReference": "test-cap!",
+  "docComment": "/**\n * test-cap/express: the Express adapter (ADR 0024). It converts and decides nothing:\n *\n * - every request first goes to the core's gate, which refuses an ambiguous path with a 400 and applies deny by\n *  default with the public list this adapter passes it;\n * - a request under `/auth/` has its body read here, from the raw stream, never from `req.body`, and goes to\n *  `auth.handle`; when a body parser already consumed the stream, the request fails closed with a 500;\n * - every other request continues to the app with `req.auth` set, and its stream untouched for the app's own parsers.\n *\n * Express is typed structurally, so this entry has no dependency on it.\n *\n * @packageDocumentation\n */\n",
+  "name": "test-cap",
+  "preserveMemberOrder": false,
+  "members": [
+    {
+      "kind": "EntryPoint",
+      "canonicalReference": "test-cap!",
+      "name": "",
+      "preserveMemberOrder": false,
+      "members": [
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!expressAuth:function(1)",
+          "docComment": "/**\n * Mounts test-cap on an Express app: serves `/auth/*` and protects every other route at the default requirement\n * unless `options.public` lists it. Mount it before any body parser.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function expressAuth(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<string>"
+            },
+            {
+              "kind": "Content",
+              "text": ", options?: "
+            },
+            {
+              "kind": "Reference",
+              "text": "ExpressAuthOptions",
+              "canonicalReference": "test-cap!ExpressAuthOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "ExpressAuthMiddleware",
+              "canonicalReference": "test-cap!ExpressAuthMiddleware:type"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/express/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 6,
+            "endIndex": 7
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 4,
+                "endIndex": 5
+              },
+              "isOptional": true
+            }
+          ],
+          "name": "expressAuth"
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!ExpressAuthInfo:type",
+          "docComment": "/**\n * What `req.auth` holds: the subject on a protected route, `null` on a public one.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ExpressAuthInfo = "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly subject: string;\n} | null"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/express/index.ts",
+          "releaseTag": "Public",
+          "name": "ExpressAuthInfo",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!ExpressAuthMiddleware:type",
+          "docComment": "/**\n * An Express middleware.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ExpressAuthMiddleware = "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "ExpressLikeRequest",
+              "canonicalReference": "test-cap!ExpressLikeRequest:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", res: "
+            },
+            {
+              "kind": "Reference",
+              "text": "ExpressLikeResponse",
+              "canonicalReference": "test-cap!ExpressLikeResponse:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ", next: (error?: unknown) => void) => void"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/express/index.ts",
+          "releaseTag": "Public",
+          "name": "ExpressAuthMiddleware",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!ExpressAuthOptions:interface",
+          "docComment": "/**\n * What `expressAuth` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ExpressAuthOptions "
+            }
+          ],
+          "fileUrlPath": "src/adapters/express/index.ts",
+          "releaseTag": "Public",
+          "name": "ExpressAuthOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressAuthOptions#public:member",
+              "docComment": "/**\n * The paths that need no session. An entry matches exactly (`\"/\"` is the root only), or ends in `/*` to match one or\n * more segments below it (`\"/blog/*\"`). Matching is case-sensitive. Everything else needs the default requirement.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly public?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly string[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "public",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!ExpressLikeRequest:interface",
+          "docComment": "/**\n * The parts of an Express (Node) request the adapter reads.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ExpressLikeRequest "
+            }
+          ],
+          "fileUrlPath": "src/adapters/express/index.ts",
+          "releaseTag": "Public",
+          "name": "ExpressLikeRequest",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#auth:member",
+              "docComment": "/**\n * Set by the adapter.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "auth?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ExpressAuthInfo",
+                  "canonicalReference": "test-cap!ExpressAuthInfo:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "auth",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#body:member",
+              "docComment": "/**\n * Set by a body parser; its presence means the stream is no longer the core's to read.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly body?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "body",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#method:member",
+              "docComment": "/**\n * The HTTP method as received.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly method?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "method",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#on:member(1)",
+              "docComment": "/**\n * Receives one chunk of the raw body.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "on(event: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"data\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ", listener: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "(chunk: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Uint8Array",
+                  "canonicalReference": "!Uint8Array:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ") => void"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 7,
+                "endIndex": 8
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "event",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "listener",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 6
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "on"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#on:member(2)",
+              "docComment": "/**\n * The body has been read whole.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "on(event: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"end\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ", listener: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "() => void"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 6
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 2,
+              "parameters": [
+                {
+                  "parameterName": "event",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "listener",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "on"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#on:member(3)",
+              "docComment": "/**\n * The stream failed.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "on(event: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"error\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ", listener: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "(error: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Error",
+                  "canonicalReference": "!Error:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ") => void"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 7,
+                "endIndex": 8
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 3,
+              "parameters": [
+                {
+                  "parameterName": "event",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "listener",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 6
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "on"
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#originalUrl:member",
+              "docComment": "/**\n * Express's unrewritten URL; the adapter prefers it to `url`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly originalUrl?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "originalUrl",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#pause:member(1)",
+              "docComment": "/**\n * Stops reading the body.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "pause(): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "pause"
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#rawHeaders:member",
+              "docComment": "/**\n * Every header line as received, name and value alternating.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly rawHeaders: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly string[]"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "rawHeaders",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#readableEnded:member",
+              "docComment": "/**\n * True once something has read the whole body stream.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly readableEnded: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "readableEnded",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#socket:member",
+              "docComment": "/**\n * The socket the request came in on.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly socket: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "{\n        readonly remoteAddress?: string | undefined;\n    }"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "socket",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeRequest#url:member",
+              "docComment": "/**\n * The request target; `originalUrl` wins when Express has rewritten it.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly url?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "url",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!ExpressLikeResponse:interface",
+          "docComment": "/**\n * The parts of an Express (Node) response the adapter writes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ExpressLikeResponse "
+            }
+          ],
+          "fileUrlPath": "src/adapters/express/index.ts",
+          "releaseTag": "Public",
+          "name": "ExpressLikeResponse",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeResponse#end:member(1)",
+              "docComment": "/**\n * Sends the body, if any, and ends the response.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "end(body?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Uint8Array",
+                  "canonicalReference": "!Uint8Array:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "body",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "end"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeResponse#once:member(1)",
+              "docComment": "/**\n * The connection closed, before or after the response finished.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "once(event: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"close\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ", listener: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "() => void"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 6
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "event",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "listener",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "once"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!ExpressLikeResponse#setHeader:member(1)",
+              "docComment": "/**\n * Sets one header; an array writes one line per value.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "setHeader(name: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", value: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | readonly string[]"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Content",
+                  "text": "unknown"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 6
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "name",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "value",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "setHeader"
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeResponse#statusCode:member",
+              "docComment": "/**\n * The status to send.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "statusCode: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": false,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "statusCode",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ExpressLikeResponse#writableFinished:member",
+              "docComment": "/**\n * True once the whole response has been handed to the socket.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly writableFinished: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "writableFinished",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        }
+      ]
+    }
+  ]
+}

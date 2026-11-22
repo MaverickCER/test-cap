@@ -3,8 +3,8 @@
 ## Status
 
 Accepted (2026-11-15). Supersedes the handoff's "no framework or runtime adapters" rule. Implemented in phase 3 (the
-Express adapter with deny by default) and phase 6 (the `fetch`, Nest, Next.js and TanStack Start adapters and the
-adapter conformance suite); the quick-start count runs from phase 7. Flow: F22 (adapter transport and deny by
+Express, `fetch`, Next.js and TanStack Start adapters with deny by default and the adapter differential test; the
+owner brought the last three forward on 2026-11-16) and phase 4 (Nest); the quick-start count runs from phase 3. Flow: F22 (adapter transport and deny by
 default). Pinned by:
 
 - `test/adapters/conformance/*.test.ts`
@@ -68,8 +68,12 @@ adapter passes the public list to the core, so the five adapters cannot disagree
 under `/auth/*`, the default pages and their hashed assets are served by the dispatcher and need no listing.
 
 The core first refuses an ambiguous path with a 400, for every request and every method, before any public-path match
-([ADR 0003](0003-byte-transport-and-dispatcher.md), section 2). A public path then matches only the clean raw path as
-received: exactly, or through an explicit wildcard (Open 1). The core never normalises a path to make it match.
+([ADR 0003](0003-byte-transport-and-dispatcher.md), section 2). Behind a raw-stream adapter (Express, and later Nest)
+that covers every ambiguous form. A fetch-based adapter (`fetch`, Next.js, TanStack Start) receives a WHATWG-parsed
+URL whose dot segments and backslashes are already resolved, so for those two forms there is no 400: the core and the
+framework read the same resolved path. `test/attacks/adapter-core-parsing-differential.test.ts` pins this. A public
+path then matches only the clean raw path as received: exactly, or through an explicit wildcard (Open 1). The core
+never normalises a path to make it match.
 
 Why: an app that forgets to protect a route should get a protected route. Normalising before matching would itself be
 the bypass: `/admin/x/../about` normalises to a public `/about`, while Express dispatches the raw path to an

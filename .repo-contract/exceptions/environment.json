@@ -27,6 +27,48 @@
       "residualRisk": "A finding the App never raised is not seen; the same is true of any reviewer. Until the App is installed on this repository (owner step), no CodeRabbit review happens at all.",
       "revisitWhen": "CodeRabbit ships a CI mode for the CLI, or the App is uninstalled.",
       "expires": ""
+    },
+    {
+      "id": "environment:DocsLinks:https://maverickcer.github.io/test-cap/",
+      "version": 2,
+      "justification": "https://maverickcer.github.io/test-cap/ is the landing page's canonical URL, which IPC's site generator takes from siteUrl. It returns 404 until this change is merged to main and the first GitHub Pages deploy publishes the site.",
+      "check": "DocsLinks",
+      "code": "https://maverickcer.github.io/test-cap/",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "Removed every other link to the unpublished site from README, GUIDE, ADOPTION and docs/site.json; these three remain because the site generator requires an https canonical URL and the landing page needs a link to the guide.",
+      "constraint": "GitHub Pages serves nothing before the first deploy from main, and the deploy runs only after this change merges.",
+      "whyPreferable": "The owner chose a short-lived record over publishing placeholder content first or shipping without the landing page (2026-11-17).",
+      "residualRisk": "If the first deploy fails, these links stay broken; the first DocsLinks run on main after the deploy reports it, and the follow-up pull request that re-adds the site links deletes these records.",
+      "revisitWhen": "The first GitHub Pages deploy from main succeeds; the follow-up pull request deletes this record.",
+      "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://maverickcer.github.io/test-cap/brief.html",
+      "version": 2,
+      "justification": "https://maverickcer.github.io/test-cap/brief.html is the one-page brief's canonical URL, which IPC's site generator takes from siteUrl. It returns 404 until this change is merged to main and the first GitHub Pages deploy publishes the site.",
+      "check": "DocsLinks",
+      "code": "https://maverickcer.github.io/test-cap/brief.html",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "Removed every other link to the unpublished site from README, GUIDE, ADOPTION and docs/site.json; these three remain because the site generator requires an https canonical URL and the landing page needs a link to the guide.",
+      "constraint": "GitHub Pages serves nothing before the first deploy from main, and the deploy runs only after this change merges.",
+      "whyPreferable": "The owner chose a short-lived record over publishing placeholder content first or shipping without the landing page (2026-11-17).",
+      "residualRisk": "If the first deploy fails, these links stay broken; the first DocsLinks run on main after the deploy reports it, and the follow-up pull request that re-adds the site links deletes these records.",
+      "revisitWhen": "The first GitHub Pages deploy from main succeeds; the follow-up pull request deletes this record.",
+      "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md",
+      "version": 2,
+      "justification": "https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md is the landing page's 'Read the Guide' link; GUIDE.md is added by this change. It returns 404 until this change is merged to main and the first GitHub Pages deploy publishes the site.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "Removed every other link to the unpublished site from README, GUIDE, ADOPTION and docs/site.json; these three remain because the site generator requires an https canonical URL and the landing page needs a link to the guide.",
+      "constraint": "GitHub Pages serves nothing before the first deploy from main, and the deploy runs only after this change merges.",
+      "whyPreferable": "The owner chose a short-lived record over publishing placeholder content first or shipping without the landing page (2026-11-17).",
+      "residualRisk": "If the first deploy fails, these links stay broken; the first DocsLinks run on main after the deploy reports it, and the follow-up pull request that re-adds the site links deletes these records.",
+      "revisitWhen": "The first GitHub Pages deploy from main succeeds; the follow-up pull request deletes this record.",
+      "expires": "2026-12-01"
     }
   ]
 }

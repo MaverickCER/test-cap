@@ -5,10 +5,121 @@
 ```ts
 
 // @public
+export interface Argon2Cost {
+    readonly iterations: number;
+    readonly memoryKiB: number;
+    readonly parallelism: number;
+}
+
+// @public
+export type AssuranceLevel = "AAL1" | "AAL2" | "AAL3";
+
+// @public
 export interface AuditEntry {
     readonly record: JsonValue;
     readonly seq: number;
     readonly stream: string;
+}
+
+// @public
+export interface Auth<Id extends string = "default"> {
+    readonly admin: AuthAdmin;
+    handle(req: PlainRequest): Promise<PlainResponse | null>;
+    require(req: PlainRequest, requirementId: Id): Promise<RequireResult>;
+    session(req: PlainRequest): Promise<SessionInfo | null>;
+}
+
+// @public
+export interface AuthAdmin {
+    revoke(subject: string): Promise<number>;
+}
+
+// @public
+export interface AuthConfig<Id extends string = "default"> {
+    readonly argon2Cost?: Argon2Cost | undefined;
+    readonly clock?: Clock | undefined;
+    readonly env: Readonly<Record<string, string | undefined>>;
+    readonly hibpFetch: HibpFetch;
+    readonly onEvent?: EventSink | undefined;
+    readonly policy?: AuthPolicy<Id> | undefined;
+    readonly random?: RandomSource | undefined;
+    readonly sendEmail: SendEmail;
+    readonly store: AuthStore;
+    readonly tenant?: TenantId | undefined;
+    readonly trustedProxies?: TrustedProxies | undefined;
+}
+
+// @public
+export type AuthenticationActivity = "logon" | "logoff" | "account-switch";
+
+// @public
+export interface AuthenticationEvent extends OcsfBaseEvent {
+    readonly account_switch_type?: "Impersonate";
+    readonly account_switch_type_id?: 2;
+    readonly auth_protocol?: "OpenID" | "SAML";
+    readonly auth_protocol_id?: 4 | 5;
+    readonly class_uid: 3002;
+    readonly is_mfa?: boolean;
+    readonly service: OcsfService;
+    readonly session?: OcsfSession;
+}
+
+// @public
+export interface AuthenticationEvidence {
+    readonly at: number;
+    readonly attestationVerified: boolean;
+    readonly authenticatorId: string;
+    readonly factors: readonly Factor[];
+    readonly federation?: {
+        readonly issuer: string;
+        readonly acr: string | null;
+        readonly amr: readonly string[];
+        readonly authTime: number;
+    };
+    readonly keyProtection: KeyProtection;
+    readonly method: AuthenticationMethod;
+    readonly phishingResistant: boolean;
+    readonly replayResistant: boolean;
+    readonly userVerified: boolean;
+}
+
+// @public
+export interface AuthenticationInput extends EventInput {
+    readonly activity: AuthenticationActivity;
+    readonly assurance?: "AAL1" | "AAL2" | "AAL3" | null | undefined;
+    readonly breakGlass?: boolean | undefined;
+    readonly deviation?: string | undefined;
+    readonly mfa?: boolean | undefined;
+    readonly protocol?: "openid" | "saml" | undefined;
+    readonly reason?: string | undefined;
+    readonly session?: SessionRef | undefined;
+    readonly stepUp?: boolean | undefined;
+}
+
+// @public
+export type AuthenticationMethod = "password" | "totp" | "passkey" | "recovery-code" | "oidc" | "saml";
+
+// @public
+export interface AuthPolicy<Id extends string> {
+    assurance(session: SessionState, now: number): SessionAssurance | null;
+    readonly deviations: readonly Deviation[];
+    require(session: SessionState | null, id: Id, now: number): RequireResult;
+    requirement(id: Id): Requirement;
+    readonly timeouts: SessionTimeouts;
+    readonly trust: TrustConfig;
+    readonly version: string;
+}
+
+// @public
+export interface AuthPolicyInput<Id extends string> {
+    readonly defaultRequirement?: Requirement | undefined;
+    readonly emailSignIn?: boolean | undefined;
+    readonly requirements?: {
+        readonly [K in Id]: Requirement;
+    } | undefined;
+    readonly timeouts?: Partial<SessionTimeouts> | undefined;
+    readonly trust?: TrustConfig | undefined;
+    readonly version: string;
 }
 
 // @public
@@ -57,11 +168,204 @@ export interface CounterState {
 }
 
 // @public
+export function createAuth<Id extends string = "default">(config: AuthConfig<Id>): Auth<Id>;
+
+// @public
+export function defineAuthPolicy<const Id extends string = never>(input: AuthPolicyInput<Id>): AuthPolicy<Id | "default">;
+
+// @public
 export type DeploymentMode = "production" | "staging" | "development" | "test";
+
+// @public
+export interface Deviation {
+    readonly detail: string;
+    readonly kind: "email-sign-in" | "default-below-aal2" | "timeout-lengthened";
+}
+
+// @public
+export interface EmailMessage {
+    readonly subject: string;
+    readonly text: string;
+    readonly to: string;
+}
+
+// @public
+export interface EventInput {
+    readonly actor?: EventSubject | undefined;
+    readonly detail?: string | undefined;
+    readonly factors?: readonly FactorKind[] | undefined;
+    readonly outcome: Outcome;
+    readonly subject: EventSubject;
+    readonly system: string;
+    readonly tenant: string;
+    readonly time: number;
+}
+
+// @public
+export type EventSink = (event: SecurityEvent) => void | Promise<void>;
+
+// @public
+export interface EventSubject {
+    readonly id: string;
+    readonly kind: "user" | "service" | "agent";
+}
+
+// @public
+export type Factor = "knowledge" | "possession" | "inherence";
+
+// @public
+export type FactorKind = "password" | "totp" | "webauthn" | "email" | "recovery-code";
+
+// @public
+export type FederatedLevel = "AAL1" | "AAL2";
+
+// @public
+export interface FieldLength {
+    readonly max: number;
+    readonly min: number;
+    readonly tooLong: string;
+    readonly tooShort: string;
+}
+
+// @public
+export type FieldList = readonly [first: FieldState, ...rest: FieldState[]];
+
+// @public
+export interface FieldPattern {
+    readonly message: string;
+    readonly source: string;
+}
+
+// @public
+export interface FieldState {
+    readonly autocomplete: "username webauthn" | "current-password" | "new-password" | "one-time-code";
+    readonly error: string | null;
+    readonly help: string;
+    readonly inputmode?: "email" | "numeric";
+    readonly label: string;
+    readonly length?: FieldLength;
+    readonly name: "identifier" | "password" | "code";
+    readonly pattern?: FieldPattern;
+    readonly requiredMessage: string;
+    readonly secret: boolean;
+    readonly stripWhitespace?: true;
+    readonly type: "email" | "password" | "text";
+    readonly value: string;
+}
+
+// @public
+export interface FlowOutcome {
+    readonly error: "invalid-credentials" | "invalid-code" | "too-common" | "breached" | "rate-limited" | "unexpected";
+    readonly retryAfterMs?: number | undefined;
+}
+
+// @public
+export type FormId = "sign-in" | "sign-up" | "email-confirm" | "password" | "mfa" | "totp-enrol" | "step-up";
+
+// @public
+export interface FormModel {
+    readonly fields: FieldList;
+    readonly globalError: string | null;
+    readonly id: FormId;
+    readonly messages: Messages;
+    readonly submitLabel: string;
+    readonly title: string;
+}
+
+// @public
+export interface FormOptions {
+    readonly messages?: Partial<Messages> | undefined;
+    readonly passwordAlone?: boolean | undefined;
+}
+
+// @public
+export type HibpFetch = (url: string, init: {
+    readonly method: "GET";
+    readonly headers: Readonly<Record<string, string>>;
+    readonly signal: AbortSignal;
+}) => Promise<HibpResponse>;
+
+// @public
+export interface HibpResponse {
+    readonly ok: boolean;
+    readonly status: number;
+    text(): Promise<string>;
+}
 
 // @public
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | {
     readonly [key: string]: JsonValue;
+};
+
+// @public
+export type KeyProtection = "non-exportable" | "syncable" | "unknown";
+
+// @public
+export interface Messages {
+    readonly badCode: string;
+    readonly badEmail: string;
+    readonly badEmailCode: string;
+    readonly codeHelp: string;
+    readonly codeLabel: string;
+    readonly codeRequired: string;
+    readonly currentPasswordHelp: string;
+    readonly emailCodeHelp: string;
+    readonly emailConfirmSubmit: string;
+    readonly emailConfirmTitle: string;
+    readonly hidePassword: string;
+    readonly identifierHelp: string;
+    readonly identifierLabel: string;
+    readonly identifierRequired: string;
+    readonly identifierSignUpHelp: string;
+    readonly invalidCode: string;
+    readonly invalidCredentials: string;
+    readonly invalidEmailCode: string;
+    readonly mfaSubmit: string;
+    readonly mfaTitle: string;
+    readonly newPasswordHelp: string;
+    readonly passwordBreached: string;
+    readonly passwordLabel: string;
+    readonly passwordRequired: string;
+    readonly passwordSubmit: string;
+    readonly passwordTitle: string;
+    readonly passwordTooCommon: string;
+    readonly rateLimitedOneSecond: string;
+    readonly rateLimitedSeconds: string;
+    readonly rateLimitedUnknown: string;
+    readonly resendSubmit: string;
+    readonly showPassword: string;
+    readonly signInLink: string;
+    readonly signInSubmit: string;
+    readonly signInTitle: string;
+    readonly signOutSubmit: string;
+    readonly signOutTitle: string;
+    readonly signUpLink: string;
+    readonly signUpSubmit: string;
+    readonly signUpTitle: string;
+    readonly stepUpSubmit: string;
+    readonly stepUpTitle: string;
+    readonly tooLong: string;
+    readonly tooShort: string;
+    readonly totpEnrolCodeHelp: string;
+    readonly totpEnrolSubmit: string;
+    readonly totpEnrolTitle: string;
+    readonly totpSecretHelp: string;
+    readonly totpSecretLabel: string;
+    readonly unexpected: string;
+}
+
+// @public
+export type MissingEvidence = {
+    readonly kind: "level";
+    readonly level: AssuranceLevel;
+} | {
+    readonly kind: "phishing-resistance";
+} | {
+    readonly kind: "fresh-multi-factor";
+    readonly withinMs: number;
+} | {
+    readonly kind: "fresh-phishing-resistance";
+    readonly withinMs: number;
 };
 
 // @public
@@ -71,6 +375,117 @@ export interface NewRecord {
     readonly expiresAt?: number | null | undefined;
     readonly key: string;
     readonly owner: string | null;
+}
+
+// @public
+export interface OcsfActor {
+    readonly user: OcsfUser;
+}
+
+// @public
+export interface OcsfAuthFactor {
+    readonly factor_type: string;
+    readonly factor_type_id: number;
+    readonly is_totp?: true;
+}
+
+// @public
+export interface OcsfBaseEvent {
+    readonly activity_id: number;
+    readonly activity_name: string;
+    readonly actor?: OcsfActor;
+    readonly auth_factors?: readonly OcsfAuthFactor[];
+    readonly category_name: "Identity & Access Management";
+    readonly category_uid: 3;
+    readonly class_name: string;
+    readonly metadata: OcsfMetadata;
+    readonly severity: "Informational" | "Low";
+    readonly severity_id: 1 | 2;
+    readonly status: "Success" | "Failure";
+    readonly status_detail?: string;
+    readonly status_id: 1 | 2;
+    readonly time: number;
+    readonly type_name: string;
+    readonly type_uid: number;
+    readonly unmapped: OcsfUnmapped;
+    readonly user: OcsfUser;
+}
+
+// @public
+export interface OcsfMetadata {
+    readonly product: OcsfProduct;
+    readonly tenant_uid: string;
+    readonly version: "1.9.0";
+}
+
+// @public
+export interface OcsfProduct {
+    readonly name: "test-cap";
+    readonly vendor_name: "MaverickCER";
+}
+
+// @public
+export interface OcsfService {
+    readonly name: string;
+}
+
+// @public
+export interface OcsfSession {
+    readonly created_time: number;
+    readonly expiration_time: number;
+    readonly is_mfa: boolean;
+    readonly issuer: string;
+    readonly uid: string;
+}
+
+// @public
+export interface OcsfUnmapped {
+    readonly test_cap: TestCapFacts;
+}
+
+// @public
+export interface OcsfUser {
+    readonly uid: string;
+}
+
+// @public
+export type Outcome = "success" | "failure";
+
+// @public
+export interface PageAsset {
+    readonly body: Uint8Array;
+    readonly contentType: string;
+    readonly path: string;
+}
+
+// @public
+export interface PageAssets {
+    readonly script: string;
+    readonly style?: string | undefined;
+}
+
+// @public
+export interface PageAssetSet {
+    readonly script: PageAsset;
+    readonly style: PageAsset;
+}
+
+// @public
+export interface PageContext {
+    readonly action: string;
+    readonly assets: PageAssets;
+    readonly csrfToken: string;
+    readonly hidden?: Readonly<Record<string, string>> | undefined;
+    readonly lang?: string | undefined;
+    readonly links?: readonly PageLink[] | undefined;
+    readonly resend?: string | undefined;
+    readonly totpSecret?: string | undefined;
+}
+
+// @public
+export interface PageLink {
+    readonly href: string;
+    readonly text: string;
 }
 
 // @public
@@ -99,6 +514,124 @@ export interface RandomSource {
 export interface RecordChange {
     readonly data?: JsonValue;
     readonly expiresAt?: number | null;
+}
+
+// @public
+export interface Requirement {
+    readonly level: AssuranceLevel;
+    readonly multiFactorWithinMs?: number | undefined;
+    readonly phishingResistant?: boolean | undefined;
+    readonly phishingResistantWithinMs?: number | undefined;
+}
+
+// @public
+export type RequireResult = {
+    readonly outcome: "allow";
+    readonly subject: string;
+    readonly assurance: SessionAssurance;
+} | {
+    readonly outcome: "step-up";
+    readonly subject: string;
+    readonly missing: readonly MissingEvidence[];
+    readonly assurance: SessionAssurance;
+} | {
+    readonly outcome: "enroll";
+} | {
+    readonly outcome: "recovery-only";
+} | {
+    readonly outcome: "unauthenticated";
+};
+
+// @public
+export type SecurityEvent = AuthenticationEvent | UserManagementEvent;
+
+// @public
+export type SendEmail = (message: EmailMessage) => Promise<void>;
+
+// @public
+export interface SessionAssurance {
+    readonly absoluteExpiresAt: number;
+    readonly evidence: readonly AuthenticationEvidence[];
+    readonly idleExpiresAt: number;
+    readonly lastMultiFactorAt: number | null;
+    readonly lastPhishingResistantAt: number | null;
+    readonly level: AssuranceLevel | null;
+    readonly policyVersion: string;
+    readonly stepUps: readonly StepUpRecord[];
+}
+
+// @public
+export interface SessionInfo {
+    readonly absoluteExpiresAt: number;
+    readonly id: string;
+    readonly idleExpiresAt: number;
+    readonly level: "AAL1" | "AAL2" | "AAL3" | null;
+    readonly methods: readonly AuthenticationMethod[];
+    readonly state: "authenticated" | "pre-auth" | "recovery-only";
+    readonly subject: string;
+}
+
+// @public
+export type SessionKind = "authenticated" | "pre-auth" | "recovery-only";
+
+// @public
+export interface SessionRef {
+    readonly createdAt: number;
+    readonly expiresAt: number;
+    readonly hash: string;
+    readonly mfa: boolean;
+}
+
+// @public
+export interface SessionState {
+    readonly evidence: readonly AuthenticationEvidence[];
+    readonly lastSeenAt: number;
+    readonly startedAt: number;
+    readonly state: SessionKind;
+    readonly stepUps: readonly StepUpRecord[];
+    readonly subject: string;
+}
+
+// @public
+export interface SessionTimeouts {
+    readonly aal2AbsoluteMs: number;
+    readonly aal2IdleMs: number;
+    readonly aal3AbsoluteMs: number;
+    readonly aal3IdleMs: number;
+    readonly restrictedAbsoluteMs: number;
+    readonly restrictedIdleMs: number;
+}
+
+// @public
+export type SqlDialect = "postgres" | "sqlite" | "mysql";
+
+// @public
+export type SqlParam = string | number | null;
+
+// @public
+export type SqlQuery = (sql: string, params: readonly SqlParam[]) => Promise<SqlResult>;
+
+// @public
+export interface SqlResult {
+    readonly affectedRows: number;
+    readonly rows: readonly Readonly<Record<string, unknown>>[];
+}
+
+// @public
+export interface SqlStoreOptions {
+    readonly dialect: SqlDialect;
+    readonly query: SqlQuery;
+    readonly tablePrefix?: string | undefined;
+    readonly transaction?: SqlTransaction | undefined;
+}
+
+// @public
+export type SqlTransaction = <T>(fn: (query: SqlQuery) => Promise<T>) => Promise<T>;
+
+// @public
+export interface StepUpRecord {
+    readonly at: number;
+    readonly method: AuthenticationMethod;
 }
 
 // @public
@@ -144,6 +677,18 @@ export type StoreTransaction = StoreOperations;
 export type TenantId = string;
 
 // @public
+export interface TestCapFacts {
+    readonly actor_kind?: EventSubject["kind"];
+    readonly assurance_level?: "AAL1" | "AAL2" | "AAL3" | null;
+    readonly break_glass?: true;
+    readonly deviation?: string;
+    readonly reason?: string;
+    readonly step_up?: true;
+    readonly subject_kind: EventSubject["kind"];
+    readonly system: string;
+}
+
+// @public
 export class TransportError extends Error {
     constructor(code: TransportErrorCode, message: string);
     readonly code: TransportErrorCode;
@@ -152,5 +697,33 @@ export class TransportError extends Error {
 
 // @public
 export type TransportErrorCode = "aborted" | "ambiguous-header" | "body-too-large" | "duplicate-field" | "invalid-path" | "malformed-body" | "too-many-fields" | "unsupported-media-type";
+
+// @public
+export type TrustConfig = readonly TrustedIssuer[];
+
+// @public
+export interface TrustedIssuer {
+    readonly acr?: Readonly<Record<string, FederatedLevel>> | undefined;
+    readonly amr?: Readonly<Record<string, FederatedLevel>> | undefined;
+    readonly issuer: string;
+    readonly maxAuthAgeMs: number;
+}
+
+// @public
+export type TrustedProxies = readonly string[];
+
+// @public
+export type UserManagementActivity = "create" | "update" | "enable" | "disable" | "password-change" | "password-reset" | "enable-mfa-factors" | "disable-mfa-factors" | "add-programmatic-credentials" | "remove-programmatic-credentials" | "other";
+
+// @public
+export interface UserManagementEvent extends OcsfBaseEvent {
+    readonly class_uid: 3007;
+}
+
+// @public
+export interface UserManagementInput extends EventInput {
+    readonly activity: UserManagementActivity;
+    readonly otherName?: string | undefined;
+}
 
 ```

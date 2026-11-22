@@ -46,6 +46,9 @@ jobs:
       # `--scope auto` runs only what a pull request's changes can affect. A push to main and a release
       # run everything. So does a pull request that touches a lockfile, a config or anything the analysis
       # cannot place.
+      # The runner deletes reports/ and coverage/ after the run unless they existed before it started, so create them:
+      # the mutation report must survive for the upload below and the `badges` job.
+      - run: mkdir -p reports coverage
       - run: npm run contract -- --scope auto
         env:
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
@@ -61,6 +64,14 @@ jobs:
           path: reports/contract
           if-no-files-found: ignore
           retention-days: 30
+      # The `badges` job reads the mutation score from this report instead of mutating a second time.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation/mutation.json
+          if-no-files-found: ignore
+          retention-days: 5
 
   # The package declares `engines.node >=22`; the contract above runs on 24, so prove the declared
   # floor itself by building and testing on it.
@@ -128,13 +139,173 @@ jobs:
           deno-version: v2.9.4
       - run: deno run --allow-read test/cross-runtime/run.mjs
 
+  # The examples are e2e tests of the packed package. Each is its own npm project that installs the
+  # tarball `npm pack` makes, as an app would, so it tests what ships rather than the source tree.
+  # test/examples/*.test.ts skip without the example's node_modules (the contract job has none, see
+  # .repo-contract/exceptions/skipped-tests.json); here they run for real. The Next.js test runs
+  # `next build`, then `next start` on an ephemeral port, then the sign-up to sign-out journey over HTTP.
+  # The TanStack Start example's lockfile records the tarball without an integrity hash, so its `npm ci` installs the
+  # tarball packed here, never a cached copy; the Next.js example installs the tarball over its own lockfile.
+  examples:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+      - run: npm ci
+      - run: npm run build
+      - run: npm pack
+      - name: Install examples/nextjs with the packed test-cap
+        working-directory: examples/nextjs
+        run: |
+          npm ci
+          npm install --no-save ../../test-cap-*.tgz
+      # A TanStack Start app: the global request middleware, the /auth/$ server route and server functions.
+      - name: tanstack-start
+        run: |
+          npm pack --pack-destination examples/tanstack-start
+          cd examples/tanstack-start
+          npm ci
+          npm run typecheck
+      - run: npx vitest run test/examples/
+
+  # Badge data for the Pages site, on a push to main only, after every gate job passed: coverage and size from a fresh
+  # run, the mutation score from the report the `contract` job already paid for. The writers are
+  # internal-package-contract's shared ones.
+  badges:
+    needs: [contract, node-floor, typescript-7, cross-runtime, examples]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:coverage
+      - run: npm run size -- --json coverage/size-summary.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation
+      - name: Generate mutation badge data
+        run: node node_modules/internal-package-contract/scripts/run-mutation-badge.mjs
+      - name: Generate coverage and size badge data
+        run: npx --no-install internal-package-contract tool badges
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-badges
+          path: |
+            docs/coverage-badge.json
+            docs/coverage.json
+            docs/mutation-badge.json
+            docs/mutation.json
+            docs/size-badge.json
+            docs/size.json
+          retention-days: 14
+
+  # Deploys docs/ to GitHub Pages (https://maverickcer.github.io/test-cap/) with the badge data `badges` just wrote, in
+  # the same run. Built here, never committed: the TypeDoc API docs (docs/api/) and Storybook (docs/storybook/, over the
+  # committed placeholder page). Committed and checked by tests: the landing page and the HTTP API reference. Only this
+  # job holds the `pages` and `id-token` permissions.
+  deploy:
+    needs: badges
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify the site entry point exists
+        run: test -f docs/index.html
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+      - run: npm ci
+      - run: npm run docs:api
+      - run: npm run docs:storybook --if-present
+      - name: Put the built Storybook in the site
+        run: |
+          if [ -d storybook-static ]; then
+            rm -rf docs/storybook
+            mv storybook-static docs/storybook
+          fi
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: docs-badges
+          path: docs
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # Benchmarks on a pull request (same-repository branches only): measures the branch, checks big-O and overhead
+  # against the documented suite, and posts or updates one summary comment. It commits nothing. A bot's own pull
+  # request (the results PR benchmark-record opens) is skipped, which ends the loop. Pinned to the
+  # internal-package-contract release the devDependency names.
+  benchmark-pr:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'github-actions[bot]'
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: MaverickCER/internal-package-contract/.github/workflows/benchmark-pr.yml@ab0f846d7927f63ad5d77c72e4de55de87ec543c # main, unreleased (#148)
+    with:
+      suites: |
+        Runtime|benchmarks/performance-runtime|benchmarks/history/runtime.json
+      budgets-path: benchmarks/budgets.mjs
+      comment-marker: "<!-- test-cap-benchmark-summary -->"
+      node-version: 24.x
+
+  # After a merge to main: measures the merge commit on a GitHub runner and opens a pull request with the new
+  # results.json, BENCHMARKS.md and history entry. This is how the committed figures are produced; a developer's run
+  # writes to .benchmark-local/ and is never committed. Not in `required`: it runs only on a push to main.
+  benchmark-record:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    uses: MaverickCER/internal-package-contract/.github/workflows/benchmark-record.yml@ab0f846d7927f63ad5d77c72e4de55de87ec543c # main, unreleased (#148)
+    with:
+      suites: |
+        Runtime|benchmarks/performance-runtime|benchmarks/history/runtime.json
+      node-version: 24.x
+
   # The one status check that stands for every job above except `contract`. GitHub treats a skipped or
   # cancelled required job as passing, and cannot name a matrix job as one context. So this job runs
   # `if: always()` and fails unless each job it needs finished `success`. Add every new job to `needs`;
   # the `ci-jobs-test` managed copy fails a package whose ci.yml has a job this list omits. It blocks a
-  # merge only once the ruleset names `required` (see the top of this file).
+  # merge only once the ruleset names `required` (see the top of this file). `badges`, `deploy` and
+  # `benchmark-record` are left out on purpose: they publish after a merge to main and are skipped on every pull
+  # request, so they gate nothing. `benchmark-pr` is in, and may be skipped: it runs only on a same-repository pull
+  # request, so a push to main or a fork's pull request skips it.
   required:
-    needs: [node-floor, typescript-7, cross-runtime]
+    needs: [node-floor, typescript-7, cross-runtime, examples, benchmark-pr]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -145,7 +316,8 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: >-
           node -e "const needs = JSON.parse(process.env.NEEDS);
-          const bad = Object.entries(needs).filter(([, n]) => n.result !== 'success');
+          const maySkip = new Set(['benchmark-pr']);
+          const bad = Object.entries(needs).filter(([id, n]) => !(n.result === 'success' || (maySkip.has(id) && n.result === 'skipped')));
           if (bad.length > 0) {
             console.error('::error::not green: ' + bad.map(([id, n]) => id + '=' + n.result).join(', '));
             process.exit(1);

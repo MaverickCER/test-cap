@@ -85,10 +85,14 @@ session cookie.
 | AAL3              | 15 min | 12 h     |
 
 Every request checks both limits against the injected `Clock`. The cookie never outlives the absolute limit; the
-server record is authoritative.
+server record is authoritative. A read that finds a session past either limit revokes its record, so a clock that
+later jumps backwards cannot give the session the rest of its window again. The read answers `unauthenticated`
+whether or not that revoke lands; a failed revoke is tried again by the next read that finds the session
+(`test/failure/clock.test.ts`, finding L-1 in [dependency-failures.md](../dependency-failures.md#findings)).
 
 Why: these are the 800-63B-4 limits quoted above. Using them as defaults means the policy report has nothing to
-explain for an app that keeps them.
+explain for an app that keeps them. An expiry read from the clock alone is only as final as the clock; a revoked
+record stays ended whatever the clock does next.
 
 Override: an app may shorten any limit. Lengthening one is a deviation, listed in the policy report (ADR 0005).
 

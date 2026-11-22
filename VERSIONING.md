@@ -32,4 +32,14 @@ large enough bump:
 Neither check sees a change in behaviour behind an unchanged signature or `--help` text, or in the
 files a command writes. Those are judged in review, and a changeset says so when they matter.
 
-<!-- ipc:prompt: list stable / experimental / private surfaces here when they diverge. -->
+## Surfaces
+
+| Surface                                                           | Tier    | What a change means                                                                                                                     |
+| ----------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Every entry in `exports`                                          | public  | Versioned as above. Before `1.0.0`, a breaking change is a minor and says so.                                                           |
+| The `/auth/*` routes, their fields, replies and error codes       | public  | Versioned like the API, because apps and the default pages depend on them. Review judges it; no check compares them with a release.     |
+| The session and CSRF cookie names                                 | public  | A rename signs every user out, so it is a breaking change.                                                                              |
+| Entries not yet in `exports` (the SQL store, the conformance kit) | private | May change in any release until a capability gate adds them ([ADR 0004](specs/decisions/0004-package-entries-and-capability-gates.md)). |
+| Anything under `src/` not reachable from `exports`                | private | May change in any release.                                                                                                              |
+
+There is no experimental tier: a capability enters `exports` only when its gate passes.
