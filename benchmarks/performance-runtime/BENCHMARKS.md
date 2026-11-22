@@ -87,7 +87,7 @@ Every function the package exposes is measured on its own across the full size l
 | `tanstackStartMiddleware` (protected-route) | request | O(n) | O(n) | ✅ matches | 8.86 ms | 118 ms |
 | `auth.handle (POST /auth/totp/verify)` (newest-matches) | request | O(n) | O(log n) | 🟡 close (neighbouring class) | 1.67 ms (at 5) | 1.67 ms (at 5) |
 | `auth.handle (POST /auth/totp/verify)` (wrong-code) | request | O(n) | O(log n) | 🟡 close (neighbouring class) | 1.37 ms (at 5) | 1.37 ms (at 5) |
-| `auth.require` | request | O(n) | O(log n) | 🟡 close (neighbouring class) | 90.6 µs (at 5) | 90.6 µs (at 5) |
+| `auth.require` | request | O(1) | O(log n) | 🟡 close (neighbouring class) | 90.6 µs (at 5) | 90.6 µs (at 5) |
 | `memoryStore().listByOwner` | request | O(n) | O(n) | ✅ matches | 1.08 ms | 17.0 ms |
 | `memoryStore().consumeOnce` | request | O(1) | O(log n) | 🟡 close (neighbouring class) | 13.5 µs | 28.2 µs |
 | `memoryStore().increment` | request | O(1) | O(1) | ✅ matches | 0.735 µs | 0.725 µs |
@@ -938,7 +938,7 @@ A code no authenticator accepts: every one is tried.
 
 **What poor performance would mean.** Every protected call pays it, so a slow check slows every sensitive route of the app for as long as the session lives.
 
-**Expected growth: O(n).** A session keeps only the newest evidence per method and authenticator, so its evidence is at most one entry per authenticator plus the password; the assurance is one sorted pass over it.
+**Expected growth: O(1).** A session keeps only the newest evidence per method and authenticator, so it holds at most one entry per authenticator plus the password, six at most. The assurance is one sorted pass over those entries, and at these counts that pass is dwarfed by fixed work every call does: the session read from the store and the token hash.
 
 **Measured on a shorter ladder (1, 2, 3, 4, 5).** The evidence is bounded by the account's authenticators, at most five, so the ladder is every count it can have.
 

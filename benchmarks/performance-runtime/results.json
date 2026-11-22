@@ -12364,8 +12364,8 @@
         "variable": "request",
         "notation": "O(log n)",
         "points": 5,
-        "expected": "linear",
-        "expectedNotation": "O(n)",
+        "expected": "constant",
+        "expectedNotation": "O(1)",
         "agreement": "close"
       },
       "fn:store-list-by-owner": {
