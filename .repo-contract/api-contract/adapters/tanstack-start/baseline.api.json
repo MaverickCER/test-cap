@@ -1,0 +1,914 @@
+{
+  "metadata": {
+    "toolPackage": "@microsoft/api-extractor",
+    "toolVersion": "7.60.1",
+    "schemaVersion": 1011,
+    "oldestForwardsCompatibleVersion": 1001,
+    "tsdocConfig": {
+      "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+      "noStandardTags": true,
+      "tagDefinitions": [
+        {
+          "tagName": "@alpha",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@beta",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@defaultValue",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@decorator",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@deprecated",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@eventProperty",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@example",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@experimental",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@inheritDoc",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@internal",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@label",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@link",
+          "syntaxKind": "inline",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@override",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@packageDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@param",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@privateRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@public",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@readonly",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@remarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@returns",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@sealed",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@see",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@throws",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@typeParam",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@virtual",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@jsx",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxRuntime",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxFrag",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxImportSource",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@betaDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@internalRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@preapproved",
+          "syntaxKind": "modifier"
+        }
+      ],
+      "supportForTags": {
+        "@alpha": true,
+        "@beta": true,
+        "@defaultValue": true,
+        "@decorator": true,
+        "@deprecated": true,
+        "@eventProperty": true,
+        "@example": true,
+        "@experimental": true,
+        "@inheritDoc": true,
+        "@internal": true,
+        "@label": true,
+        "@link": true,
+        "@override": true,
+        "@packageDocumentation": true,
+        "@param": true,
+        "@privateRemarks": true,
+        "@public": true,
+        "@readonly": true,
+        "@remarks": true,
+        "@returns": true,
+        "@sealed": true,
+        "@see": true,
+        "@throws": true,
+        "@typeParam": true,
+        "@virtual": true,
+        "@betaDocumentation": true,
+        "@internalRemarks": true,
+        "@preapproved": true
+      },
+      "reportUnsupportedHtmlElements": false
+    }
+  },
+  "kind": "Package",
+  "canonicalReference": "test-cap!",
+  "docComment": "/**\n * test-cap/tanstack-start: the TanStack Start adapter (ADR 0024). It converts and decides nothing:\n *\n * - `tanstackStartMiddleware(auth, { public })` is the server function of a global request middleware. TanStack\n *  Start runs it for every request, pages, server routes and server function calls alike. It sends the request's\n *  head to the core's gate, which refuses an ambiguous path with a 400 and applies deny by default with the public\n *  list; a refusal is answered here, and every other request continues with `context.auth` set.\n * - `tanstackStartAuth(auth).handlers` serves the `/auth/$` server route: the body is read here, once, as bytes, and\n *  goes to `auth.handle`.\n * - `tanstackStartAuth(auth).require` and `.session` let a server function check a requirement itself, close to the\n *  data, and answer with the core's outcome.\n *\n * TanStack Start is typed structurally, so this entry has no dependency on it.\n *\n * @packageDocumentation\n */\n",
+  "name": "test-cap",
+  "preserveMemberOrder": false,
+  "members": [
+    {
+      "kind": "EntryPoint",
+      "canonicalReference": "test-cap!",
+      "name": "",
+      "preserveMemberOrder": false,
+      "members": [
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!tanstackStartAuth:function(1)",
+          "docComment": "/**\n * The `/auth/$` server route and the server helpers. Serve the route with\n * `server: { handlers: tanstackStartAuth(auth).handlers }`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function tanstackStartAuth<Id extends "
+            },
+            {
+              "kind": "Content",
+              "text": "string"
+            },
+            {
+              "kind": "Content",
+              "text": ">(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Id>"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "TanstackStartAuth",
+              "canonicalReference": "test-cap!TanstackStartAuth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Id>"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 6,
+            "endIndex": 8
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 5
+              },
+              "isOptional": false
+            }
+          ],
+          "typeParameters": [
+            {
+              "typeParameterName": "Id",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "tanstackStartAuth"
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!TanstackStartAuth:interface",
+          "docComment": "/**\n * What `tanstackStartAuth` returns.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TanstackStartAuth<Id extends "
+            },
+            {
+              "kind": "Content",
+              "text": "string"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "Id",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "TanstackStartAuth",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!TanstackStartAuth#handlers:member",
+              "docComment": "/**\n * The `/auth/$` server route's handlers.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly handlers: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TanstackStartRouteHandlers",
+                  "canonicalReference": "test-cap!TanstackStartRouteHandlers:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "handlers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!TanstackStartAuth#require:member(1)",
+              "docComment": "/**\n * Whether the request's session meets the requirement under `requirementId`, as one of five outcomes.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "require(request: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Request",
+                  "canonicalReference": "@types/node!__global.Request:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", requirementId: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "Id"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RequireResult",
+                  "canonicalReference": "test-cap!~RequireResult:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 9
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "request",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "requirementId",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "require"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!TanstackStartAuth#session:member(1)",
+              "docComment": "/**\n * The request's session, read from the store; `null` when it has none, or it is revoked or expired.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "session(request: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Request",
+                  "canonicalReference": "@types/node!__global.Request:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SessionInfo",
+                  "canonicalReference": "test-cap!~SessionInfo:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | null>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "request",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "session"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!TanstackStartAuthInfo:type",
+          "docComment": "/**\n * What `context.auth` holds: the subject on a protected route, `null` on a public one and under `/auth/`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type TanstackStartAuthInfo = "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly subject: string;\n} | null"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "name": "TanstackStartAuthInfo",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!TanstackStartContext:interface",
+          "docComment": "/**\n * The context the middleware adds for the routes and server functions after it.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TanstackStartContext "
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "name": "TanstackStartContext",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!TanstackStartContext#auth:member",
+              "docComment": "/**\n * The subject deny by default let through, or `null`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly auth: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TanstackStartAuthInfo",
+                  "canonicalReference": "test-cap!TanstackStartAuthInfo:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "auth",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!tanstackStartMiddleware:function(1)",
+          "docComment": "/**\n * The global request middleware's server function: protects every route and server function at the default\n * requirement unless `options.public` lists its path. Register it with\n * `createStart(() => ({ requestMiddleware: [createMiddleware().server(tanstackStartMiddleware(auth, options))] }))`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function tanstackStartMiddleware(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<string>"
+            },
+            {
+              "kind": "Content",
+              "text": ", options?: "
+            },
+            {
+              "kind": "Reference",
+              "text": "TanstackStartMiddlewareOptions",
+              "canonicalReference": "test-cap!TanstackStartMiddlewareOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "TanstackStartMiddleware",
+              "canonicalReference": "test-cap!TanstackStartMiddleware:type"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 6,
+            "endIndex": 7
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 4,
+                "endIndex": 5
+              },
+              "isOptional": true
+            }
+          ],
+          "name": "tanstackStartMiddleware"
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!TanstackStartMiddleware:type",
+          "docComment": "/**\n * The server function of a request middleware: a refusal as a `Response`, or whatever `next` answered.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type TanstackStartMiddleware = "
+            },
+            {
+              "kind": "Content",
+              "text": "<Next>(input: "
+            },
+            {
+              "kind": "Reference",
+              "text": "TanstackStartMiddlewareInput",
+              "canonicalReference": "test-cap!TanstackStartMiddlewareInput:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Next>) => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Awaited",
+              "canonicalReference": "!Awaited:type"
+            },
+            {
+              "kind": "Content",
+              "text": "<Next> | "
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ">"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "name": "TanstackStartMiddleware",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 10
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!TanstackStartMiddlewareInput:interface",
+          "docComment": "/**\n * The parts of TanStack Start's request middleware options the adapter reads.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TanstackStartMiddlewareInput<Next> "
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "Next",
+              "constraintTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "TanstackStartMiddlewareInput",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!TanstackStartMiddlewareInput#next:member",
+              "docComment": "/**\n * Continues to the next middleware, the route or the server function, with the adapter's context added.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly next: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "(options: {\n        context: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TanstackStartContext",
+                  "canonicalReference": "test-cap!TanstackStartContext:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";\n    }) => Next"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "next",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 4
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!TanstackStartMiddlewareInput#request:member",
+              "docComment": "/**\n * The request as TanStack Start received it.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly request: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Request",
+                  "canonicalReference": "@types/node!__global.Request:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "request",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!TanstackStartMiddlewareOptions:interface",
+          "docComment": "/**\n * What `tanstackStartMiddleware` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TanstackStartMiddlewareOptions "
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "name": "TanstackStartMiddlewareOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!TanstackStartMiddlewareOptions#public:member",
+              "docComment": "/**\n * The paths that need no session. An entry matches exactly (`\"/\"` is the root only), or ends in `/*` to match one or\n * more segments below it (`\"/blog/*\"`). Matching is case-sensitive. Everything else needs the default requirement,\n * server function calls included.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly public?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly string[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "public",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!TanstackStartRouteHandler:type",
+          "docComment": "/**\n * A server route handler: TanStack Start passes more than the request, and the adapter reads only the request.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type TanstackStartRouteHandler = "
+            },
+            {
+              "kind": "Content",
+              "text": "(input: {\n    readonly request: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ";\n}) => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ">"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "name": "TanstackStartRouteHandler",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 8
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!TanstackStartRouteHandlers:interface",
+          "docComment": "/**\n * The handlers for the `/auth/$` server route.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface TanstackStartRouteHandlers "
+            }
+          ],
+          "fileUrlPath": "src/adapters/tanstack-start/index.ts",
+          "releaseTag": "Public",
+          "name": "TanstackStartRouteHandlers",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!TanstackStartRouteHandlers#ANY:member",
+              "docComment": "/**\n * Every method: the core answers a method a route does not take with a 405.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly ANY: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TanstackStartRouteHandler",
+                  "canonicalReference": "test-cap!TanstackStartRouteHandler:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "ANY",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        }
+      ]
+    }
+  ]
+}

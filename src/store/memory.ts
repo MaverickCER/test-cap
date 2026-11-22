@@ -4,6 +4,7 @@
  * non-durable and production refuses it (ADR 0026).
  *
  * Every operation runs under one lock, so each is atomic and a transaction's partial state is never visible.
+ * @packageDocumentation
  */
 
 import {
@@ -197,7 +198,10 @@ function createLock(): <T>(fn: () => Promise<T>) => Promise<T> {
 }
 
 /** The in-memory reference store. Development and tests only. */
-export function memoryStore(): AuthStore & { transaction: NonNullable<AuthStore["transaction"]> } {
+export function memoryStore(): AuthStore & {
+  /** Runs `fn` atomically under the store's one lock; the memory store always has transactions. */
+  transaction: NonNullable<AuthStore["transaction"]>
+} {
   const state: State = { records: new Map(), counters: new Map(), audit: new Map() }
   const ops = operations(state)
   const exclusive = createLock()

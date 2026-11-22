@@ -93,13 +93,13 @@ check, unless:
 - `APP_ORIGIN` is an HTTPS origin;
 - the store is a real store, not `store/memory`;
 - every secret the enabled capabilities need is present and is not a default or example value;
-- the clock and the random source are test-cap's defaults. A custom `Clock` or `RandomSource` is accepted only in
-  `test` mode.
+- the clock, the random source and the argon2id cost are test-cap's defaults. A custom `Clock`, `RandomSource` or
+  `argon2Cost` ([ADR 0018](0018-budgets.md) §1) is accepted only in `test` mode.
 
 Why: each of these turns a working deployment into an insecure one silently: an HTTP origin drops the `__Host-`
 cookie's protection, the memory store loses revocations and counters on restart, a known key is no key, a frozen
-clock disables every expiry, and a predictable random source makes every token guessable (800-63B-4 §3.2.12, ASVS
-6.5.3).
+clock disables every expiry, a predictable random source makes every token guessable (800-63B-4 §3.2.12, ASVS
+6.5.3), and a lowered argon2id cost makes every stored hash cheaper to crack.
 
 Override: none in production. A non-production mode relaxes them (Open 1).
 

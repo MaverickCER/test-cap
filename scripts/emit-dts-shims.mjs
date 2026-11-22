@@ -10,7 +10,14 @@ import { fileURLToPath } from "node:url"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
-const ENTRIES = [{ name: "index", dtsPath: "./.dts/index.js" }]
+const ENTRIES = [
+  { name: "index", dtsPath: "./.dts/index.js" },
+  { name: "express", dtsPath: "./.dts/adapters/express/index.js" },
+  { name: "fetch", dtsPath: "./.dts/adapters/fetch/index.js" },
+  { name: "next", dtsPath: "./.dts/adapters/next/index.js" },
+  { name: "tanstack-start", dtsPath: "./.dts/adapters/tanstack-start/index.js" },
+  { name: "store/memory", dtsPath: "../.dts/store/memory.js" },
+]
 
 for (const { name, dtsPath } of ENTRIES) {
   const shim = `export * from "${dtsPath}";\n`

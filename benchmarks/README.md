@@ -9,13 +9,13 @@ default), measures it, checks the big-O and prices it**. It then writes a **repo
 
 ## Read first
 
-| File                                           | For whom     | What it is                                                                               |
-| ---------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
-| [BENCHMARKS.md](BENCHMARKS.md)                 | Everyone     | The generated report: cost at a glance, end-to-end, per function, attribution.           |
-| [READING-BENCHMARKS.md](READING-BENCHMARKS.md) | Readers      | Why we benchmark, how to read the numbers, and why they are not comparable between runs. |
-| [WRITING-BENCHMARKS.md](WRITING-BENCHMARKS.md) | Contributors | What to test, how, why, and how to document it.                                          |
-| [suite.mjs](suite.mjs)                         | Contributors | The input: what this package runs.                                                       |
-| `results.json`                                 | Tools        | The output: every measurement and analysis, in a documented shape.                       |
+| File                                               | For whom     | What it is                                                                               |
+| -------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
+| [BENCHMARKS.md](performance-runtime/BENCHMARKS.md) | Everyone     | The generated report: cost at a glance, end-to-end, per function, attribution.           |
+| [READING-BENCHMARKS.md](READING-BENCHMARKS.md)     | Readers      | Why we benchmark, how to read the numbers, and why they are not comparable between runs. |
+| [WRITING-BENCHMARKS.md](WRITING-BENCHMARKS.md)     | Contributors | What to test, how, why, and how to document it.                                          |
+| [suite.mjs](performance-runtime/suite.mjs)         | Contributors | The input: what this package runs.                                                       |
+| `results.json`                                     | Tools        | The output: every measurement and analysis, in a documented shape.                       |
 
 The history page on the project website and the pull-request summaries link back here.
 
@@ -23,6 +23,39 @@ Only CI's figures are committed. A run on your own machine writes to `.benchmark
 never committed. While that directory exists, it is what the contract checks read. The benchmarks therefore
 gate a change locally without publishing a number from a laptop. Delete `.benchmark-local/` to fall back to
 the committed figures.
+
+## test-cap's suite
+
+One suite, [performance-runtime](performance-runtime/), measures what an app pays at runtime. It imports the
+built entry points a consumer imports: `test-cap`, the four adapters and `test-cap/store/memory`. The parsers,
+CSRF, session reads and argon2id are internal, so they are measured through `auth.handle`, the way every request
+reaches them.
+
+| Benchmark              | `n` counts                                               | Why it is there                                                           |
+| ---------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------- |
+| End to end             | `GET /auth/session` requests                             | The request every page load makes first, against a bare async call.       |
+| `session-cookies`      | cookies on the request                                   | The cookie parser and session read run on every request.                  |
+| `sign-up-body`         | identifier characters                                    | The cheapest state-changing path an anonymous client can reach.           |
+| `sign-in-argon2`       | password characters, up to the 256 cap                   | argon2id at the test-mode cost and, as a variant, the real cost.          |
+| `create-auth`          | key-ring entries                                         | Startup and cold-start cost; rotation adds entries.                       |
+| `define-auth-policy`   | requirement ids                                          | Startup cost for apps with many requirements.                             |
+| `express-public-paths` | public wildcard entries                                  | Paid by every request to an Express app.                                  |
+| `express-requests`     | requests through the middleware                          | Express's per-request overhead, over a real Node request and response.    |
+| `fetch-*`, `next-*`    | requests through what the adapter returns                | Each adapter's per-request overhead: conversion, path match, the core.    |
+| `tanstack-start-*`     | requests through what the adapter returns                | The same for TanStack Start's middleware, route handler and helpers.      |
+| `totp-verify`          | TOTP authenticators on the account (1 to 5, the cap)     | Each is tried in turn; variants for the newest matching and a wrong code. |
+| `auth-require`         | authenticators whose evidence the session holds (1 to 5) | Recomputed on every read, without a cache.                                |
+| `store-*`              | stored records or counters                               | The memory store's `listByOwner`, `consumeOnce` and `increment`.          |
+
+**Where the committed figures come from.** Only CI's figures are committed. After a merge to `main`, the
+`benchmark-record` job measures the merge commit on a GitHub runner and opens a pull request with the new
+`results.json`, `BENCHMARKS.md` and history entry. On every pull request, `benchmark-pr` measures the branch
+and comments on the change. The first committed results were measured on a developer machine to bootstrap the
+coverage check, and say so in `metadata.environment` (`isCI: false`). The first merge replaces them.
+
+**Before you push**, move `.benchmark-local/` aside and run
+`npx internal-package-contract --checks BenchmarkCoverage,BenchmarkComplexity`. While that directory exists, the
+checks read your local run, not the committed figures CI reads.
 
 ## Commands
 
@@ -40,7 +73,7 @@ the arguments to give them at size `n`; the contract does the rest.
 
 ```js
 import { defineSuite } from "internal-package-contract/benchmark"
-import { parse, validate } from "../dist/index.js"
+import { parse, validate } from "../../dist/index.js"
 
 export default defineSuite({
   package: { name: "my-package", bundleFiles: ["dist/index.js"] },

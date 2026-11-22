@@ -3,8 +3,8 @@
 ## Status
 
 Accepted (2026-11-15). Implemented in phase 2 (the transport contract, the parsers, `Clock` and `RandomSource`),
-phase 3 (the Express adapter) and phase 6 (the `fetch`, Nest, Next.js and TanStack Start adapters and the adapter
-conformance suite).
+phase 3 (the Express, `fetch`, Next.js and TanStack Start adapters and the adapter differential test) and phase 4
+(Nest).
 
 Answers [handoff question](../../GLOSSARY.md) 3 (HTTP surface), together with ADR 0024, which owns the adapters and deny
 by default.
@@ -32,9 +32,9 @@ Planned tests:
 - `test/attacks/upstream-body-parser-changes-core-view.test.ts` (an Express body parser mounted before test-cap cannot
   change what the core sees);
 - `test/attacks/double-slash-path-bypass.test.ts` and `test/attacks/adapter-core-parsing-differential.test.ts`;
-- `test/core/injected-clock-and-random.test.ts` (every flow runs on the injected `Clock` and `RandomSource`; a scan
+- `test/core/source-rules.test.ts` (every flow runs on the injected `Clock` and `RandomSource`; a scan
   of `src/` finds no other use of the global clock or random source);
-- `test/core/standard-globals-only.test.ts` (the core imports no `node:` module).
+- `test/core/source-rules.test.ts` (the core imports no `node:` module).
 
 The recommendations under Open are provisional defaults until the owner decides.
 
@@ -89,6 +89,13 @@ The core reads the path exactly as sent and never normalises it. A path that two
 refused with a 400, for every request, whether under `/auth/*` or not, before deny by default (ADR 0024) or any route
 sees it: an empty segment (`//`, or a trailing slash on any path but `/`), a dot segment, an encoded slash, dot or
 backslash, a backslash, whitespace or a control character.
+
+That 400 is promised for every form only behind a raw-stream adapter (Express, and later Nest), which hands the core
+the request line's path as sent. A fetch-based adapter (`fetch`, Next.js, TanStack Start) receives a `Request` whose
+URL the runtime has already parsed by the WHATWG URL rules: its dot segments are resolved and its backslashes are
+slashes before the adapter runs, so `/admin/x/../about` arrives as `/about`. The core and the framework then read the
+same path, and there is nothing left for them to disagree about; every other form above still reaches the core and is
+refused. `test/attacks/adapter-core-parsing-differential.test.ts` pins both behaviours.
 
 Why: one parser means one interpretation, and a declared field list means the request shape is the route's, not the
 caller's. Normalising a path would be a bypass: `/admin/x/../about` normalises to a public `/about`, while a framework

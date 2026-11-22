@@ -41,8 +41,9 @@ of them to a package that does not exist yet would leave them unprotected.
 
 Every state-changing request to a test-cap route passes two checks:
 
-- **Origin.** The `Origin` header must equal `APP_ORIGIN`. When `Origin` is absent, `Sec-Fetch-Site` must be
-  `same-origin`. A request carrying neither is rejected.
+- **Origin.** The `Origin` header must equal `APP_ORIGIN`. When `Origin` is absent or `null`, `Sec-Fetch-Site` must
+  be `same-origin`. A request carrying neither is rejected. `null` is what a browser sends for a form post from a page
+  whose referrer policy is `no-referrer`, as the default pages' is (Open 2); found by the phase-7 browser tests.
 - **Synchronizer token.** The request carries a token derived under `AUTH_CSRF_KEY` and bound to the browser state it
   was issued to. The default pages put it in a hidden field; `test-cap/client` sends it with its requests.
 

@@ -86,7 +86,7 @@ everything after.
 
 Completing a recovery is a credential change: it revokes the account's other sessions (ADR 0006), revokes every
 outstanding emailed recovery code of the account with `revokeByOwner` (ADR 0002), and emits a security
-event (OCSF Account Change: Password Reset for a reset, MFA Factor Enable or Disable for authenticator changes; ADR
+event (OCSF User Management: Password Reset for a reset, Enable or Disable MFA Factors for authenticator changes; ADR
 0015).
 
 Why: a person who recovers an account usually suspects someone else has it. Their sessions must end with the old

@@ -96,6 +96,34 @@ export function parseKeyRing(
   return problems.length === 0 ? { keys, problems } : { keys: [], problems }
 }
 
+/**
+ * The key material test-cap's own examples commit in `examples/nextjs/.env` and `examples/tanstack-start/.env` for
+ * local development. Anyone can read them, so production and staging refuse them (ADR 0026 §4: "not a default or
+ * example value").
+ */
+const EXAMPLE_KEYS: ReadonlySet<string> = new Set([
+  "HyZsmcRz3x-z7EXAIM0O952M67EBY26XZCevK6-p1q0",
+  "MMGWsmAIyfs4cIwsnVTyB-9R0cWKRDC94Y916MYVwAY",
+  "LTKh_83qwGmtcmp11aYwtIHI6dlvnszmbedq224nwxU",
+  "cI-CelXi8E5p4tFZVfSY2lNL5IsXcwgqtlj9zxcFJS0",
+])
+
+/** One problem for each entry of the ring that holds a published example key, in production and staging only. */
+export function exampleKeyProblems(
+  variable: string,
+  value: string,
+  mode: DeploymentMode,
+): readonly string[] {
+  if (!isProductionLike(mode)) return []
+  return value
+    .split(",")
+    .flatMap((entry, index) =>
+      EXAMPLE_KEYS.has(entry.slice(entry.indexOf(":") + 1))
+        ? [`${variable} entry ${index + 1} is a published example key; generate a new one.`]
+        : [],
+    )
+}
+
 /** What the startup check needs to know about the store. */
 export interface StoreTraits {
   /** The store's short name, such as `memory`, used in the refusal message. */
@@ -114,7 +142,13 @@ export interface ReadinessInput {
    * Which of the injected sources the app replaced. Outside test mode both must be the system ones: a fixed clock
    * freezes every expiry, and a predictable random source makes every token guessable (requirements Open 13).
    */
-  readonly custom?: { readonly clock: boolean; readonly random: boolean } | undefined
+  readonly custom?:
+    | {
+        readonly clock: boolean
+        readonly random: boolean
+        readonly argon2Cost?: boolean | undefined
+      }
+    | undefined
 }
 
 const LOOPBACK: ReadonlySet<string> = new Set(["localhost", "127.0.0.1", "[::1]"])
@@ -134,7 +168,7 @@ export function originProblem(origin: string, mode: DeploymentMode): string | un
     (url.protocol === "https:" || url.protocol === "http:") &&
     `${url.protocol}//${url.host}` === origin
   if (!bare) {
-    return "APP_ORIGIN must be a bare origin exactly as browsers send it, such as https://app.example (scheme, lowercase host, and a port only if not the default)."
+    return "APP_ORIGIN must be a bare origin exactly as browsers send it: scheme, lowercase host, and a port only if not the default."
   }
   if (url.protocol === "https:") return undefined
   if (isProductionLike(mode)) return `APP_ORIGIN must use https in ${mode}.`
@@ -158,7 +192,10 @@ export function checkReadiness(input: ReadinessInput): readonly string[] {
     if (value === undefined) {
       if (strict) problems.push(`${variable} is missing.`)
     } else {
-      problems.push(...parseKeyRing(variable, value).problems)
+      problems.push(
+        ...parseKeyRing(variable, value).problems,
+        ...exampleKeyProblems(variable, value, input.mode),
+      )
     }
   }
   if (input.mode !== "test" && input.custom?.clock === true) {
@@ -166,6 +203,11 @@ export function checkReadiness(input: ReadinessInput): readonly string[] {
   }
   if (input.mode !== "test" && input.custom?.random === true) {
     problems.push(`A custom RandomSource is for tests only; ${input.mode} must use Web Crypto.`)
+  }
+  if (input.mode !== "test" && input.custom?.argon2Cost === true) {
+    problems.push(
+      `A custom argon2id cost is for tests only; ${input.mode} must use the ADR 0018 cost.`,
+    )
   }
   return problems
 }

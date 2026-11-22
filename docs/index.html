@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      ;(function () {
+        var KEY = "test-cap-theme"
+        try {
+          var stored = window.localStorage.getItem(KEY)
+          var isDark =
+            stored === "dark"
+              ? true
+              : stored === "light"
+                ? false
+                : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light")
+          document.documentElement.setAttribute("data-theme-key", KEY)
+        } catch (error) {}
+      })()
+    </script>
+    <title>test-cap: internal authentication for MaverickCER apps</title>
+    <meta
+      name="description"
+      content="Sign-up, sign-in, sessions and MFA for the owner&#39;s apps. On Express, fetch and TanStack Start, every route needs AAL2 unless it is listed as public. Each session&#39;s level is computed from the evidence behind it. Internal use only."
+    />
+    <link rel="canonical" href="https://maverickcer.github.io/test-cap/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://maverickcer.github.io/test-cap/" />
+    <meta property="og:title" content="test-cap: internal authentication for MaverickCER apps" />
+    <meta
+      property="og:description"
+      content="Sign-up, sign-in, sessions and MFA for the owner&#39;s apps. On Express, fetch and TanStack Start, every route needs AAL2 unless it is listed as public. Each session&#39;s level is computed from the evidence behind it. Internal use only."
+    />
+    <meta name="twitter:title" content="test-cap: internal authentication for MaverickCER apps" />
+    <meta
+      name="twitter:description"
+      content="Sign-up, sign-in, sessions and MFA for the owner&#39;s apps. On Express, fetch and TanStack Start, every route needs AAL2 unless it is listed as public. Each session&#39;s level is computed from the evidence behind it. Internal use only."
+    />
+    <meta name="twitter:card" content="summary" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="favicon.png" type="image/png" sizes="48x48" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="container">
+        <a class="site-logo" href="#top">test-cap</a>
+        <nav class="primary-nav" id="primary-nav" aria-label="Primary">
+          <ul class="primary-nav-list">
+            <li><a href="#why">Why it exists</a></li>
+            <li><a href="#how">How it works</a></li>
+            <li><a href="#see-it">See it</a></li>
+            <li><a href="#guarantees">Guarantees</a></li>
+            <li><a href="#adoption">Adoption</a></li>
+            <li><a href="#proof">Proof</a></li>
+          </ul>
+        </nav>
+        <div class="header-actions">
+          <button class="icon-button" type="button" id="theme-toggle" aria-pressed="false">
+            <span aria-hidden="true" class="theme-toggle-icon">◐</span
+            ><span class="sr-only">Toggle dark mode</span></button
+          ><a class="github-link" href="https://github.com/MaverickCER/test-cap">GitHub ↗</a
+          ><button
+            class="nav-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="primary-nav"
+          >
+            Menu
+          </button>
+        </div>
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-heading">
+        <div class="container">
+          <p class="section-eyebrow">Authentication, owned</p>
+          <h1 id="hero-heading">Deny by default, at AAL2.</h1>
+          <p class="hero-lede">
+            A createAuth call and one line of Express middleware give an app sign-up, sign-in, TOTP,
+            sessions and CSRF protection. The fetch and TanStack Start adapters protect the same
+            way; on Next.js, each route calls the server helper.
+          </p>
+          <p class="hero-support">
+            test-cap never opens a database connection. It computes each session&#39;s assurance
+            level from the evidence that proved it.
+          </p>
+          <p class="hero-outcome">
+            Protect every route of an Express app at AAL2 with fewer than 20 lines of setup.
+          </p>
+          <p class="hero-meta">Pre-1.0 · v0.0.0 · MIT</p>
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-filename">Quick start</span
+              ><button class="copy-button" type="button" data-copy-target="hero-install">
+                Copy
+              </button>
+            </div>
+            <pre
+              tabindex="0"
+            ><code id="hero-install">npm i https://github.com/MaverickCER/test-cap/releases/download/vX.Y.Z/test-cap-X.Y.Z.tgz</code></pre>
+          </div>
+          <p class="hero-note">
+            test-cap is not on npm, and no release has been cut yet: run <code>npm pack</code> in a
+            checkout. A prebuilt tarball on each GitHub Release is planned for phase 9.
+          </p>
+          <div class="hero-actions">
+            <a class="button button--primary" href="https://github.com/MaverickCER/test-cap#readme"
+              >Read the README</a
+            ><a
+              class="button button--secondary button--on-dark"
+              href="https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md"
+              >Read the Guide</a
+            ><a class="hero-link" href="brief.html">For your manager: the one-page brief</a>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="why" aria-labelledby="why-heading">
+        <div class="container container--narrow">
+          <p class="section-eyebrow">Why it exists</p>
+          <h2 id="why-heading">
+            The owner&#39;s apps need authentication they can test and patch on their own schedule.
+          </h2>
+          <p class="section-lede">
+            Better Auth, the previous choice, published 49 repository advisories between 2024-12-30
+            and 2026-11-03, and patches only its latest release. About 180 of its calls read the
+            system clock, and a test cannot replace them.
+          </p>
+          <div class="diagram">
+            <p class="sr-only">
+              What an app on it could not do: stay on a release and still receive security fixes,
+              test its own session expiry with a controlled clock — a dependency the app cannot
+              reason about.
+            </p>
+            <ol class="diagram-tree" aria-hidden="true">
+              <li>
+                <span class="diagram-branch-label">What an app on it could not do</span>
+                <ol>
+                  <li>stay on a release and still receive security fixes</li>
+                  <li>test its own session expiry with a controlled clock</li>
+                </ol>
+              </li>
+              <li>
+                <span class="diagram-branch-label"
+                  >&rarr; a dependency the app cannot reason about</span
+                >
+              </li>
+            </ol>
+          </div>
+          <p>
+            test-cap writes the flows, sessions and assurance rules in one core the owner controls.
+            It leaves each protocol to a library that specialises in it: today, hash-wasm for
+            argon2id.
+          </p>
+        </div>
+      </section>
+      <section class="section section--muted" id="how" aria-labelledby="how-heading">
+        <div class="container container--narrow">
+          <p class="section-eyebrow">How it works</p>
+          <h2 id="how-heading">One core, thin adapters, the app&#39;s own store.</h2>
+          <p class="section-lede">
+            The adapter turns a framework&#39;s request into bytes. The core parses, checks CSRF and
+            runs the route against the app&#39;s store. The adapter turns the answer back.
+          </p>
+          <div class="diagram">
+            <p class="sr-only">
+              A request passes from the framework through a converting adapter to the core. The core
+              reads and writes the app&#39;s own store and returns bytes for the adapter to send.
+            </p>
+            <ol class="diagram-tree" aria-hidden="true">
+              <li><span class="diagram-branch-label">Framework request</span></li>
+              <li>
+                <span class="diagram-branch-label"
+                  >→ Adapter: converts only; Express, fetch and TanStack Start also apply deny by
+                  default with the app&#39;s public list</span
+                >
+              </li>
+              <li>
+                <span class="diagram-branch-label"
+                  >→ Core: path check, CSRF, the route, and assurance computed from evidence</span
+                >
+              </li>
+              <li>
+                <span class="diagram-branch-label"
+                  >→ The app&#39;s <code>AuthStore</code>: atomic operations over its own
+                  database</span
+                >
+              </li>
+            </ol>
+          </div>
+          <p>
+            Because the core makes every decision, a fix to the core reaches every framework at
+            once. Express, fetch, Next.js and TanStack Start adapters exist today; the Nest adapter
+            is planned for phase 4.
+          </p>
+        </div>
+      </section>
+      <section class="section" id="see-it" aria-labelledby="see-it-heading">
+        <div class="container container--narrow">
+          <p class="section-eyebrow">See it</p>
+          <h2 id="see-it-heading">The README quick start, answering curl.</h2>
+          <p class="section-lede">
+            The quick start started with <code>APP_ENV=development</code>. Headers are trimmed.
+          </p>
+          <div class="code-block">
+            <div class="code-block-header">
+              <span class="code-block-filename">curl -i localhost:3000/account</span
+              ><button class="copy-button" type="button" data-copy-target="demo-output">
+                Copy
+              </button>
+            </div>
+            <pre tabindex="0"><code id="demo-output">$ curl -i localhost:3000/account
+HTTP/1.1 401 Unauthorized
+cache-control: no-store
+{&quot;error&quot;:&quot;unauthenticated&quot;}
+
+$ curl -i localhost:3000/auth/session
+HTTP/1.1 200 OK
+{&quot;session&quot;:null,&quot;csrfToken&quot;:&quot;generated.1794855793133.ZFne…Jo0&quot;}
+
+$ curl -i -X POST -H &quot;Origin: http://localhost:3000&quot; -d &quot;identifier=a%40example.com&amp;password=x&quot; localhost:3000/auth/sign-in
+HTTP/1.1 403 Forbidden
+{&quot;error&quot;:&quot;csrf&quot;}</code></pre>
+          </div>
+          <p class="source-note">
+            Source:
+            <a href="https://github.com/MaverickCER/test-cap#quick-start">README quick start</a>
+          </p>
+          <p>
+            <code>/account</code> is not listed as public, so it needs a session at AAL2. A POST
+            without the token from <code>/auth/session</code> is refused before the route runs. A
+            test runs the same quick start and keeps it under 20 lines.
+          </p>
+        </div>
+      </section>
+      <section class="section section--muted" id="guarantees" aria-labelledby="guarantees-heading">
+        <div class="container">
+          <p class="section-eyebrow">Enforced</p>
+          <h2 id="guarantees-heading">What is enforced, and where it stops.</h2>
+          <p class="section-lede">
+            Each claim names what enforces it and where it stops, and links to the decision that
+            defines it.
+          </p>
+          <div class="adoption-grid">
+            <div class="adoption-card guarantee">
+              <span class="adoption-card-title"
+                >A route not listed as public needs a session at the default requirement,
+                AAL2.</span
+              ><span class="adoption-card-desc"
+                ><strong>Scope:</strong> The Express, fetch and TanStack Start adapters apply it
+                before the app&#39;s handler runs. On Next.js, a route is protected when it calls
+                <code>nextServerAuth</code>. A requirement above the default is the app&#39;s to
+                check with <code>auth.require</code> inside the handler.</span
+              ><a
+                class="external-link-note"
+                href="https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0024-adapters-and-deny-by-default.md"
+                >Read ADR 0024 ↗</a
+              >
+            </div>
+            <div class="adoption-card guarantee">
+              <span class="adoption-card-title"
+                >Production refuses to start without HTTPS, a durable store and both keys.</span
+              ><span class="adoption-card-desc"
+                ><strong>Scope:</strong> <code>createAuth</code> throws one
+                <code>ConfigError</code> naming every problem. A missing or unknown
+                <code>APP_ENV</code> counts as production. It cannot tell whether a store the app
+                wrote is really durable; it trusts the store&#39;s own traits.</span
+              ><a
+                class="external-link-note"
+                href="https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0026-strict-defaults-and-deployment-mode.md"
+                >Read ADR 0026 ↗</a
+              >
+            </div>
+            <div class="adoption-card guarantee">
+              <span class="adoption-card-title"
+                >Every POST under /auth/ checks a same-origin signal and a synchronizer token.</span
+              ><span class="adoption-card-desc"
+                ><strong>Scope:</strong> The signal is an Origin equal to APP_ORIGIN, or
+                Sec-Fetch-Site: same-origin when Origin is absent or null. The app&#39;s own routes
+                are the app&#39;s to protect; test-cap does not check CSRF on them.</span
+              ><a
+                class="external-link-note"
+                href="https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0011-csrf-and-xss-boundary-with-secure-cap.md"
+                >Read ADR 0011 ↗</a
+              >
+            </div>
+            <div class="adoption-card guarantee">
+              <span class="adoption-card-title"
+                >A session&#39;s level is computed from evidence that is still valid, and email
+                never raises it.</span
+              ><span class="adoption-card-desc"
+                ><strong>Scope:</strong> Password plus TOTP is AAL2. The level drops when the
+                evidence behind it expires. The rules map to NIST SP 800-63B-4; this is not a
+                certification.</span
+              ><a
+                class="external-link-note"
+                href="https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0005-policy-and-evidence-based-assurance.md"
+                >Read ADR 0005 ↗</a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="why-not-ci" aria-labelledby="why-not-ci-heading">
+        <div class="container">
+          <p class="section-eyebrow">Where it fits</p>
+          <h2 id="why-not-ci-heading">Authentication only, next to the other caps.</h2>
+          <p class="section-lede">
+            test-cap answers who a request belongs to and how strongly that was proven. The rest
+            belongs elsewhere.
+          </p>
+          <div class="table-scroll">
+            <table class="comparison-table">
+              <caption>
+                Which piece handles each concern
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Concern</th>
+                  <th scope="col">Handled by</th>
+                  <th scope="col">How</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Who the person is, and at what level</th>
+                  <td>test-cap</td>
+                  <td>Ceremonies produce evidence; the session&#39;s level is computed from it</td>
+                </tr>
+                <tr>
+                  <th scope="row">What the person may do</th>
+                  <td>access-cap (in design)</td>
+                  <td>Planned to map its capabilities to test-cap&#39;s requirement ids</td>
+                </tr>
+                <tr>
+                  <th scope="row">Shared variables and keys</th>
+                  <td>env-cap</td>
+                  <td>
+                    Documents and validates <code>APP_*</code> and <code>AUTH_*</code> at startup
+                  </td>
+                </tr>
+                <tr>
+                  <th scope="row">Accounts, email and kept events</th>
+                  <td>The app</td>
+                  <td>Its own store, mail sender and event sink</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="section section--muted" id="adoption" aria-labelledby="adoption-heading">
+        <div class="container container--narrow">
+          <p class="section-eyebrow">Adoption</p>
+          <h2 id="adoption-heading">From the quick start to every route protected.</h2>
+          <p class="section-lede">
+            Start in development with the memory store, then add a durable store, keys and the
+            routes that stay public.
+          </p>
+          <div class="callout callout--note">
+            <p class="callout-title">Route by route, not all at once</p>
+            <ol class="callout-steps">
+              <li>
+                Run the README quick start with <code>APP_ENV=development</code> and sign up once by
+                hand.
+              </li>
+              <li>
+                Start with <code>public: [&quot;/&quot;, &quot;/*&quot;]</code>, which leaves every
+                existing route open while <code>/auth/*</code> works.
+              </li>
+              <li>
+                Replace <code>&quot;/*&quot;</code> with the routes that should stay public, one
+                release at a time, then set <code>APP_ENV=production</code>.
+              </li>
+            </ol>
+          </div>
+          <div class="callout callout--note">
+            <p class="callout-title">Use something else when</p>
+            <p>
+              The app is not one of the owner&#39;s, it needs passkeys, social sign-in or SAML
+              today, or it runs on Nest before that adapter lands.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="section" id="brief" aria-labelledby="brief-heading">
+        <div class="container container--narrow">
+          <p class="section-eyebrow">For decision-makers</p>
+          <h2 id="brief-heading">A one-page brief</h2>
+          <p class="section-lede">
+            test-cap signs people in to the owner&#39;s apps with two factors by default, and
+            records how strongly each session was proven.
+          </p>
+          <p>
+            It answers what this is, why it matters, what it costs, what could go wrong and what is
+            being asked, in plain language, on one printable page.
+          </p>
+          <div class="hero-actions">
+            <a class="button button--secondary" href="brief.html">Open the one-page brief</a>
+          </div>
+        </div>
+      </section>
+      <section class="section section--muted" id="proof" aria-labelledby="proof-heading">
+        <div class="container">
+          <p class="section-eyebrow">Go deeper</p>
+          <h2 id="proof-heading">Read past the summary.</h2>
+          <p class="section-lede">
+            The documents behind this page: the steps, the design, the threats, every form page in
+            every state, and every route.
+          </p>
+          <div class="adoption-grid">
+            <a class="adoption-card" href="storybook/"
+              ><span class="adoption-card-title">Storybook</span
+              ><span class="adoption-card-desc"
+                >Every default form page (sign-up, email confirmation, password, TOTP enrolment,
+                sign-in, MFA, step-up) in every state: empty, field error, global error, busy and
+                rate-limited.</span
+              ><span class="external-link-note">Open Storybook ↗</span></a
+            ><a class="adoption-card" href="api-reference/"
+              ><span class="adoption-card-title">HTTP API reference</span
+              ><span class="adoption-card-desc"
+                >Every /auth route with its fields and replies, generated from the dispatcher&#39;s
+                route table and rendered with Scalar.</span
+              ><span class="external-link-note">Open the API reference ↗</span></a
+            ><a
+              class="adoption-card"
+              href="https://github.com/MaverickCER/test-cap/blob/main/ADOPTION.md"
+              ><span class="adoption-card-title">Adoption guide</span
+              ><span class="adoption-card-desc"
+                >The rollout steps, what adopting costs and what test-cap refuses to do.</span
+              ><span class="external-link-note">Read ADOPTION.md ↗</span></a
+            ><a
+              class="adoption-card"
+              href="https://github.com/MaverickCER/test-cap/blob/main/specs/architecture.md"
+              ><span class="adoption-card-title">Architecture</span
+              ><span class="adoption-card-desc"
+                >The core, the byte transport, the store port and the assurance model.</span
+              ><span class="external-link-note">Read architecture.md ↗</span></a
+            ><a
+              class="adoption-card"
+              href="https://github.com/MaverickCER/test-cap/blob/main/specs/attack-catalogue.md"
+              ><span class="adoption-card-title">Threat model and attack catalogue</span
+              ><span class="adoption-card-desc"
+                >Each flow&#39;s threats, and each attack class with the defence that stops it and,
+                once built, its negative test.</span
+              ><span class="external-link-note">Read the attack catalogue ↗</span></a
+            ><a
+              class="adoption-card"
+              href="https://github.com/MaverickCER/test-cap/tree/main/specs/decisions"
+              ><span class="adoption-card-title">Decision records</span
+              ><span class="adoption-card-desc"
+                >Twenty-nine decision records, each with its context, the decision and its
+                consequences.</span
+              ><span class="external-link-note">Browse the decisions ↗</span></a
+            ><a class="adoption-card" href="api/"
+              ><span class="adoption-card-title">TypeScript API docs</span
+              ><span class="adoption-card-desc"
+                >Every exported symbol, generated from source with TypeDoc.</span
+              ><span class="external-link-note">Read the API docs ↗</span></a
+            >
+          </div>
+        </div>
+      </section>
+      <section class="section" id="fit" aria-labelledby="fit-heading">
+        <div class="container container--narrow">
+          <p class="section-eyebrow">Try it</p>
+          <h2 id="fit-heading">Try it on one app in development.</h2>
+          <p class="section-lede">
+            Run the quick start, then follow the Guide from sign-up to step-up.
+          </p>
+          <p class="maturity">
+            test-cap is pre-1.0 and has not cut its first release. Before 1.0, a minor release may
+            break the API (<a href="https://github.com/MaverickCER/test-cap/blob/main/VERSIONING.md"
+              >VERSIONING.md</a
+            >). It is phase 3 of 9: passwords and TOTP are the only sign-in methods so far.
+          </p>
+          <div class="hero-actions">
+            <a class="button button--primary" href="https://github.com/MaverickCER/test-cap#readme"
+              >Read the README</a
+            ><a
+              class="button button--secondary"
+              href="https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md"
+              >Read the Guide</a
+            >
+          </div>
+          <p class="fit-links">
+            <a href="storybook/">Storybook</a> · <a href="api-reference/">HTTP API reference</a> ·
+            <a href="api/">TypeScript API docs</a> ·
+            <a href="https://github.com/MaverickCER/test-cap">View on GitHub</a>
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <ul class="footer-nav">
+          <li><a href="#why">Why it exists</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#see-it">See it</a></li>
+          <li><a href="#guarantees">Guarantees</a></li>
+          <li><a href="#adoption">Adoption</a></li>
+          <li><a href="#proof">Proof</a></li>
+          <li><a href="brief.html">One-page brief</a></li>
+          <li><a href="storybook/">Storybook</a></li>
+          <li><a href="api-reference/">HTTP API</a></li>
+          <li><a href="api/">API docs</a></li>
+          <li><a href="https://github.com/MaverickCER/test-cap">GitHub ↗</a></li>
+          <li><a href="https://github.com/MaverickCER/test-cap/issues">Issues ↗</a></li>
+        </ul>
+        <p class="footer-meta">
+          <span>© test-cap contributors</span
+          ><span
+            ><a href="https://github.com/MaverickCER/test-cap/blob/main/LICENSE"
+              >MIT License</a
+            ></span
+          >
+        </p>
+      </div>
+    </footer>
+    <div class="sr-only" role="status" aria-live="polite" id="copy-status"></div>
+    <script src="script.js"></script>
+  </body>
+</html>

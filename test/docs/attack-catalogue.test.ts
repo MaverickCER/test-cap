@@ -149,6 +149,15 @@ describe("attack catalogue", () => {
       }
     }
   })
+
+  it("gives every entry an Invariant cell naming security invariants, or none (ADR 0029)", () => {
+    const cells = catalogue
+      .split("\n")
+      .filter((line) => /^\| `[^`]+` +\|/.test(line))
+      .map((line) => line.split("|").map((cell) => cell.trim())[8] ?? "")
+    expect(cells.length).toBe(entries.length)
+    for (const cell of cells) expect(cell).toMatch(/^(?:none|`INV-[A-Z-]+`(?:, `INV-[A-Z-]+`)*)$/)
+  })
 })
 
 describe("threat model", () => {

@@ -73,6 +73,15 @@ evidence.
 Why: a stored level outlives the proof behind it. Recomputing from evidence makes decay and policy changes automatic,
 and makes the session cache bypass of ADR 0001 impossible by construction: there is no cached level to bypass.
 
+The evidence a session stores is bounded: only the newest evidence of each (method, authenticator), and only the newest
+step-up of each method, are kept, so a ceremony repeated a thousand times leaves one entry. The newest ceremony with an
+authenticator is what that authenticator proves now, and the level rules and recency times need nothing older. The
+times are computed in one pass over the evidence sorted by time (a suffix scan), so a read costs a sort and a linear
+scan (`test/sessions/evidence-bound.test.ts`, `test/property/recency.property.test.ts`).
+
+Why the bound: without it a signed-in attacker could add an entry with every step-up (about 2,880 a day) and slow
+every read of their own session, and the per-item check the times used before was quadratic in the entries.
+
 ### 3. The level rules
 
 | Evidence                                                                                            | Level                    |

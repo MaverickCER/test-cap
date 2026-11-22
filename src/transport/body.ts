@@ -16,7 +16,8 @@ const DEFAULT_MAX_DEPTH = 8
 /** A record with no prototype, so a field named `__proto__` or `constructor` is only data. */
 export type Fields = Record<string, unknown>
 
-function throwIfAborted(signal: AbortSignal | undefined): void {
+/** Refuses a request whose client has gone away, so the core stops before its next store write (ADR 0003 §4). */
+export function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted === true) throw new TransportError("aborted", "The request was aborted.")
 }
 

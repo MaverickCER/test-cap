@@ -1,0 +1,258 @@
+{
+  "siteUrl": "https://maverickcer.github.io/test-cap/",
+  "repoUrl": "https://github.com/MaverickCER/test-cap",
+  "title": "test-cap: internal authentication for MaverickCER apps",
+  "description": "Sign-up, sign-in, sessions and MFA for the owner's apps. On Express, fetch and TanStack Start, every route needs AAL2 unless it is listed as public. Each session's level is computed from the evidence behind it. Internal use only.",
+  "maturity": "test-cap is pre-1.0 and has not cut its first release. Before 1.0, a minor release may break the API ([VERSIONING.md](https://github.com/MaverickCER/test-cap/blob/main/VERSIONING.md)). It is phase 3 of 9: passwords and TOTP are the only sign-in methods so far.",
+  "hero": {
+    "eyebrow": "Authentication, owned",
+    "heading": "Deny by default, at AAL2.",
+    "lede": "A createAuth call and one line of Express middleware give an app sign-up, sign-in, TOTP, sessions and CSRF protection. The fetch and TanStack Start adapters protect the same way; on Next.js, each route calls the server helper.",
+    "support": "test-cap never opens a database connection. It computes each session's assurance level from the evidence that proved it.",
+    "outcome": "Protect every route of an Express app at AAL2 with fewer than 20 lines of setup."
+  },
+  "install": {
+    "label": "Quick start",
+    "commands": [
+      "npm i https://github.com/MaverickCER/test-cap/releases/download/vX.Y.Z/test-cap-X.Y.Z.tgz"
+    ],
+    "note": "test-cap is not on npm, and no release has been cut yet: run `npm pack` in a checkout. A prebuilt tarball on each GitHub Release is planned for phase 9."
+  },
+  "cta": {
+    "primary": {
+      "label": "Read the README",
+      "url": "https://github.com/MaverickCER/test-cap#readme"
+    },
+    "secondary": {
+      "label": "Read the Guide",
+      "url": "https://github.com/MaverickCER/test-cap/blob/main/GUIDE.md"
+    }
+  },
+  "problem": {
+    "eyebrow": "Why it exists",
+    "heading": "The owner's apps need authentication they can test and patch on their own schedule.",
+    "lede": "Better Auth, the previous choice, published 49 repository advisories between 2024-12-30 and 2026-11-03, and patches only its latest release. About 180 of its calls read the system clock, and a test cannot replace them.",
+    "listLabel": "What an app on it could not do",
+    "items": [
+      "stay on a release and still receive security fixes",
+      "test its own session expiry with a controlled clock"
+    ],
+    "conclusion": "a dependency the app cannot reason about",
+    "closing": "test-cap writes the flows, sessions and assurance rules in one core the owner controls. It leaves each protocol to a library that specialises in it: today, hash-wasm for argon2id."
+  },
+  "model": {
+    "eyebrow": "How it works",
+    "heading": "One core, thin adapters, the app's own store.",
+    "lede": "The adapter turns a framework's request into bytes. The core parses, checks CSRF and runs the route against the app's store. The adapter turns the answer back.",
+    "flow": [
+      "Framework request",
+      "→ Adapter: converts only; Express, fetch and TanStack Start also apply deny by default with the app's public list",
+      "→ Core: path check, CSRF, the route, and assurance computed from evidence",
+      "→ The app's `AuthStore`: atomic operations over its own database"
+    ],
+    "flowDescription": "A request passes from the framework through a converting adapter to the core. The core reads and writes the app's own store and returns bytes for the adapter to send.",
+    "note": "Because the core makes every decision, a fix to the core reaches every framework at once. Express, fetch, Next.js and TanStack Start adapters exist today; the Nest adapter is planned for phase 4."
+  },
+  "demo": {
+    "eyebrow": "See it",
+    "heading": "The README quick start, answering curl.",
+    "intro": "The quick start started with `APP_ENV=development`. Headers are trimmed.",
+    "command": "curl -i localhost:3000/account",
+    "output": "$ curl -i localhost:3000/account\nHTTP/1.1 401 Unauthorized\ncache-control: no-store\n{\"error\":\"unauthenticated\"}\n\n$ curl -i localhost:3000/auth/session\nHTTP/1.1 200 OK\n{\"session\":null,\"csrfToken\":\"generated.1794855793133.ZFne…Jo0\"}\n\n$ curl -i -X POST -H \"Origin: http://localhost:3000\" -d \"identifier=a%40example.com&password=x\" localhost:3000/auth/sign-in\nHTTP/1.1 403 Forbidden\n{\"error\":\"csrf\"}",
+    "source": {
+      "label": "README quick start",
+      "url": "https://github.com/MaverickCER/test-cap#quick-start"
+    },
+    "explanation": "`/account` is not listed as public, so it needs a session at AAL2. A POST without the token from `/auth/session` is refused before the route runs. A test runs the same quick start and keeps it under 20 lines."
+  },
+  "guarantees": {
+    "eyebrow": "Enforced",
+    "heading": "What is enforced, and where it stops.",
+    "lede": "Each claim names what enforces it and where it stops, and links to the decision that defines it.",
+    "items": [
+      {
+        "claim": "A route not listed as public needs a session at the default requirement, AAL2.",
+        "scope": "The Express, fetch and TanStack Start adapters apply it before the app's handler runs. On Next.js, a route is protected when it calls `nextServerAuth`. A requirement above the default is the app's to check with `auth.require` inside the handler.",
+        "linkLabel": "Read ADR 0024",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0024-adapters-and-deny-by-default.md"
+      },
+      {
+        "claim": "Production refuses to start without HTTPS, a durable store and both keys.",
+        "scope": "`createAuth` throws one `ConfigError` naming every problem. A missing or unknown `APP_ENV` counts as production. It cannot tell whether a store the app wrote is really durable; it trusts the store's own traits.",
+        "linkLabel": "Read ADR 0026",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0026-strict-defaults-and-deployment-mode.md"
+      },
+      {
+        "claim": "Every POST under /auth/ checks a same-origin signal and a synchronizer token.",
+        "scope": "The signal is an Origin equal to APP_ORIGIN, or Sec-Fetch-Site: same-origin when Origin is absent or null. The app's own routes are the app's to protect; test-cap does not check CSRF on them.",
+        "linkLabel": "Read ADR 0011",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0011-csrf-and-xss-boundary-with-secure-cap.md"
+      },
+      {
+        "claim": "A session's level is computed from evidence that is still valid, and email never raises it.",
+        "scope": "Password plus TOTP is AAL2. The level drops when the evidence behind it expires. The rules map to NIST SP 800-63B-4; this is not a certification.",
+        "linkLabel": "Read ADR 0005",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/specs/decisions/0005-policy-and-evidence-based-assurance.md"
+      }
+    ]
+  },
+  "comparison": {
+    "eyebrow": "Where it fits",
+    "heading": "Authentication only, next to the other caps.",
+    "lede": "test-cap answers who a request belongs to and how strongly that was proven. The rest belongs elsewhere.",
+    "caption": "Which piece handles each concern",
+    "columns": ["Concern", "Handled by", "How"],
+    "rows": [
+      [
+        "Who the person is, and at what level",
+        "test-cap",
+        "Ceremonies produce evidence; the session's level is computed from it"
+      ],
+      [
+        "What the person may do",
+        "access-cap (in design)",
+        "Planned to map its capabilities to test-cap's requirement ids"
+      ],
+      [
+        "Shared variables and keys",
+        "env-cap",
+        "Documents and validates `APP_*` and `AUTH_*` at startup"
+      ],
+      ["Accounts, email and kept events", "The app", "Its own store, mail sender and event sink"]
+    ]
+  },
+  "adoption": {
+    "eyebrow": "Adoption",
+    "heading": "From the quick start to every route protected.",
+    "lede": "Start in development with the memory store, then add a durable store, keys and the routes that stay public.",
+    "calloutTitle": "Route by route, not all at once",
+    "steps": [
+      "Run the README quick start with `APP_ENV=development` and sign up once by hand.",
+      "Start with `public: [\"/\", \"/*\"]`, which leaves every existing route open while `/auth/*` works.",
+      "Replace `\"/*\"` with the routes that should stay public, one release at a time, then set `APP_ENV=production`."
+    ],
+    "notFor": {
+      "title": "Use something else when",
+      "text": "The app is not one of the owner's, it needs passkeys, social sign-in or SAML today, or it runs on Nest before that adapter lands."
+    }
+  },
+  "brief": {
+    "heading": "A one-page brief",
+    "oneLine": "test-cap signs people in to the owner's apps with two factors by default, and records how strongly each session was proven.",
+    "problem": "The previous library published 49 advisories in about 23 months and patches only its latest release. Its clock cannot be controlled in tests.",
+    "whatItDoes": "It serves sign-up, sign-in, TOTP and sessions. On Express, fetch and TanStack Start, it protects every route that is not listed as public. It sends an OCSF security event for each sign-in.",
+    "whyItMatters": [
+      "On Express, fetch and TanStack Start, a route someone forgot to protect is protected anyway.",
+      "Each session says which factors proved it, so a sensitive action can ask for more.",
+      "The owner decides when to patch, because the code is the owner's."
+    ],
+    "whatItCosts": "An app adds one adapter line, a store over its database and two keys. Each person enrols a second factor at sign-up.",
+    "whatCouldGoWrong": [
+      "It is phase 3 of 9, so passkeys, email recovery and social sign-in are not built yet.",
+      "No durable store is exported yet, so it is ready for development and tests only.",
+      "There has been no external penetration test, by the owner's decision."
+    ],
+    "whatWeAsk": "Agree that new work in the owner's apps uses test-cap once a durable store is exported."
+  },
+  "resources": {
+    "eyebrow": "Go deeper",
+    "heading": "Read past the summary.",
+    "lede": "The documents behind this page: the steps, the design, the threats, every form page in every state, and every route.",
+    "items": [
+      {
+        "title": "Storybook",
+        "description": "Every default form page (sign-up, email confirmation, password, TOTP enrolment, sign-in, MFA, step-up) in every state: empty, field error, global error, busy and rate-limited.",
+        "label": "Open Storybook",
+        "url": "storybook/"
+      },
+      {
+        "title": "HTTP API reference",
+        "description": "Every /auth route with its fields and replies, generated from the dispatcher's route table and rendered with Scalar.",
+        "label": "Open the API reference",
+        "url": "api-reference/"
+      },
+      {
+        "title": "Adoption guide",
+        "description": "The rollout steps, what adopting costs and what test-cap refuses to do.",
+        "label": "Read ADOPTION.md",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/ADOPTION.md"
+      },
+      {
+        "title": "Architecture",
+        "description": "The core, the byte transport, the store port and the assurance model.",
+        "label": "Read architecture.md",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/specs/architecture.md"
+      },
+      {
+        "title": "Threat model and attack catalogue",
+        "description": "Each flow's threats, and each attack class with the defence that stops it and, once built, its negative test.",
+        "label": "Read the attack catalogue",
+        "url": "https://github.com/MaverickCER/test-cap/blob/main/specs/attack-catalogue.md"
+      },
+      {
+        "title": "Decision records",
+        "description": "Twenty-nine decision records, each with its context, the decision and its consequences.",
+        "label": "Browse the decisions",
+        "url": "https://github.com/MaverickCER/test-cap/tree/main/specs/decisions"
+      },
+      {
+        "title": "TypeScript API docs",
+        "description": "Every exported symbol, generated from source with TypeDoc.",
+        "label": "Read the API docs",
+        "url": "api/"
+      }
+    ]
+  },
+  "fit": {
+    "eyebrow": "Try it",
+    "heading": "Try it on one app in development.",
+    "lede": "Run the quick start, then follow the Guide from sign-up to step-up.",
+    "links": [
+      {
+        "label": "Storybook",
+        "url": "storybook/"
+      },
+      {
+        "label": "HTTP API reference",
+        "url": "api-reference/"
+      },
+      {
+        "label": "TypeScript API docs",
+        "url": "api/"
+      },
+      {
+        "label": "View on GitHub",
+        "url": "https://github.com/MaverickCER/test-cap"
+      }
+    ]
+  },
+  "footer": {
+    "links": [
+      {
+        "label": "Storybook",
+        "url": "storybook/"
+      },
+      {
+        "label": "HTTP API",
+        "url": "api-reference/"
+      },
+      {
+        "label": "API docs",
+        "url": "api/"
+      },
+      {
+        "label": "GitHub ↗",
+        "url": "https://github.com/MaverickCER/test-cap"
+      },
+      {
+        "label": "Issues ↗",
+        "url": "https://github.com/MaverickCER/test-cap/issues"
+      }
+    ],
+    "license": {
+      "label": "MIT License",
+      "url": "https://github.com/MaverickCER/test-cap/blob/main/LICENSE"
+    },
+    "copyright": "test-cap contributors"
+  }
+}

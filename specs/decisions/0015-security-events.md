@@ -4,7 +4,8 @@
 
 Accepted (2026-11-15). The event model, the `onEvent` sink, redaction and the events of password and TOTP sign-in and
 the session lifecycle are implemented in phase 3; each later phase adds the events of the flows it builds. Answers
-[handoff question](../../GLOSSARY.md) 15.
+[handoff question](../../GLOSSARY.md) 15. Amended 2026-11-16: account events use User Management (3007), by owner
+decision (Open 1).
 
 Planned tests:
 
@@ -36,50 +37,54 @@ OCSF 1.9.0 facts this decision rests on (schema.ocsf.io, checked 2026-11-15):
 - Authentication (3002) activities: 1 Logon, 2 Logoff, 3 Authentication Ticket, 4 Service Ticket Request, 5 Service
   Ticket Renew, 6 Preauth, 7 Account Switch (with `account_switch_type_id` 2 Impersonate). It carries `is_mfa`,
   `auth_factors`, `auth_protocol_id` (4 OpenID, 5 SAML), `session`, `actor` and `status_id`.
-- Account Change (3001) activities: 1 Create, 2 Enable, 3 Password Change, 4 Password Reset, 5 Disable, 6 Delete,
-  7 Attach Policy, 8 Detach Policy, 9 Lock, 10 MFA Factor Enable, 11 MFA Factor Disable, 12 Unlock.
-- The 1.9.0 schema marks Account Change "DEPRECATED since v1.9.0" and names User Management (3007) as its
-  replacement. See Open 1.
+- User Management (3007) activities: 1 Create, 2 Update, 3 Delete, 4 Enable, 5 Disable, 6 Lock, 7 Unlock, 8 Password
+  Change, 9 Password Reset, 10 Attach Policies, 11 Detach Policies, 12 Enable MFA Factors, 13 Disable MFA Factors, 14
+  Assign Privileges, 15 Remove Privileges, 16 Assign Roles, 17 Remove Roles, 18 Add Programmatic Credentials, 19
+  Remove Programmatic Credentials, 99 Other (schema API, checked 2026-11-16).
+- The 1.9.0 schema marks Account Change (3001), the class the plan names, deprecated since 1.9.0 and superseded by
+  User Management (3007).
 
 ## Decision
 
-### 1. Two OCSF classes: Authentication 3002 and Account Change 3001
+### 1. Two OCSF classes: Authentication 3002 and User Management 3007
 
 Sign-in attempts, session ends and account switches are Authentication events. Changes to an account and its
-authenticators are Account Change events. Each event's `status_id` is 1 (Success) or 2 (Failure). Where an OCSF
+authenticators are User Management events. Each event's `status_id` is 1 (Success) or 2 (Failure). Where an OCSF
 activity has no exact match, the event uses 99 (Other) with an `activity_name` that says what happened.
 
-Why: these are the two classes the plan names. Using OCSF's own activities where they fit lets an app's security
-tooling read the events without a test-cap mapping.
+Why: the plan named Authentication and Account Change; Account Change is deprecated at the pinned version, and the owner
+chose its replacement, User Management, on 2026-11-16. It also has exact activities for API keys (Add and Remove
+Programmatic Credentials), which Account Change lacked. Using OCSF's own activities where they fit lets an app's
+security tooling read the events without a test-cap mapping.
 
 ### 2. Which activity for which flow
 
-| Flow                                | Event                                                                         |
-| ----------------------------------- | ----------------------------------------------------------------------------- |
-| F01 sign-up                         | 3001 Create; 3001 MFA Factor Enable for each authenticator enrolled           |
-| F02 password sign-in                | 3002 Logon, success or failure                                                |
-| F03 TOTP enrolment                  | 3001 MFA Factor Enable; removal is 3001 MFA Factor Disable                    |
-| F04 TOTP verification               | 3002 Logon, success or failure, with `is_mfa` and `auth_factors`              |
-| F05 passkey and security-key reg.   | 3001 MFA Factor Enable; removal is 3001 MFA Factor Disable                    |
-| F06 passkey authentication          | 3002 Logon, success or failure                                                |
-| F07 recovery codes                  | issue: 3001 Other ("recovery codes issued"); redeem: 3001 Other ("recovery")  |
-| F08 email address confirmation      | 3001 Other ("email confirmed")                                                |
-| F09 account recovery by email       | 3001 Other ("recovery"); a password set during it is 3001 Password Reset      |
-| F10 opt-in email sign-in            | 3002 Logon, marked as a deviation                                             |
-| F11 OIDC sign-in and linking        | 3002 Logon with `auth_protocol_id` 4; a link is 3001 Other ("linked")         |
-| F12 SAML SP sign-in                 | 3002 Logon with `auth_protocol_id` 5                                          |
-| F13 step-up                         | 3002 Logon on the existing session, marked as a step-up                       |
-| F14 session lifecycle               | issue: the Logon of its flow; sign-out, expiry and remote revoke: 3002 Logoff |
-| F15 API keys                        | create and revoke: 3001 Other; a rejected key: 3002 Logon failure             |
-| F16 delegations to agents           | issue and revoke: 3001 Other; a rejected delegation: 3002 Logon failure       |
-| F17 admin impersonation             | 3002 Account Switch, `account_switch_type_id` 2; its end is 3002 Logoff       |
-| F18 break-glass                     | 3002 Logon, flagged as break-glass; its end is 3002 Logoff                    |
-| F19 deprovision hook                | 3001 Disable; 3002 Logoff for each session it revokes                         |
-| F20 audit                           | none: the audit trail has its own records                                     |
-| F21 default pages and client assets | none of their own: the flows they drive emit                                  |
-| F22 adapter transport               | none: a request denied by deny by default is not an authentication event      |
+| Flow                                | Event                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| F01 sign-up                         | 3007 Create; 3007 Enable MFA Factors for each authenticator enrolled           |
+| F02 password sign-in                | 3002 Logon, success or failure                                                 |
+| F03 TOTP enrolment                  | 3007 Enable MFA Factors; removal is 3007 Disable MFA Factors                   |
+| F04 TOTP verification               | 3002 Logon, success or failure, with `is_mfa` and `auth_factors`               |
+| F05 passkey and security-key reg.   | 3007 Enable MFA Factors; removal is 3007 Disable MFA Factors                   |
+| F06 passkey authentication          | 3002 Logon, success or failure                                                 |
+| F07 recovery codes                  | issue: 3007 Other ("recovery codes issued"); redeem: 3007 Other ("recovery")   |
+| F08 email address confirmation      | 3007 Update ("email confirmed")                                                |
+| F09 account recovery by email       | 3007 Other ("recovery"); a password set during it is 3007 Password Reset       |
+| F10 opt-in email sign-in            | 3002 Logon, marked as a deviation                                              |
+| F11 OIDC sign-in and linking        | 3002 Logon with `auth_protocol_id` 4; a link is 3007 Update ("linked")         |
+| F12 SAML SP sign-in                 | 3002 Logon with `auth_protocol_id` 5                                           |
+| F13 step-up                         | 3002 Logon on the existing session, marked as a step-up                        |
+| F14 session lifecycle               | issue: the Logon of its flow; sign-out, expiry and remote revoke: 3002 Logoff  |
+| F15 API keys                        | 3007 Add / Remove Programmatic Credentials; a rejected key: 3002 Logon failure |
+| F16 delegations to agents           | issue and revoke: 3007 Other; a rejected delegation: 3002 Logon failure        |
+| F17 admin impersonation             | 3002 Account Switch, `account_switch_type_id` 2; its end is 3002 Logoff        |
+| F18 break-glass                     | 3002 Logon, flagged as break-glass; its end is 3002 Logoff                     |
+| F19 deprovision hook                | 3007 Disable; 3002 Logoff for each session it revokes                          |
+| F20 audit                           | none: the audit trail has its own records                                      |
+| F21 default pages and client assets | none of their own: the flows they drive emit                                   |
+| F22 adapter transport               | none: a request denied by deny by default is not an authentication event       |
 
-A password change outside recovery is 3001 Password Change. A throttled attempt is a 3002 Logon failure whose
+A password change outside recovery is 3007 Password Change. A throttled attempt is a 3002 Logon failure whose
 `status_detail` says it was throttled; there is no Lock event, because test-cap throttles and never locks out
 ([ADR 0009](0009-abuse-and-proxy-trust.md)). A request refused by the CSRF check
 ([ADR 0011](0011-csrf-and-xss-boundary-with-secure-cap.md)) is a failure of the flow it was trying to start.
@@ -136,17 +141,14 @@ namespaced extension lets them move into a shared module without changing a fiel
 ## Limits
 
 - test-cap emits; it does not deliver reliably. If the app's sink drops an event, test-cap does not retry.
-- A deprecated class at the pinned version (Account Change, see Open 1) may be dropped by a later OCSF release.
+- A class change in a later OCSF release changes this table; the version is pinned in every event's `metadata`.
 - The client address and user agent in events follow Open 2; the plan sets an opt-in only for the audit trail.
 - Events record what test-cap saw. They say nothing about what the app did after `auth.require` answered `allow`.
 
 ## Open
 
-1. **Account Change is deprecated in OCSF 1.9.0.** The plan names 3001; the 1.9.0 schema deprecates it in favour of
-   User Management (3007, activities including 1 Create, 8 Password Change, 9 Password Reset, 12 Enable MFA Factors,
-   13 Disable MFA Factors, 18 Add Programmatic Credentials, 19 Remove Programmatic Credentials). Recommendation: emit
-   3007 for account changes, since it is the current class at the pinned version and has exact activities for API
-   keys; keep the table above with 3007's ids. The owner decides, because the plan names 3001.
+1. **Account Change is deprecated in OCSF 1.9.0.** Settled 2026-11-16: the owner chose User Management (3007); the
+   table above uses its ids.
 2. **Client address and user agent in events.** The plan makes recording them opt-in for the audit trail but says
    nothing for events. Recommendation: the same opt-in, so one privacy setting governs both; throttling uses counters
    in the store ([ADR 0009](0009-abuse-and-proxy-trust.md)) and does not depend on events.

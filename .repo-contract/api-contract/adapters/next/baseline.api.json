@@ -1,0 +1,883 @@
+{
+  "metadata": {
+    "toolPackage": "@microsoft/api-extractor",
+    "toolVersion": "7.60.1",
+    "schemaVersion": 1011,
+    "oldestForwardsCompatibleVersion": 1001,
+    "tsdocConfig": {
+      "$schema": "https://developer.microsoft.com/json-schemas/tsdoc/v0/tsdoc.schema.json",
+      "noStandardTags": true,
+      "tagDefinitions": [
+        {
+          "tagName": "@alpha",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@beta",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@defaultValue",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@decorator",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@deprecated",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@eventProperty",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@example",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@experimental",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@inheritDoc",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@internal",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@label",
+          "syntaxKind": "inline"
+        },
+        {
+          "tagName": "@link",
+          "syntaxKind": "inline",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@override",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@packageDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@param",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@privateRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@public",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@readonly",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@remarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@returns",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@sealed",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@see",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@throws",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@typeParam",
+          "syntaxKind": "block",
+          "allowMultiple": true
+        },
+        {
+          "tagName": "@virtual",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@jsx",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxRuntime",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxFrag",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@jsxImportSource",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@betaDocumentation",
+          "syntaxKind": "modifier"
+        },
+        {
+          "tagName": "@internalRemarks",
+          "syntaxKind": "block"
+        },
+        {
+          "tagName": "@preapproved",
+          "syntaxKind": "modifier"
+        }
+      ],
+      "supportForTags": {
+        "@alpha": true,
+        "@beta": true,
+        "@defaultValue": true,
+        "@decorator": true,
+        "@deprecated": true,
+        "@eventProperty": true,
+        "@example": true,
+        "@experimental": true,
+        "@inheritDoc": true,
+        "@internal": true,
+        "@label": true,
+        "@link": true,
+        "@override": true,
+        "@packageDocumentation": true,
+        "@param": true,
+        "@privateRemarks": true,
+        "@public": true,
+        "@readonly": true,
+        "@remarks": true,
+        "@returns": true,
+        "@sealed": true,
+        "@see": true,
+        "@throws": true,
+        "@typeParam": true,
+        "@virtual": true,
+        "@betaDocumentation": true,
+        "@internalRemarks": true,
+        "@preapproved": true
+      },
+      "reportUnsupportedHtmlElements": false
+    }
+  },
+  "kind": "Package",
+  "canonicalReference": "test-cap!",
+  "docComment": "/**\n * test-cap/next: the Next.js App Router adapter (Next.js 16), built on test-cap/fetch (ADR 0024 §4). It has three\n * surfaces, and only the second protects anything:\n *\n * - `nextAuthHandler(auth)` is the route handler for `app/auth/[...path]/route.ts`: it serves every `/auth/*` route.\n * - `nextServerAuth(auth, { headers })` is the authoritative check. Call it inside every route handler, server\n *  function and data-access function that needs a session, as close to the data as the app can.\n * - `nextProxy(auth, { public })` is an optional `proxy` that sends a visitor without a session cookie to the sign-in\n *  page early. It is not protection. Next.js's own guide says a proxy \"should not be your only line of defense in\n *  protecting your data\": it passes any request that carries a session cookie, forged or not, and a route the\n *  proxy's matcher misses never meets it.\n *\n * Next.js has no global check that covers every route, so a route handler or server function that never calls a\n * server helper is unprotected (ADR 0024, Limits). Next.js is typed structurally: this entry has no dependency on it.\n * Next.js gives a route handler no socket address, so the core sees none here; the address is never read from a\n * header (ADR 0009).\n *\n * @packageDocumentation\n */\n",
+  "name": "test-cap",
+  "preserveMemberOrder": false,
+  "members": [
+    {
+      "kind": "EntryPoint",
+      "canonicalReference": "test-cap!",
+      "name": "",
+      "preserveMemberOrder": false,
+      "members": [
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!nextAuthHandler:function(1)",
+          "docComment": "/**\n * The route handler for `app/auth/[...path]/route.ts`. Mounted anywhere else, every request is a 404, because the\n * core serves only paths under `/auth/`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function nextAuthHandler(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<string>"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "NextAuthHandlers",
+              "canonicalReference": "test-cap!NextAuthHandlers:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 4,
+            "endIndex": 5
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "isOptional": false
+            }
+          ],
+          "name": "nextAuthHandler"
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!NextAuthHandlers:interface",
+          "docComment": "/**\n * What `nextAuthHandler` returns: `export const { GET, POST } = nextAuthHandler(auth)`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface NextAuthHandlers "
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextAuthHandlers",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!NextAuthHandlers#GET:member",
+              "docComment": "/**\n * Serves the reading routes, such as `/auth/session`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly GET: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "NextRouteHandler",
+                  "canonicalReference": "test-cap!NextRouteHandler:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "GET",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!NextAuthHandlers#POST:member",
+              "docComment": "/**\n * Serves the state-changing routes, such as `/auth/sign-in`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly POST: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "NextRouteHandler",
+                  "canonicalReference": "test-cap!NextRouteHandler:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "POST",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!NextHeaders:type",
+          "docComment": "/**\n * The request headers Next.js's `headers()` from `next/headers` returns.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type NextHeaders = "
+            },
+            {
+              "kind": "Reference",
+              "text": "Iterable",
+              "canonicalReference": "!Iterable:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<readonly [string, string]>"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextHeaders",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 3
+          }
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!nextProxy:function(1)",
+          "docComment": "/**\n * An optional Next.js `proxy` for early redirects only. It is not protection: Next.js's guide says a proxy \"should\n * not be your only line of defense in protecting your data\". It never reads the store: a visitor whose request\n * carries no session cookie, on a path that is not public, is redirected to the sign-in path; every other request\n * continues, and the server helpers decide. A malformed public list or sign-in path throws a `ConfigError` here.\n * ```ts\n * // proxy.ts\n * export const proxy = nextProxy(auth, { public: [\"/\"] })\n * ```\n *\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function nextProxy(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<string>"
+            },
+            {
+              "kind": "Content",
+              "text": ", options?: "
+            },
+            {
+              "kind": "Reference",
+              "text": "NextProxyOptions",
+              "canonicalReference": "test-cap!NextProxyOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "NextProxy",
+              "canonicalReference": "test-cap!NextProxy:type"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 6,
+            "endIndex": 7
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 4,
+                "endIndex": 5
+              },
+              "isOptional": true
+            }
+          ],
+          "name": "nextProxy"
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!NextProxy:type",
+          "docComment": "/**\n * A Next.js `proxy` function: a response ends the request, `undefined` lets it continue.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type NextProxy = "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ") => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " | undefined"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextProxy",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!NextProxyOptions:interface",
+          "docComment": "/**\n * What `nextProxy` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface NextProxyOptions "
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextProxyOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!NextProxyOptions#public:member",
+              "docComment": "/**\n * The paths a visitor without a session cookie may reach; the same form as `withAuth`'s `public` list.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly public?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly string[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "public",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!NextProxyOptions#signIn:member",
+              "docComment": "/**\n * The path on `APP_ORIGIN` a visitor without a session cookie is sent to, with `returnTo`; `/auth/sign-in` when\n * absent.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly signIn?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "signIn",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!NextRouteHandler:type",
+          "docComment": "/**\n * A route handler for one HTTP method, as a `route.ts` file exports it.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type NextRouteHandler = "
+            },
+            {
+              "kind": "Content",
+              "text": "(req: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Request",
+              "canonicalReference": "@types/node!__global.Request:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ") => "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<"
+            },
+            {
+              "kind": "Reference",
+              "text": "Response",
+              "canonicalReference": "@types/node!__global.Response:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ">"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextRouteHandler",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 8
+          }
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!nextServerAuth:function(1)",
+          "docComment": "/**\n * The authoritative check for route handlers, server functions and the app's data-access layer:\n * ```ts\n * import { headers } from \"next/headers\"\n * export const serverAuth = nextServerAuth(auth, { headers })\n * ```\n *\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function nextServerAuth<Id extends "
+            },
+            {
+              "kind": "Content",
+              "text": "string"
+            },
+            {
+              "kind": "Content",
+              "text": ">(auth: "
+            },
+            {
+              "kind": "Reference",
+              "text": "Auth",
+              "canonicalReference": "test-cap!~Auth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Id>"
+            },
+            {
+              "kind": "Content",
+              "text": ", options: "
+            },
+            {
+              "kind": "Reference",
+              "text": "NextServerAuthOptions",
+              "canonicalReference": "test-cap!NextServerAuthOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "NextServerAuth",
+              "canonicalReference": "test-cap!NextServerAuth:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<Id>"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 8,
+            "endIndex": 10
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "auth",
+              "parameterTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 5
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 6,
+                "endIndex": 7
+              },
+              "isOptional": false
+            }
+          ],
+          "typeParameters": [
+            {
+              "typeParameterName": "Id",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "nextServerAuth"
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!NextServerAuth:interface",
+          "docComment": "/**\n * The server helpers. Each call reads the current request's headers and the session from the store.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface NextServerAuth<Id extends "
+            },
+            {
+              "kind": "Content",
+              "text": "string"
+            },
+            {
+              "kind": "Content",
+              "text": "> "
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "typeParameters": [
+            {
+              "typeParameterName": "Id",
+              "constraintTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "defaultTypeTokenRange": {
+                "startIndex": 0,
+                "endIndex": 0
+              }
+            }
+          ],
+          "name": "NextServerAuth",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!NextServerAuth#require:member(1)",
+              "docComment": "/**\n * Whether the current request's session meets the requirement (the default requirement when none is named), as\n * one of the five outcomes. Act on anything but `allow` before touching the data. A store failure rejects; it is\n * never an `allow`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "require(requirementId?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "Id | \"default\""
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RequireResult",
+                  "canonicalReference": "test-cap!~RequireResult:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "requirementId",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "require"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!NextServerAuth#session:member(1)",
+              "docComment": "/**\n * The current request's session; `null` when it has none, or it is revoked or expired.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "session(): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "SessionInfo",
+                  "canonicalReference": "test-cap!~SessionInfo:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | null>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 5
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [],
+              "name": "session"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!NextServerAuthOptions:interface",
+          "docComment": "/**\n * What `nextServerAuth` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface NextServerAuthOptions "
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextServerAuthOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!NextServerAuthOptions#headers:member",
+              "docComment": "/**\n * Next.js's `headers` function from `next/headers`, passed in so this entry needs no dependency on Next.js.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly headers: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "() => "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "NextHeaders",
+                  "canonicalReference": "test-cap!NextHeaders:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "headers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 6
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        }
+      ]
+    }
+  ]
+}

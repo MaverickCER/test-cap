@@ -16,6 +16,8 @@ reports/
 # Docs generation output (commit the source, not the render)
 api-docs/
 docs/api/
+# Storybook builds here locally; the deploy job builds into docs/storybook/ over the committed placeholder.
+storybook-static/
 
 # Packaging
 *.tgz
@@ -33,3 +35,14 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+# Each example commits its local-development values; production refuses their keys (ADR 0026 §4).
+!examples/*/.env
+
+# Badge data the `badges` job writes for the Pages deploy (never committed)
+/docs/coverage.json
+/docs/mutation.json
+/docs/size.json
+/docs/*-badge.json
+
+# A benchmark run outside CI is a gate, not a figure: it writes here, and only CI's results are committed.
+/.benchmark-local

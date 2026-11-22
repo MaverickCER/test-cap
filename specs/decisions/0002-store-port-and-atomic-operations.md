@@ -7,6 +7,14 @@ kit), phase 3 (`test-cap/store/sql` on Postgres) and phase 6 (SQLite and MySQL).
 
 Answers [handoff question](../../GLOSSARY.md) 2 (storage ownership).
 
+Landed in phase 3 (internal until its gate): `sqlStore` and `migrations` for Postgres, SQLite and MySQL, with every
+guarantee as one constraint-backed statement (MySQL's `consumeOnce` and `increment` as two statements inside the
+app's transaction, so the MySQL dialect requires `transaction`). The full conformance kit passes on real SQLite
+(`node:sqlite`) and Postgres (PGlite). Postgres 15, 16 and 17 servers and MySQL 8.4 are wired to
+`TEST_CAP_POSTGRES_URL` and `TEST_CAP_MYSQL_URL` but not yet run, so the dialect claims are partly met until CI's
+service jobs run them. An app that prunes audit records keeps each stream's last record, because `appendAudit`
+continues from the highest stored `seq`.
+
 Landed in phase 2: the port, `memoryStore()` and the conformance kit. The kit's checks for `consumeOnce`,
 `increment`, `resetCounter`, `createUnique`, `update` (also concurrent updates at one expected version),
 `appendAudit`, revoke visibility, transactions and tenant isolation (`resetCounter` included) run in one file,

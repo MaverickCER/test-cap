@@ -1,8 +1,19 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": ["src/index.ts!", "scripts/*.mjs", "benchmarks/*.mjs"],
-  "project": ["src/**/*.ts!"],
+  "entry": [
+    "src/index.ts!",
+    "src/adapters/express/index.ts!",
+    "src/adapters/fetch/index.ts!",
+    "src/adapters/next/index.ts!",
+    "src/adapters/tanstack-start/index.ts!",
+    "src/store/memory.ts!",
+    "scripts/*.mjs",
+    "benchmarks/**/*.mjs"
+  ],
+  "project": ["src/**/*.ts!", "test/**/*.ts", "stories/**/*.ts", ".storybook/*.ts"],
   "ignore": ["**/*.d.ts", "dist/**", "coverage/**", "reports/**"],
   "ignoreDependencies": ["test-cap", "typedoc-plugin-markdown"],
-  "typedoc": { "config": ["typedoc.json", "typedoc.markdown.json"] }
+  "typedoc": {
+    "config": ["typedoc.json", "typedoc.markdown.json"]
+  }
 }

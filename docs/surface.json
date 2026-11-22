@@ -2,12 +2,43 @@
   "entries": {
     ".": {
       "source": "src/",
-      "environment": "isomorphic, zero runtime deps",
+      "environment": "isomorphic, one runtime dependency (hash-wasm)",
       "tier": "Stable",
-      "purpose": "The foundation's public contract: the `PlainRequest` and `PlainResponse` transport types, the `AuthStore` port and its record types, `Clock`, `RandomSource`, `DeploymentMode`, and the `TransportError` and `ConfigError` classes."
+      "purpose": "`createAuth` and `defineAuthPolicy`, the `Auth` it returns and the types its signature needs; the `PlainRequest` and `PlainResponse` transport types, the `AuthStore` port and its record types, `Clock`, `RandomSource`, `DeploymentMode`, the `TransportError` and `ConfigError` classes, and the OCSF security event types."
+    },
+    "./express": {
+      "source": "src/adapters/express/",
+      "environment": "Node, Express 5 (typed structurally; no dependency on express)",
+      "tier": "Stable",
+      "purpose": "`expressAuth(auth, { public })`: mounts test-cap on an Express app, serves `/auth/*` from the raw request stream, and protects every other route at the default requirement unless it is listed as public."
+    },
+    "./fetch": {
+      "source": "src/adapters/fetch/",
+      "environment": "Web Request and Response globals; its tests run on Node, and Bun and Deno are planned for phase 6",
+      "tier": "Stable",
+      "purpose": "`withAuth(auth, handler, { public, clientAddress })`: wraps an app's fetch handler, serves `/auth/*` and protects every other route at the default requirement unless it is listed as public; `fetchAuth(auth)` serves the `/auth/*` routes alone and answers `null` for any other path."
+    },
+    "./next": {
+      "source": "src/adapters/next/",
+      "environment": "Next.js 16 App Router on the Node.js runtime (typed structurally; no dependency on next)",
+      "tier": "Stable",
+      "purpose": "`nextAuthHandler(auth)` for `app/auth/[...path]/route.ts`; `nextServerAuth(auth, { headers })`, the authoritative check for route handlers, server functions and the data-access layer; `nextProxy(auth, { public })`, an optional proxy for early redirects that is not protection."
+    },
+    "./tanstack-start": {
+      "source": "src/adapters/tanstack-start/",
+      "environment": "Web Request and Response, TanStack Start 1.169 (typed structurally; no dependency on TanStack Start)",
+      "tier": "Stable",
+      "purpose": "`tanstackStartMiddleware(auth, { public })`, the server function of a global request middleware that protects every route and server function call at the default requirement unless its path is listed as public, and puts the subject in `context.auth`; `tanstackStartAuth(auth)`, whose `handlers` serve the `/auth/$` server route and whose `require` and `session` let a server function check a requirement itself."
+    },
+    "./store/memory": {
+      "source": "src/store/memory.ts",
+      "environment": "isomorphic, no dependencies; development and test only",
+      "tier": "Stable",
+      "purpose": "`memoryStore()`: the reference `AuthStore`, kept in one process's memory. It declares itself not durable, so production and staging refuse to start with it."
     }
   },
   "dependencies": {
-    "@maverickcer/env-cap": "Optional peer. Only `src/env.schema.ts` imports it, so env-cap can document and validate test-cap's variables in an app that uses env-cap; without it, `createAuth` takes plain values (ADR 0022)."
+    "@maverickcer/env-cap": "Optional peer. Only `src/env.schema.ts` imports it, so env-cap can document and validate test-cap's variables in an app that uses env-cap; without it, `createAuth` takes plain values (ADR 0022).",
+    "hash-wasm": "Runtime. argon2id password hashing in WebAssembly, with no native build (ADR 0018). It was chosen because it is the only argon2id found that runs on Node, Bun and Deno (ADR 0023); CI hashes on Node only so far. MIT, no dependencies of its own."
   }
 }

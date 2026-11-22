@@ -150,7 +150,7 @@ describe("checkReadiness", () => {
       "https://app.example#x",
     ]) {
       expect(checkReadiness({ mode: "test", origin, store: memory, secrets: {} }), origin).toEqual([
-        "APP_ORIGIN must be a bare origin exactly as browsers send it, such as https://app.example (scheme, lowercase host, and a port only if not the default).",
+        "APP_ORIGIN must be a bare origin exactly as browsers send it: scheme, lowercase host, and a port only if not the default.",
       ])
     }
   })
@@ -162,7 +162,7 @@ describe("checkReadiness", () => {
       ["production", "https://App.example"],
     ] as const) {
       expect(checkReadiness({ mode, origin, store: durable, secrets: {} }), origin).toEqual([
-        "APP_ORIGIN must be a bare origin exactly as browsers send it, such as https://app.example (scheme, lowercase host, and a port only if not the default).",
+        "APP_ORIGIN must be a bare origin exactly as browsers send it: scheme, lowercase host, and a port only if not the default.",
       ])
     }
   })

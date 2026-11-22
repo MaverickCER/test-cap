@@ -127,6 +127,7 @@ The secret comes from the injected random source, is shown once, is stored AES-G
 | I      | A database read yields usable seeds.                                       | AES-GCM under a key held outside the database (ADR 0027)                     | `totp-secret-read-at-rest`           |
 | I      | A seed is short or predictable.                                            | Random source default `crypto.getRandomValues`; fixed seed length (ADR 0003) | `weak-secret-generation`             |
 | E      | An unconfirmed secret counts as an authenticator, or is shown again later. | Evidence only after a confirming code; never redisplayed (ADR 0027, 0005)    | `totp-unconfirmed-enrolment-counts`  |
+| D      | Endless enrolments grow the list every verification reads.                 | At most 5 confirmed per account; one unconfirmed at a time (ADR 0027)        | `totp-authenticator-flood`           |
 | T      | After key rotation, a ciphertext under a retired or wrong key id is used.  | Key id stored with each ciphertext; retired ids refused (ADR 0027, 0022)     | `totp-key-rotation-confusion`        |
 | E      | A hijacked session enrols the attacker's TOTP without re-authenticating.   | Recent step-up for credential changes (ADR 0005; O2)                         | `sensitive-change-without-reauth`    |
 | T      | A user removes another user's TOTP secret.                                 | Store calls scoped to tenant and subject (ADR 0002, 0012)                    | `idor-authenticator-removal`         |
@@ -142,17 +143,18 @@ session reaches AAL2.
 
 **Assets:** the second factor, the AAL2 session. **Boundaries:** B1, B3, B4.
 
-| STRIDE | Threat                                                    | Stopped by                                                      | Entry                                                           |
-| ------ | --------------------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
-| S      | A code is replayed within its time step.                  | Last accepted step stored; equal or earlier rejected (ADR 0027) | `totp-code-replay`                                              |
-| S      | The client supplies the time the code is checked against. | Server clock only (ADR 0027, 0003)                              | `totp-client-supplied-time`                                     |
-| S      | Parallel guesses count as one attempt.                    | Atomic `increment` before checking (ADR 0002, 0009)             | `otp-attempt-limit-race`                                        |
-| S      | The 6-digit code is guessed within its window.            | Throttles; at most 100 consecutive failures (ADR 0009, 0027)    | `totp-brute-force`                                              |
-| E      | A session cache treats the user as signed in before TOTP. | No cache skips the assurance check (ADR 0006, 0005)             | `session-cache-skips-mfa`, `alternate-path-skips-second-factor` |
-| I      | Code comparison leaks matching digits through timing.     | Constant-time comparison (ADR 0006, 0011)                       | `secret-comparison-timing`                                      |
-| T      | A seed under a retired key id verifies after rotation.    | Key id checked on decrypt (ADR 0027, 0022)                      | `totp-key-rotation-confusion`                                   |
-| D      | Failures lock the owner out.                              | Throttle, never lock out (ADR 0009)                             | `lockout-denial-of-service`                                     |
-| R      | Failed second-factor attempts leave no trace.             | OCSF 3002 on every outcome (ADR 0015)                           | `auth-attempt-not-evented`                                      |
+| STRIDE | Threat                                                        | Stopped by                                                                             | Entry                                                           |
+| ------ | ------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| S      | A code is replayed within its time step.                      | Last accepted step stored; equal or earlier rejected (ADR 0027)                        | `totp-code-replay`                                              |
+| S      | The client supplies the time the code is checked against.     | Server clock only (ADR 0027, 0003)                                                     | `totp-client-supplied-time`                                     |
+| S      | Parallel guesses count as one attempt.                        | Atomic `increment` before checking (ADR 0002, 0009)                                    | `otp-attempt-limit-race`                                        |
+| S      | The 6-digit code is guessed within its window.                | Throttles; at most 100 consecutive failures (ADR 0009, 0027)                           | `totp-brute-force`                                              |
+| E      | A session cache treats the user as signed in before TOTP.     | No cache skips the assurance check (ADR 0006, 0005)                                    | `session-cache-skips-mfa`, `alternate-path-skips-second-factor` |
+| I      | Code comparison leaks matching digits through timing.         | Constant-time comparison (ADR 0006, 0011)                                              | `secret-comparison-timing`                                      |
+| D      | Repeated verifies grow the session, slowing every read of it. | Newest evidence per authenticator kept (ADR 0005); at most 5 authenticators (ADR 0027) | `totp-authenticator-flood`                                      |
+| T      | A seed under a retired key id verifies after rotation.        | Key id checked on decrypt (ADR 0027, 0022)                                             | `totp-key-rotation-confusion`                                   |
+| D      | Failures lock the owner out.                                  | Throttle, never lock out (ADR 0009)                                                    | `lockout-denial-of-service`                                     |
+| R      | Failed second-factor attempts leave no trace.                 | OCSF 3002 on every outcome (ADR 0015)                                                  | `auth-attempt-not-evented`                                      |
 
 **Residual risks.** TOTP is not phishing-resistant: a relay that forwards the code within its step succeeds. A
 6-digit code has a one-in-a-million guess rate per attempt; the 100-failure limit bounds it, it does not remove it.

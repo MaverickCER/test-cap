@@ -12,7 +12,8 @@ Planned tests:
 - `test/budgets/argon2-semaphore.test.ts` (no more hashes run at once than the limit, under concurrent load)
 - `test/budgets/password-max-input.test.ts` (input over 256 characters is refused before hashing)
 - `test/budgets/bundle-size.test.ts` (each entry within its gzip budget)
-- `benchmarks/suite.mjs` entries for password sign-in, TOTP verification, passkey verification and `auth.require`
+- `benchmarks/performance-runtime/suite.mjs` entries for password sign-in, TOTP verification and `auth.require`
+  (phase 3), and passkey verification (planned, phase 5)
 
 The recommendations under Open are provisional defaults until the owner decides.
 
@@ -58,7 +59,12 @@ parameters it was made with, so a later change of constants never makes an old h
 Why: a cost an app can lower is a cost an app will lower to make tests faster, and then ship. A fixed cost makes the
 latency of password sign-in predictable and the strength of stored hashes known.
 
-Override: none in the plan.
+Override: in `test` mode only, `createAuth`'s `argon2Cost` sets another cost, so a test suite does not spend the full
+cost on every sign-in. Any other mode refuses to start with it, the same rule as a custom `Clock` or `RandomSource`
+([ADR 0026](0026-strict-defaults-and-deployment-mode.md) §4). The cost a test passes still goes through the semaphore
+(§2) and the dummy hash runs at it, so a test sees the same flow. test-cap's own tests hash at the smallest cost
+hash-wasm accepts; one test file keeps the full 19 MiB, 2 passes, parallelism 1 and checks that `createAuth` uses it
+when no cost is passed.
 
 ### 2. A concurrency semaphore bounds hashing
 
@@ -82,7 +88,11 @@ Phase 9 sets a latency budget for each sign-in method and a gzip size budget for
 verification checks them. Latency is judged the way the repository already judges it (big-O and overhead ratio
 through the benchmark suite) plus the argon2id parameter test above; bundle size is gated by
 the contract's `Size` check over `ci/size-budgets.mjs`, one budget per `exports` entry, and
-`test/budgets/size-budgets.test.ts` fails when an entry has no budget.
+`test/budgets/size-budgets.test.ts` fails when an entry has no budget. Each entry is measured together with every
+`dist/` chunk it imports, since an entry file may only re-export from shared chunks; a library it imports by package
+name is a dependency and is left out. The default pages' assets are measured as `auth.handle` serves them. Since
+2026-11-16 the server entries carry their first measurement plus 10 percent and the page assets the fixed 15 KiB of
+Open 4.
 
 Why: the plan puts "size and benchmark budgets" in release verification. Gating size inside test-cap closes the one
 gap the shared benchmarks leave.

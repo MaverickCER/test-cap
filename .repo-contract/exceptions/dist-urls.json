@@ -1,3 +1,38 @@
 {
-  "exceptions": []
+  "exceptions": [
+    {
+      "id": "dist-url:http://${domain",
+      "version": 2,
+      "justification": "normaliseEmail (src/core/identifier.ts) builds `http://<domain>` only to hand an email domain to the WHATWG URL parser, which converts it to its IDNA A-label form (ADR 0021 Open 3). No request is ever made to it. Approved by the owner (MaverickCER) on 2026-11-16.",
+      "alternatives": "node:url domainToASCII (refused: the core imports no node: module, ADR 0003 §7); a bundled IDNA table (refused: a large dependency for one conversion).",
+      "attempted": "Removing the scheme: the URL parser needs a special scheme to apply host parsing and IDNA.",
+      "constraint": "Standard globals only (ADR 0003 §7), and URL is the only standard IDNA converter.",
+      "exceptionType": "accepted-risk",
+      "expires": "2027-11-16",
+      "method": "independent-human-review",
+      "remediation": "None needed: the string is a parser input, never fetched.",
+      "residualRisk": "Socket.dev may still flag the template; a reviewer reads this record.",
+      "revisitWhen": "A standard global for IDNA conversion appears, or identifier normalisation moves out of the core.",
+      "ruleBroken": "A URL appears in the published bundle.",
+      "url": "http://${domain",
+      "whyPreferable": "One standard parser and no dependency, for a value that never leaves the process."
+    },
+    {
+      "id": "dist-url:https://api.pwnedpasswords.com/range/",
+      "version": 2,
+      "justification": "The HIBP breached-password range check (ADR 0010 §2 to §4) calls this host. Only the first five hex characters of the password's SHA-1 leave the process, with Add-Padding, through the fetch the app hands createAuth. Approved by the owner (MaverickCER) on 2026-11-16.",
+      "alternatives": "Bundling a breach corpus (refused: hundreds of megabytes and stale at once); letting the app supply the URL (refused: a URL from configuration is an SSRF surface, ADR 0026 §5).",
+      "attempted": "Keeping it out of the bundle is not possible: the check is the feature.",
+      "constraint": "ADR 0010 makes breach screening a default.",
+      "exceptionType": "accepted-risk",
+      "expires": "2027-11-16",
+      "method": "independent-human-review",
+      "remediation": "None needed: the host is fixed in source and the fetch is the app's.",
+      "residualRisk": "An app that turns the screen off still ships the string; it is never fetched then.",
+      "revisitWhen": "ADR 0010 changes the screening service.",
+      "ruleBroken": "A URL appears in the published bundle.",
+      "url": "https://api.pwnedpasswords.com/range/",
+      "whyPreferable": "A fixed, documented host is easier to review than one read from configuration."
+    }
+  ]
 }
