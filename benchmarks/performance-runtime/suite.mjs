@@ -1243,9 +1243,9 @@ export default defineSuite({
       why: "An app calls auth.require next to the data on every route that needs more than the default requirement. It reads the session from the store and recomputes its assurance from the evidence the session holds, with no cache.",
       poorPerformanceMeans:
         "Every protected call pays it, so a slow check slows every sensitive route of the app for as long as the session lives.",
-      expectedComplexity: "linear",
+      expectedComplexity: "constant",
       complexityReason:
-        "A session keeps only the newest evidence per method and authenticator, so its evidence is at most one entry per authenticator plus the password; the assurance is one sorted pass over it.",
+        "A session keeps only the newest evidence per method and authenticator, so it holds at most one entry per authenticator plus the password, six at most. The assurance is one sorted pass over those entries, and at these counts that pass is dwarfed by fixed work every call does: the session read from the store and the token hash.",
       tiers: [1, 2, 3, 4, 5],
       tiersReason:
         "The evidence is bounded by the account's authenticators, at most five, so the ladder is every count it can have.",
