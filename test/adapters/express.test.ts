@@ -11,6 +11,7 @@ import {
 import type { Auth } from "../../src/core/auth.js"
 import { aal1, aal2, body, Browser, enrol, ORIGIN, seedSession, testAuth } from "../support/auth.js"
 import { listen } from "../support/http.js"
+import { within } from "../support/within.js"
 
 const servers: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -108,10 +109,13 @@ describe("serving /auth/* over HTTP", () => {
     const { transport, port } = await serve(app(setup.auth))
     const browser = new Browser(transport)
     await browser.start()
-    const large = await browser.post("/auth/sign-up", { identifier: "a".repeat(70_000) })
+    const large = await within(
+      browser.post("/auth/sign-up", { identifier: "a".repeat(70_000) }),
+      2_000,
+    )
     expect([large.status, large.text]).toEqual([413, '{"error":"body-too-large"}'])
     const { request } = await import("node:http")
-    const chunked = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+    const sent = new Promise<{ status: number; text: string }>((resolve, reject) => {
       const req = request(
         {
           host: "127.0.0.1",
@@ -130,6 +134,7 @@ describe("serving /auth/* over HTTP", () => {
       for (let i = 0; i < 10; i += 1) req.write("x".repeat(8_000))
       req.end()
     })
+    const chunked = await within(sent, 2_000)
     expect(chunked).toEqual({ status: 413, text: '{"error":"body-too-large"}' })
   })
 
@@ -305,7 +310,7 @@ describe("the stream, driven by hand", () => {
     expect(paused()).toBe(false)
     emitter.emit("data", new Uint8Array(1))
     expect(paused()).toBe(true)
-    await done
+    await within(done, 1_000)
     expect([res.statusCode, text()]).toEqual([413, '{"error":"body-too-large"}'])
   })
 
@@ -351,7 +356,7 @@ describe("the stream, driven by hand", () => {
     expressAuth(auth)(req, res, () => undefined)
     await tick()
     emitter.emit("error", new Error("socket hang up: secret detail"))
-    await done
+    await within(done, 1_000)
     expect([res.statusCode, text()]).toEqual([500, '{"error":"internal"}'])
   })
 
