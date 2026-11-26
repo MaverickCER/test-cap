@@ -1,7 +1,7 @@
 # test-cap on TanStack Start
 
-A TanStack Start app on `test-cap/tanstack-start`: a public home page, a protected billing page, and server functions
-that check their own requirement. It is also test-cap's end-to-end test for that entry:
+A TanStack Start app on `test-cap/tanstack-start`: a public home page, a billing page that needs AAL2, an account
+page that needs only a signed-in session (AAL1), and server functions that check their own requirement. It is also test-cap's end-to-end test for that entry:
 `test/examples/tanstack-start.test.ts` builds it, starts it and walks the journey below over real HTTP.
 
 Its settings are in the committed `.env`: `APP_ENV=development`, `APP_ORIGIN` on localhost, an `APP_SYSTEM_ID` and both
@@ -15,12 +15,23 @@ Start documents; no test here runs `vite dev`.
 | File                       | What it does                                                                                     |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |
 | `src/auth.server.ts`       | Creates the one `Auth` over a memory store, the policy's requirements, and the adapter's pieces. |
-| `src/start.ts`             | Registers test-cap's global request middleware: deny by default, `/` public.                     |
+| `src/start.ts`             | Registers test-cap's global request middleware: deny by default, `/` and `/account` listed.      |
 | `src/routes/auth/$.ts`     | The `/auth/$` server route: every `/auth/*` route and default page.                              |
 | `src/billing.functions.ts` | Server functions that check `billing.export` and `billing.close` themselves.                     |
-| `src/routes/billing.tsx`   | The protected page.                                                                              |
+| `src/routes/billing.tsx`   | The protected page, AAL2 from the middleware.                                                    |
+| `src/account.functions.ts` | The server function that checks `account.view` (AAL1) itself, next to the data.                  |
+| `src/routes/account.tsx`   | The account page: the subject and the session's level. Refusals redirect home with the reason.   |
 | `server.mjs`               | Serves the production build on Node, after loading `.env`.                                       |
 | `.env`                     | The local-development settings and keys. Never use them in production.                           |
+
+## Two levels
+
+`/billing` takes the default requirement, AAL2, from the middleware: a password and a TOTP code. `/account` needs only
+a signed-in session, so `src/auth.server.ts` defines `account.view` as `{ level: "AAL1" }` and `getAccount` checks it
+itself with `authRoutes.require`. The middleware knows only the default requirement, so `/account` is on its public
+list; that opens no data, because `getAccount` refuses a session that is missing, in enrolment (`enroll`) or in
+recovery. The home page links to `/account` with a plain anchor: a client-side navigation would call `getAccount`
+through its server function endpoint, and the middleware answers that call at AAL2.
 
 ## Email
 
@@ -30,10 +41,14 @@ test reads the code from those lines and posts it to `/auth/email/confirm`.
 
 ## The journey the test walks
 
-1. `/` answers 200 and names the server function endpoints; `/billing` and the server functions answer 401.
-2. Sign-up, the emailed code, a password, then TOTP enrolment: the session is AAL2 and `/billing` renders.
-3. Sign-out, then sign-in with the password alone: `step-up`. A TOTP step-up brings back AAL2.
-4. `billing.export` allows; `billing.close` (AAL3) answers `step-up`. Sign-out refuses everything again.
+1. `/` answers 200 and names the server function endpoints; `/billing` and the server functions answer 401, and
+   `/account` redirects home with `need=unauthenticated`.
+2. Sign-up, the emailed code, a password: mid-enrolment `/account` redirects with `need=enroll`. Then TOTP
+   enrolment: the session is AAL2, and `/billing` and `/account` render, `/account` at AAL2.
+3. Sign-out refuses both. Sign-in with the password alone: `/billing` answers `step-up` while `/account` renders at
+   AAL1. A TOTP step-up brings back AAL2, and `/account` renders at AAL2.
+4. `billing.export` allows; `billing.close` (AAL3) answers `step-up`. Sign-out refuses everything again, `/account`
+   included, and so does the old cookie.
 
 ## Run it
 

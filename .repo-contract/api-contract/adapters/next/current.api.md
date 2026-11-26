@@ -5,7 +5,12 @@
 ```ts
 
 // @public
-export function nextAuthHandler(auth: Auth<string>): NextAuthHandlers;
+export function nextAuthHandler(auth: Auth<string>, options?: NextAuthHandlerOptions): NextAuthHandlers;
+
+// @public
+export interface NextAuthHandlerOptions {
+    readonly clientAddress?: ((request: Request) => string | undefined) | undefined;
+}
 
 // @public
 export interface NextAuthHandlers {

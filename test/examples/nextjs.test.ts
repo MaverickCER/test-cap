@@ -116,6 +116,22 @@ describe.skipIf(!installed)("example: nextjs", () => {
     return reply
   }
 
+  /**
+   * Opens /account and /account/session as the signed-in user and checks both name the same subject at `level`.
+   * Returns the subject.
+   */
+  async function expectAccount(user: Client, level: "AAL1" | "AAL2"): Promise<string> {
+    const api = expectStatus(await user.get("/account/session"), 200)
+    const { subject, level: reported } = api.json as { subject: string; level: string }
+    expect(reported).toBe(level)
+    expect(subject).toMatch(/\S/)
+    const page = expectStatus(await user.get("/account"), 200)
+    expect(page.text).toContain("Account")
+    expect(page.text).toContain(`data-level="${level}"`)
+    expect(page.text).toContain(subject)
+    return subject
+  }
+
   it("serves the public home page to anyone", async () => {
     const reply = expectStatus(await browser().get("/"), 200)
     expect(reply.text).toContain("test-cap on Next.js")
@@ -127,15 +143,22 @@ describe.skipIf(!installed)("example: nextjs", () => {
     // The proxy redirects to an absolute URL on APP_ORIGIN; Next.js sends a same-origin one as a relative path.
     expect(page.headers.get("location")).toBe("/?returnTo=%2Fbilling")
     expectStatus(await visitor.get("/billing/invoices"), 307)
+    const accountPage = expectStatus(await visitor.get("/account"), 307)
+    expect(accountPage.headers.get("location")).toBe("/?returnTo=%2Faccount")
+    expectStatus(await visitor.get("/account/session"), 307)
     // A forged session cookie gets past the proxy, which does not read the store; the helper behind it refuses.
     visitor.cookies.set("__Host-test-cap", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
     const forged = expectStatus(await visitor.get("/billing"), 307)
     expect(forged.headers.get("location")).toBe("/?need=unauthenticated&returnTo=%2Fbilling")
     const api = expectStatus(await visitor.get("/billing/invoices"), 401)
     expect(api.json).toEqual({ error: "unauthenticated" })
+    const forgedAccount = expectStatus(await visitor.get("/account"), 307)
+    expect(forgedAccount.headers.get("location")).toBe("/?need=unauthenticated&returnTo=%2Faccount")
+    const accountApi = expectStatus(await visitor.get("/account/session"), 401)
+    expect(accountApi.json).toEqual({ error: "unauthenticated" })
   })
 
-  it("signs up with a password and TOTP, signs in, steps up, opens /billing and signs out", async () => {
+  it("signs up with a password and TOTP, signs in, steps up, opens /account at AAL1 and AAL2 and /billing at AAL2, and signs out", async () => {
     const user = browser()
 
     // Sign-up: an account, the emailed code that confirms its address, a password, then a TOTP authenticator, which
@@ -151,6 +174,10 @@ describe.skipIf(!installed)("example: nextjs", () => {
       outcome: "enroll",
     })
     expectStatus(await user.post("/auth/password", { password: PASSWORD }), 200)
+    // Mid-enrolment the session is pre-auth: /account asks for AAL1 and still refuses it, `enroll`, as /billing does.
+    const enrolling = expectStatus(await user.get("/account"), 307)
+    expect(enrolling.headers.get("location")).toBe("/?need=enroll&returnTo=%2Faccount")
+    expect(expectStatus(await user.get("/account/session"), 403).json).toEqual({ error: "enroll" })
     const enrolment = expectStatus(await user.post("/auth/totp/enrol"), 200)
     const { authenticatorId, secret } = enrolment.json as {
       authenticatorId: string
@@ -163,6 +190,8 @@ describe.skipIf(!installed)("example: nextjs", () => {
     })
     expect(expectStatus(confirmed, 200).json).toEqual({ outcome: "allow", returnTo: "/" })
     expect(expectStatus(await user.get("/billing"), 200).text).toContain("INV-0001")
+    // Password and TOTP are AAL2, which also satisfies the AAL1 requirement of /account.
+    const subject = await expectAccount(user, "AAL2")
 
     // Sign-out ends the session.
     expectStatus(await user.post("/auth/sign-out"), 200)
@@ -181,6 +210,10 @@ describe.skipIf(!installed)("example: nextjs", () => {
       error: "step-up",
     })
 
+    // The password alone is AAL1: /account, which asks for AAL1, opens for the same subject, while /billing, which
+    // asks for the default AAL2, did not.
+    expect(await expectAccount(user, "AAL1")).toBe(subject)
+
     // The second factor: a code from the step after enrolment's, which the replay check accepts.
     const verified = await user.post("/auth/totp/verify", {
       code: totpCode(secret, enrolledAt + 30_000),
@@ -191,6 +224,7 @@ describe.skipIf(!installed)("example: nextjs", () => {
     expect(expectStatus(await user.get("/billing/invoices"), 200).json).toEqual({
       invoices: ["INV-0001", "INV-0002"],
     })
+    expect(await expectAccount(user, "AAL2")).toBe(subject)
 
     // Sign-out again: the old cookie no longer opens anything, and without it the proxy redirects.
     const stale = user.cookies.get("__Host-test-cap") as string
@@ -198,8 +232,17 @@ describe.skipIf(!installed)("example: nextjs", () => {
     expect(expectStatus(await user.get("/billing"), 307).headers.get("location")).toBe(
       "/?returnTo=%2Fbilling",
     )
+    expect(expectStatus(await user.get("/account"), 307).headers.get("location")).toBe(
+      "/?returnTo=%2Faccount",
+    )
     user.cookies.set("__Host-test-cap", stale)
     expectStatus(await user.get("/billing/invoices"), 401)
+    expect(expectStatus(await user.get("/account/session"), 401).json).toEqual({
+      error: "unauthenticated",
+    })
+    expect(expectStatus(await user.get("/account"), 307).headers.get("location")).toBe(
+      "/?need=unauthenticated&returnTo=%2Faccount",
+    )
   })
 
   it("asked the local HIBP stand-in, never the real service, for the password's range", () => {

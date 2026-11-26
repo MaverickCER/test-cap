@@ -8,26 +8,38 @@ tests) and phase 5 (recovery by email, including password reset).
 Answers [handoff question](../../GLOSSARY.md) 7 (account recovery), partly: admin-assisted recovery is left open (see
 Open).
 
-Planned tests:
+Tests built in phase 4:
 
-- `test/recovery/recovery-codes-entropy-and-hashing.test.ts` (80 bits from the `RandomSource`; only hashes stored;
-  shown once);
-- `test/recovery/recovery-code-single-use.test.ts` (a code works once; regenerating the set invalidates the old one);
-- `test/recovery/email-code-limits.test.ts` (at least 6 digits, at most 24 hours, invalidated on use);
-- `test/recovery/recovery-only-state.test.ts` (`auth.require` answers `recovery-only` for every requirement; only the
-  replacement actions succeed);
-- `test/recovery/recovery-revokes-sessions.test.ts`;
-- `test/attacks/outstanding-codes-survive-recovery.test.ts` (an emailed recovery code issued before a completed
-  recovery no longer works);
-- `test/assurance/recovery-yields-no-assurance.test.ts` (no recovery path produces evidence or a level);
-- `test/attacks/recovery-below-account-level.test.ts` (an AAL3 account recovered by email does not come out holding
-  AAL3, or AAL2, from the recovery itself);
+- `test/recovery/recovery-codes.test.ts` (80 bits from the `RandomSource`; only argon2id hashes stored; shown once; a
+  code works once; a new set invalidates the old one);
+- `test/recovery/recovery-flow.test.ts` (codes need a session at the default requirement or a recovery-only one;
+  redeeming yields a recovery-only session with no level and revokes the account's other sessions; `auth.require`
+  answers `recovery-only` for every requirement; only the replacement actions succeed; the account's address is told
+  as the recovery starts; finishing signs the person out);
+- `test/attacks/recovery-below-account-level.test.ts` (a recovered AAL2 account's session holds no level and reaches
+  nothing that needs one);
+- `test/attacks/sessions-survive-credential-change.test.ts` (recovery and a replaced password leave no other session
+  signed in);
 - `test/attacks/redemption-race.test.ts` (parallel redemptions of one recovery code, exactly one wins);
-- `test/attacks/email-code-brute-force.test.ts` (email codes are throttled per ADR 0009);
 - `test/attacks/recovery-code-brute-force.test.ts` (saved recovery codes are throttled per ADR 0009);
 - `test/attacks/recovery-code-weak-storage.test.ts` (a stored code is an argon2id hash with its own salt).
 
+Planned for phase 5, with recovery by email:
+
+- `test/recovery/email-code-limits.test.ts` (at least 6 digits, at most 24 hours, invalidated on use);
+- `test/attacks/outstanding-codes-survive-recovery.test.ts` (an emailed recovery code issued before a completed
+  recovery no longer works);
+- `test/assurance/recovery-yields-no-assurance.test.ts` (no recovery path produces evidence or a level);
+- `test/attacks/email-code-brute-force.test.ts` (email codes are throttled per ADR 0009).
+
 The recommendations under Open are provisional defaults until the owner decides.
+
+Amended 2026-11-24: an account holds one live set of recovery codes. A new set becomes current by one
+compare-and-set, so of parallel requests one wins, and the old set works until the switch. Redeeming a code and the
+recovery password change each run in one transaction where the store has them
+(`test/recovery/recovery-codes.test.ts`, `test/recovery/recovery-transactions.test.ts`). So the Limits bullet "Two
+sets made at once can both stay partly live" no longer holds. `test/attacks/email-code-brute-force.test.ts`, listed
+under phase 5, exists already and covers the confirmation code.
 
 ## Context
 
@@ -53,8 +65,9 @@ than the account's proven evidence.
 A user with an AAL2 session can generate a set of saved recovery codes. Each holds 80 bits from the `RandomSource`
 (ADR 0003). The store keeps only a salted password hash of each code (argon2id at the ADR 0018 cost, one salt per
 code), so each code is shown once, when generated. Each code carries a short non-secret prefix that names its row, so
-redeeming one costs a single hash. Generating a new set invalidates the old one. Redemption uses `consumeOnce`
-(ADR 0002), so a code works once even under parallel requests.
+redeeming one costs a single hash. Generating a new set invalidates the old one, and only once every new code is
+hashed, so a busy or failing hasher leaves the old set working. Redemption uses `consumeOnce` (ADR 0002), so a code
+works once even under parallel requests.
 
 Why: 80 bits clears NIST's 64-bit floor with room to spare. Because it is below 112 bits, 800-63B-4 §3.1.2.2 and ASVS
 6.5.2 require a salted password-hashing scheme rather than a plain hash, so a database copy cannot be brute-forced
@@ -109,6 +122,10 @@ codes stay valid apart from the one redeemed; generating a new set during recove
   "recovery must not drop below the account's assurance level", is therefore only partly met. See Open.
 - **Admin-assisted recovery is not designed.** See Open.
 - **Recovery code format and count** are not fixed by the plan. See Open.
+- **Two sets made at once can both stay partly live.** Each request revokes the old set and then stores its own ten
+  codes, so of two parallel requests for one account, codes of both sets can survive, and either reply can list codes
+  the other revoked. Serialising the replacement per account needs a generation record that redemption checks; it is a
+  follow-up. Hashing first keeps that window to the ten store writes.
 - **test-cap does not deliver email.** It builds the message and calls the app's `sendEmail`; delivery, and the
   security of the mailbox, are outside test-cap.
 
@@ -122,11 +139,14 @@ codes stay valid apart from the one redeemed; generating a new set during recove
    start an email recovery for the user, but cannot set credentials. Each step is a security event and, with
    `test-cap/audit`, an audit record. Impersonation and break-glass (ADR 0014) are not recovery paths.
 3. **Recovery code format.** Recommendation: 10 codes per set, each 16 base32 characters (80 bits) shown in groups of
-   four, plus the non-secret row prefix. Hashing is decided in section 1 (argon2id, per-code salt).
+   four, plus the non-secret row prefix. Hashing is decided in section 1 (argon2id, per-code salt). _Built in phase 4:
+   a 6-character prefix and a 16-character secret, shown as `XXXXXX-XXXX-XXXX-XXXX-XXXX`._
 4. **Default lifetime of an email recovery code.** The plan sets 24 hours as the ceiling. Recommendation: 15 minutes by
    default, configurable up to 24 hours.
 5. **How a session leaves recovery-only.** Recommendation: when the person finishes replacing authenticators, the
    recovery-only session ends and they sign in again with the new ones, so the evidence comes from a fresh
-   authentication ceremony and not from enrolment.
+   authentication ceremony and not from enrolment. _Built in phase 4: `POST /auth/recovery/finish`._
 6. **Notifying the account.** Recommendation: every completed recovery sends a notice to the account's confirmed email
-   address, so a recovery the owner did not start is visible to them.
+   address, so a recovery the owner did not start is visible to them. _Built in phase 4, earlier than recommended: the
+   notice goes when a code is redeemed, because a recovery that never finishes could otherwise replace credentials
+   unseen._

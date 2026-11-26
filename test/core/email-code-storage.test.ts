@@ -36,7 +36,7 @@ function deps(keyRing: readonly RingKey[], store = memoryStore()): EmailDeps {
     tenant: "t",
     clock: fixedClock(1_800_000_000_000),
     random: fixedCode,
-    origin: "https://app.example",
+    linkBase: "https://app.example/auth",
     sendEmail: () => Promise.resolve(),
     keyRing,
   }
@@ -87,6 +87,14 @@ describe("the stored confirmation code", () => {
     await sendConfirmation(deps([K1], store), input)
     const redeemed = await redeemConfirmation(deps([K2], store), { ...input, code: "123456" })
     expect(redeemed).toEqual({ ok: false, reason: "invalid-code" })
+  })
+
+  it("refuses any code for an account that was never sent one", async () => {
+    const d = deps([K1])
+    expect(await redeemConfirmation(d, { ...input, code: "123456" })).toEqual({
+      ok: false,
+      reason: "invalid-code",
+    })
   })
 
   it("redeems under the current key", async () => {

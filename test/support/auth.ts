@@ -1,3 +1,4 @@
+import { ACCOUNT_COLLECTION } from "../../src/core/accounts.js"
 import type { AuthenticationEvidence } from "../../src/assurance/evidence.js"
 import { defineAuthPolicy } from "../../src/assurance/policy.js"
 import { type AuthConfig, createAuth, type EmailMessage } from "../../src/core/auth.js"
@@ -113,6 +114,8 @@ export interface Outgoing {
   readonly path: string
   readonly headers?: readonly (readonly [string, string])[]
   readonly body?: string | Uint8Array | undefined
+  /** The socket address the request comes from; `203.0.113.7` when left out. */
+  readonly clientAddress?: string | undefined
 }
 
 /** Sends a request somewhere and returns the reply. */
@@ -144,7 +147,7 @@ export function plainRequest(request: Outgoing, signal?: AbortSignal): PlainRequ
     headers,
     body:
       body === undefined ? null : typeof body === "string" ? new TextEncoder().encode(body) : body,
-    clientAddress: "203.0.113.7",
+    clientAddress: request.clientAddress ?? "203.0.113.7",
     signal,
   }
 }
@@ -227,6 +230,7 @@ export class Browser {
         ...(extra.headers ?? []),
       ],
       body: JSON.stringify(body),
+      clientAddress: extra.clientAddress,
     })
   }
 
@@ -385,6 +389,13 @@ export async function seedSession(
   const subject = input.subject ?? "acct-1"
   const evidence = input.evidence ?? []
   const state = input.state ?? "authenticated"
+  // A session counts only for an active account (ADR 0012), so the subject gets one unless it already has a record.
+  await setup.store.createUnique(TENANT, {
+    collection: ACCOUNT_COLLECTION,
+    key: subject,
+    owner: subject,
+    data: { status: "active", createdAt: setup.clock.now() },
+  })
   const issued =
     state === "authenticated"
       ? await sessions.signIn(TENANT, null, { subject, evidence })

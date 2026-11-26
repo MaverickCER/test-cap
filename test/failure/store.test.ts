@@ -341,8 +341,10 @@ describe("a credential change interrupted by the store (finding F-1, ADR 0029)",
   }
 
   /** The calls of the flow after its compare-and-set confirmed the new authenticator. */
+  // Since phase 4 each session lookup also reads the account's status, so the rotation reads twice.
   const AFTER_CONFIRMATION = [
-    { op: "get", call: 4 },
+    { op: "get", call: 5 },
+    { op: "get", call: 6 },
     { op: "update", call: 3 },
     { op: "createUnique", call: 1 },
     { op: "revoke", call: 1 },
@@ -404,7 +406,7 @@ describe("the email code's kill at its attempt limit, when the store fails (find
       const reply = await browser.post("/auth/email/confirm", { code: wrong })
       expect([attempt, reply.text]).toEqual([attempt, '{"error":"invalid-code"}'])
     }
-    faulty.arm({ op: "revokeByOwner", call: 1, mode: "reject" })
+    faulty.arm({ op: "revoke", call: 1, mode: "reject" })
     const fifth = await browser.post("/auth/email/confirm", { code: wrong })
     faulty.heal()
     expect([fifth.status, fifth.text]).toEqual([500, '{"error":"internal"}'])
@@ -435,7 +437,7 @@ describe("the email code's kill at its attempt limit, when the store fails (find
       tenant: TENANT,
       clock: setup.clock,
       random: systemRandom,
-      origin: ORIGIN,
+      linkBase: `${ORIGIN}/auth`,
       sendEmail: () => Promise.resolve(),
       keyRing: parseKeyRing("AUTH_ENCRYPTION_KEY", ENV.AUTH_ENCRYPTION_KEY).keys,
     }

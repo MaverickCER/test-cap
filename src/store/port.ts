@@ -159,6 +159,14 @@ export interface AuthStore extends StoreOperations {
   transaction?<T>(fn: (tx: StoreTransaction) => Promise<T>): Promise<T>
 }
 
+/** Runs `fn` in one transaction when the store has them, and directly on the store when it does not. */
+export function atomically<T>(
+  store: AuthStore,
+  fn: (ops: StoreOperations) => Promise<T>,
+): Promise<T> {
+  return store.transaction === undefined ? fn(store) : store.transaction(fn)
+}
+
 /** Throws unless `value` is a non-empty string. */
 export function assertName(value: string, what: string): void {
   if (typeof value !== "string" || value === "")

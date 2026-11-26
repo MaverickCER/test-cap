@@ -30,29 +30,29 @@ Three rules hold the shape together:
 
 ## Modules
 
-| Module (source)    | Entry                    | Holds                                                                 | ADR              | State                                                    |
-| ------------------ | ------------------------ | --------------------------------------------------------------------- | ---------------- | -------------------------------------------------------- |
-| `src/core/`        | `test-cap`               | `createAuth`, dispatcher, config, deployment mode, error model        | 0003, 0026       | built                                                    |
-| `src/transport/`   | `test-cap`               | byte parsing: content type, body limit, forms, JSON, cookies, headers | 0003             | built                                                    |
-| `src/assurance/`   | `test-cap`               | evidence, session assurance, decay, `require`                         | 0005             | built                                                    |
-| `src/sessions/`    | `test-cap`               | tokens, cookies, rotation, revocation, expiry                         | 0006             | built                                                    |
-| `src/security/`    | `test-cap`               | CSRF, origin, headers, CSP, redirects, throttling, proxy trust        | 0009, 0011       | built; throttling and proxy trust planned (phase 4)      |
-| `src/methods/*`    | `test-cap`, method gates | password, TOTP, passkeys, recovery, email, OIDC                       | 0007, 0010, 0027 | password, TOTP built; recovery phase 4; the rest phase 5 |
-| `src/machine/`     | `test-cap/machine`       | API keys and the `service` subject                                    | 0013             | planned (phase 8)                                        |
-| `src/delegation/`  | `test-cap/delegation`    | delegations and the `agent` subject                                   | 0013             | planned (phase 8)                                        |
-| `src/admin/`       | `test-cap`               | revoke, deprovision, impersonate, break-glass                         | 0012, 0014       | `revoke` built (in `src/core/`); the rest planned        |
-| `src/ocsf/`        | `test-cap`               | security event types and builders                                     | 0015             | built                                                    |
-| `src/audit/`       | `test-cap/audit`         | audit records, chain, checkpoints, verification, reports              | 0020             | planned (phase 8)                                        |
-| `src/report/`      | `test-cap/report`        | the policy report                                                     | 0005, 0017       | planned (phase 8)                                        |
-| `src/env/`         | `test-cap/env`           | the env-cap contract                                                  | 0022             | built, not exported                                      |
-| `src/store/`       | `test-cap/store/*`       | the `AuthStore` port, memory store, SQL store, migrations             | 0002             | built; memory exported; SQL export planned (phase 6)     |
-| `src/conformance/` | `test-cap/conformance`   | the store conformance kit                                             | 0002             | built, not exported                                      |
-| `src/adapters/*`   | `test-cap/<framework>`   | express, nest, next, tanstack-start, fetch                            | 0024             | built and exported, but Nest planned (phase 4)           |
-| `src/client/`      | `test-cap/client`        | the browser API and passkey ceremonies                                | 0025             | planned (phase 7)                                        |
-| `src/forms/`       | `test-cap/forms`         | the framework-free form model                                         | 0025             | built; types on `test-cap`; own entry planned (phase 7)  |
-| `src/react/`       | `test-cap/react`         | the React components                                                  | 0025             | planned (phase 7)                                        |
-| `src/pages/`       | `test-cap` (served)      | server-rendered default pages and hashed assets                       | 0025             | built                                                    |
-| `src/saml/`        | `test-cap/saml`          | SAML 2.0 service provider                                             | 0028             | planned (phase 8)                                        |
+| Module (source)    | Entry                    | Holds                                                                 | ADR              | State                                                            |
+| ------------------ | ------------------------ | --------------------------------------------------------------------- | ---------------- | ---------------------------------------------------------------- |
+| `src/core/`        | `test-cap`               | `createAuth`, dispatcher, config, deployment mode, error model        | 0003, 0026       | built                                                            |
+| `src/transport/`   | `test-cap`               | byte parsing: content type, body limit, forms, JSON, cookies, headers | 0003             | built                                                            |
+| `src/assurance/`   | `test-cap`               | evidence, session assurance, decay, `require`                         | 0005             | built                                                            |
+| `src/sessions/`    | `test-cap`               | tokens, cookies, rotation, revocation, expiry                         | 0006             | built                                                            |
+| `src/security/`    | `test-cap`               | CSRF, origin, headers, CSP, redirects, throttling, request limits     | 0009, 0011       | built                                                            |
+| `src/methods/*`    | `test-cap`, method gates | password, TOTP, passkeys, recovery, email, OIDC                       | 0007, 0010, 0027 | password, TOTP, recovery codes built; the rest phase 5           |
+| `src/machine/`     | `test-cap/machine`       | API keys and the `service` subject                                    | 0013             | planned (phase 8)                                                |
+| `src/delegation/`  | `test-cap/delegation`    | delegations and the `agent` subject                                   | 0013             | planned (phase 8)                                                |
+| `src/admin/`       | `test-cap`               | revoke, deprovision, impersonate, break-glass                         | 0012, 0014       | `revoke`, `deprovision` built (in `src/core/`); the rest planned |
+| `src/ocsf/`        | `test-cap`               | security event types and builders                                     | 0015             | built                                                            |
+| `src/audit/`       | `test-cap/audit`         | audit records, chain, checkpoints, verification, reports              | 0020             | planned (phase 8)                                                |
+| `src/report/`      | `test-cap/report`        | the policy report                                                     | 0005, 0017       | planned (phase 8)                                                |
+| `src/env/`         | `test-cap/env`           | the env-cap contract                                                  | 0022             | built, not exported                                              |
+| `src/store/`       | `test-cap/store/*`       | the `AuthStore` port, memory store, SQL store, migrations             | 0002             | built; memory exported; SQL export planned (phase 6)             |
+| `src/conformance/` | `test-cap/conformance`   | the store conformance kit                                             | 0002             | built, not exported                                              |
+| `src/adapters/*`   | `test-cap/<framework>`   | express, nest, next, tanstack-start, fetch                            | 0024             | built and exported, but Nest in progress (after phase 4)         |
+| `src/client/`      | `test-cap/client`        | the browser API and passkey ceremonies                                | 0025             | planned (phase 7)                                                |
+| `src/forms/`       | `test-cap/forms`         | the framework-free form model                                         | 0025             | built; types on `test-cap`; own entry planned (phase 7)          |
+| `src/react/`       | `test-cap/react`         | the React components                                                  | 0025             | planned (phase 7)                                                |
+| `src/pages/`       | `test-cap` (served)      | server-rendered default pages and hashed assets                       | 0025             | built                                                            |
+| `src/saml/`        | `test-cap/saml`          | SAML 2.0 service provider                                             | 0028             | planned (phase 8)                                                |
 
 A module's entry is added to `package.json` `exports` only when its capability gate passes (ADR 0004). A built module
 whose entry is not exported exists in source and tests only.
@@ -62,79 +62,84 @@ whose entry is not exported exists in source and tests only.
 Every public type names the ADR that owns its shape. A docs test fails when a row names an ADR that does not exist.
 It also fails when a name the main entry exports is missing from this table.
 
-| Type or function                                                                                 | Entry                     | ADR  |
-| ------------------------------------------------------------------------------------------------ | ------------------------- | ---- |
-| `createAuth(config): Auth`                                                                       | `test-cap`                | 0003 |
-| `AuthConfig`                                                                                     | `test-cap`                | 0026 |
-| `Auth` (`handle`, `session`, `require`, `admin`)                                                 | `test-cap`                | 0003 |
-| `AuthAdmin`                                                                                      | `test-cap`                | 0012 |
-| `PlainRequest`, `PlainResponse`                                                                  | `test-cap`                | 0003 |
-| `Clock`, `RandomSource`                                                                          | `test-cap`                | 0003 |
-| `TransportError`, `ConfigError`                                                                  | `test-cap`                | 0003 |
-| `TransportErrorCode`                                                                             | `test-cap`                | 0003 |
-| `FixedClock`, `fixedClock`, `sequenceRandom`                                                     | `test-cap`                | 0003 |
-| `DeploymentMode`                                                                                 | `test-cap`                | 0026 |
-| `StoreTraits`                                                                                    | `test-cap`                | 0002 |
-| `RingKey`                                                                                        | `test-cap`                | 0022 |
-| `AuthenticationEvidence`, `KeyProtection`                                                        | `test-cap`                | 0005 |
-| `AuthenticationMethod`, `Factor`                                                                 | `test-cap`                | 0005 |
-| `SessionAssurance`, `AssuranceLevel`                                                             | `test-cap`                | 0005 |
-| `RequireResult` (`allow`, `step-up`, `enroll`, `recovery-only`, `unauthenticated`)               | `test-cap`                | 0005 |
-| `defineAuthPolicy`, `AuthPolicy`, `Requirement`, `Deviation`                                     | `test-cap`                | 0005 |
-| `AuthPolicyInput`, `SessionTimeouts`, `SessionState`, `SessionKind`                              | `test-cap`                | 0005 |
-| `MissingEvidence`, `StepUpRecord`, `FederatedLevel`                                              | `test-cap`                | 0005 |
-| `SessionInfo`                                                                                    | `test-cap`                | 0006 |
-| `Subject`, `UserSubject`, `ServiceSubject`, `AgentSubject`                                       | `test-cap`                | 0013 |
-| `Impersonator`, `BreakGlassGrant`                                                                | `test-cap`                | 0014 |
-| `TrustConfig`, `TrustedIssuer`                                                                   | `test-cap`                | 0005 |
-| `ThrottleConfig`, `TrustedProxies`, `ChallengeHook`                                              | `test-cap`                | 0009 |
-| `BreachedPasswordConfig`                                                                         | `test-cap`                | 0010 |
-| `HibpFetch`, `HibpResponse`                                                                      | `test-cap`                | 0010 |
-| `Argon2Cost`                                                                                     | `test-cap`                | 0018 |
-| `SendEmail`, `EmailMessage`                                                                      | `test-cap`                | 0021 |
-| `TenantId`, `TenantConfig`                                                                       | `test-cap`                | 0012 |
-| `SecurityEvent`, `EventSink`                                                                     | `test-cap`                | 0015 |
-| `AuthenticationEvent`, `UserManagementEvent`, their inputs and parts                             | `test-cap`                | 0015 |
-| `AuthenticationActivity`, `AuthenticationInput`, `UserManagementActivity`, `UserManagementInput` | `test-cap`                | 0015 |
-| `EventInput`, `EventSubject`, `FactorKind`, `Outcome`, `SessionRef`, `TestCapFacts`              | `test-cap`                | 0015 |
-| `OcsfActor`, `OcsfAuthFactor`, `OcsfBaseEvent`, `OcsfMetadata`, `OcsfProduct`                    | `test-cap`                | 0015 |
-| `OcsfService`, `OcsfSession`, `OcsfUnmapped`, `OcsfUser`                                         | `test-cap`                | 0015 |
-| `AuthStore`, `StoreTransaction`                                                                  | `test-cap`                | 0002 |
-| `StoredRecord`, `NewRecord`, `JsonValue`                                                         | `test-cap`                | 0002 |
-| `ConformanceReport`, `ConformanceResult`                                                         | `test-cap`                | 0002 |
-| `StoreOperations`, `RecordChange`, `CounterState`, `AuditEntry`                                  | `test-cap`                | 0002 |
-| `SqlDialect`, `SqlParam`, `SqlQuery`, `SqlResult`, `SqlStoreOptions`, `SqlTransaction`           | `test-cap`                | 0002 |
-| `ConformanceOptions`                                                                             | `test-cap`                | 0002 |
-| `memoryStore()`                                                                                  | `test-cap/store/memory`   | 0002 |
-| `sqlStore(options)`, `SqlDialect`, `migrations(dialect)`                                         | `test-cap/store/sql`      | 0002 |
-| `runAuthStoreConformance(createStore)`                                                           | `test-cap/conformance`    | 0002 |
-| `ApiKey`, `issueApiKey`                                                                          | `test-cap/machine`        | 0013 |
-| `Delegation`, `issueDelegation`                                                                  | `test-cap/delegation`     | 0013 |
-| `AuditRecord`, `AuditSink`, `Checkpoint`, `verifyAudit`, `AuditVerification`                     | `test-cap/audit`          | 0020 |
-| `sessionTimeline`, `accessReport`                                                                | `test-cap/audit`          | 0020 |
-| `PolicyReport`, `renderPolicyReport`                                                             | `test-cap/report`         | 0005 |
-| `testCapEnv`, `testCapAuditEnv`, `testCapSamlEnv` (the env-cap contracts)                        | `test-cap/env`            | 0022 |
-| `expressAuth(auth, options)`                                                                     | `test-cap/express`        | 0024 |
-| `ExpressAuthOptions`, `ExpressAuthInfo`, `ExpressAuthMiddleware`, `ExpressLike*`                 | `test-cap/express`        | 0024 |
-| `TestCapModule`, `AuthGuard`, `@Public()`, `@RequireAuth()`                                      | `test-cap/nest`           | 0024 |
-| `nextAuthHandler`, `nextServerAuth`, `nextProxy`                                                 | `test-cap/next`           | 0024 |
-| `NextAuthHandlers`, `NextRouteHandler`, `NextServerAuth`, `NextServerAuthOptions`                | `test-cap/next`           | 0024 |
-| `NextHeaders`, `NextProxy`, `NextProxyOptions`                                                   | `test-cap/next`           | 0024 |
-| `tanstackStartAuth`, `tanstackStartMiddleware`                                                   | `test-cap/tanstack-start` | 0024 |
-| `TanstackStartAuth`, `TanstackStartAuthInfo`, `TanstackStartContext`                             | `test-cap/tanstack-start` | 0024 |
-| `TanstackStartMiddleware*`, `TanstackStartRouteHandler*`                                         | `test-cap/tanstack-start` | 0024 |
-| `withAuth(auth, handler, options)`                                                               | `test-cap/fetch`          | 0024 |
-| `fetchAuth(auth, options)`                                                                       | `test-cap/fetch`          | 0024 |
-| `FetchAuthInfo`, `FetchHandler`, `FetchAuthOptions`, `WithAuthOptions`                           | `test-cap/fetch`          | 0024 |
-| `ClientAddress`                                                                                  | `test-cap/fetch`          | 0009 |
-| `createAuthClient`                                                                               | `test-cap/client`         | 0025 |
-| `FormId`, `FormModel`, `FormOptions`, `FieldList`, `FieldState`, `FieldLength`, `FieldPattern`   | `test-cap`                | 0025 |
-| `FlowOutcome`, `Messages`                                                                        | `test-cap`                | 0025 |
-| `PageAssets`, `PageContext`, `PageLink`, `PageAsset`, `PageAssetSet`                             | `test-cap`                | 0025 |
-| `FormModel`, `FieldState`, `Messages`                                                            | `test-cap/forms`          | 0025 |
-| `SignInForm`, `SignUpForm`, `RecoverForm`, `MfaChallenge`, `PasskeyEnroll`                       | `test-cap/react`          | 0025 |
-| `TotpEnroll`, `RecoveryCodes`, `Sessions`, `StepUp`                                              | `test-cap/react`          | 0025 |
-| `samlProvider(options)`                                                                          | `test-cap/saml`           | 0028 |
+| Type or function                                                                                                            | Entry                     | ADR  |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ---- |
+| `createAuth(config): Auth`                                                                                                  | `test-cap`                | 0003 |
+| `AuthConfig`                                                                                                                | `test-cap`                | 0026 |
+| `Argon2Hasher`                                                                                                              | `test-cap`                | 0031 |
+| `Auth` (`handle`, `session`, `require`, `admin`)                                                                            | `test-cap`                | 0003 |
+| `AuthAdmin`                                                                                                                 | `test-cap`                | 0012 |
+| `PlainRequest`, `PlainResponse`                                                                                             | `test-cap`                | 0003 |
+| `Clock`, `RandomSource`                                                                                                     | `test-cap`                | 0003 |
+| `TransportError`, `ConfigError`                                                                                             | `test-cap`                | 0003 |
+| `TransportErrorCode`                                                                                                        | `test-cap`                | 0003 |
+| `FixedClock`, `fixedClock`, `sequenceRandom`                                                                                | `test-cap`                | 0003 |
+| `DeploymentMode`                                                                                                            | `test-cap`                | 0026 |
+| `StoreTraits`                                                                                                               | `test-cap`                | 0002 |
+| `RingKey`                                                                                                                   | `test-cap`                | 0022 |
+| `AuthenticationEvidence`, `KeyProtection`                                                                                   | `test-cap`                | 0005 |
+| `AuthenticationMethod`, `Factor`                                                                                            | `test-cap`                | 0005 |
+| `SessionAssurance`, `AssuranceLevel`                                                                                        | `test-cap`                | 0005 |
+| `RequireResult` (`allow`, `step-up`, `enroll`, `recovery-only`, `unauthenticated`)                                          | `test-cap`                | 0005 |
+| `defineAuthPolicy`, `AuthPolicy`, `Requirement`, `Deviation`                                                                | `test-cap`                | 0005 |
+| `AuthPolicyInput`, `SessionTimeouts`, `SessionState`, `SessionKind`                                                         | `test-cap`                | 0005 |
+| `MissingEvidence`, `StepUpRecord`, `FederatedLevel`                                                                         | `test-cap`                | 0005 |
+| `SessionInfo`                                                                                                               | `test-cap`                | 0006 |
+| `Subject`, `UserSubject`, `ServiceSubject`, `AgentSubject`                                                                  | `test-cap`                | 0013 |
+| `Impersonator`, `BreakGlassGrant`                                                                                           | `test-cap`                | 0014 |
+| `TrustConfig`, `TrustedIssuer`                                                                                              | `test-cap`                | 0005 |
+| `ThrottleConfig`, `StuffingConfig`, `TrustedProxies`, `ForwardedHeader`, `ChallengeHook`                                    | `test-cap`                | 0009 |
+| `platform`, `PlatformName`, `PlatformTrust`, `AuthDiagnostic`                                                               | `test-cap`                | 0009 |
+| `Throttle`, `ThrottleSubject`, `ThrottleSecret`, `createStoreLimiter`, `StoreLimiterOptions`, `RateRule`, `RateLimiterLike` | `test-cap`                | 0030 |
+| `RateLimitConfig`, `RateLimitRouteId`, `RateRuleSetting`, `LimiterFactory`, `LimiterOptions`                                | `test-cap`                | 0030 |
+| `EmailLimitConfig`, `StuffingDetector`                                                                                      | `test-cap`                | 0009 |
+| `BreachedPasswordConfig`                                                                                                    | `test-cap`                | 0010 |
+| `HibpFetch`, `HibpResponse`                                                                                                 | `test-cap`                | 0010 |
+| `Argon2Cost`                                                                                                                | `test-cap`                | 0018 |
+| `SendEmail`, `EmailMessage`                                                                                                 | `test-cap`                | 0021 |
+| `TenantId`, `TenantConfig`                                                                                                  | `test-cap`                | 0012 |
+| `SecurityEvent`, `EventSink`                                                                                                | `test-cap`                | 0015 |
+| `AuthenticationEvent`, `UserManagementEvent`, their inputs and parts                                                        | `test-cap`                | 0015 |
+| `AuthenticationActivity`, `AuthenticationInput`, `UserManagementActivity`, `UserManagementInput`                            | `test-cap`                | 0015 |
+| `EventInput`, `EventSubject`, `FactorKind`, `Outcome`, `SessionRef`, `TestCapFacts`                                         | `test-cap`                | 0015 |
+| `OcsfActor`, `OcsfAuthFactor`, `OcsfBaseEvent`, `OcsfMetadata`, `OcsfProduct`                                               | `test-cap`                | 0015 |
+| `OcsfService`, `OcsfSession`, `OcsfUnmapped`, `OcsfUser`                                                                    | `test-cap`                | 0015 |
+| `AuthStore`, `StoreTransaction`                                                                                             | `test-cap`                | 0002 |
+| `StoredRecord`, `NewRecord`, `JsonValue`                                                                                    | `test-cap`                | 0002 |
+| `ConformanceReport`, `ConformanceResult`                                                                                    | `test-cap`                | 0002 |
+| `StoreOperations`, `RecordChange`, `CounterState`, `AuditEntry`                                                             | `test-cap`                | 0002 |
+| `SqlDialect`, `SqlParam`, `SqlQuery`, `SqlResult`, `SqlStoreOptions`, `SqlTransaction`                                      | `test-cap`                | 0002 |
+| `ConformanceOptions`                                                                                                        | `test-cap`                | 0002 |
+| `memoryStore()`                                                                                                             | `test-cap/store/memory`   | 0002 |
+| `sqlStore(options)`, `SqlDialect`, `migrations(dialect)`                                                                    | `test-cap/store/sql`      | 0002 |
+| `runAuthStoreConformance(createStore)`                                                                                      | `test-cap/conformance`    | 0002 |
+| `ApiKey`, `issueApiKey`                                                                                                     | `test-cap/machine`        | 0013 |
+| `Delegation`, `issueDelegation`                                                                                             | `test-cap/delegation`     | 0013 |
+| `AuditRecord`, `AuditSink`, `Checkpoint`, `verifyAudit`, `AuditVerification`                                                | `test-cap/audit`          | 0020 |
+| `sessionTimeline`, `accessReport`                                                                                           | `test-cap/audit`          | 0020 |
+| `PolicyReport`, `renderPolicyReport`                                                                                        | `test-cap/report`         | 0005 |
+| `testCapEnv`, `testCapAuditEnv`, `testCapSamlEnv` (the env-cap contracts)                                                   | `test-cap/env`            | 0022 |
+| `expressAuth(auth, options)`                                                                                                | `test-cap/express`        | 0024 |
+| `ExpressAuthOptions`, `ExpressAuthInfo`, `ExpressAuthMiddleware`, `ExpressLike*`                                            | `test-cap/express`        | 0024 |
+| `TestCapModule`, `AuthGuard`, `@Public()`, `@RequireAuth()`                                                                 | `test-cap/nest`           | 0024 |
+| `nextAuthHandler`, `nextServerAuth`, `nextProxy`                                                                            | `test-cap/next`           | 0024 |
+| `NextAuthHandlers`, `NextRouteHandler`, `NextServerAuth`, `NextServerAuthOptions`                                           | `test-cap/next`           | 0024 |
+| `NextHeaders`, `NextProxy`, `NextProxyOptions`, `NextAuthHandlerOptions`                                                    | `test-cap/next`           | 0024 |
+| `tanstackStartAuth`, `tanstackStartMiddleware`                                                                              | `test-cap/tanstack-start` | 0024 |
+| `TanstackStartAuth`, `TanstackStartAuthInfo`, `TanstackStartContext`, `TanstackStartAuthOptions`                            | `test-cap/tanstack-start` | 0024 |
+| `TanstackStartMiddleware*`, `TanstackStartRouteHandler*`                                                                    | `test-cap/tanstack-start` | 0024 |
+| `withAuth(auth, handler, options)`                                                                                          | `test-cap/fetch`          | 0024 |
+| `fetchAuth(auth, options)`                                                                                                  | `test-cap/fetch`          | 0024 |
+| `FetchAuthInfo`, `FetchHandler`, `FetchAuthOptions`, `WithAuthOptions`                                                      | `test-cap/fetch`          | 0024 |
+| `ClientAddress`                                                                                                             | `test-cap/fetch`          | 0009 |
+| `createAuthClient`                                                                                                          | `test-cap/client`         | 0025 |
+| `FormId`, `FormModel`, `FormOptions`, `FieldList`, `FieldState`, `FieldLength`, `FieldPattern`                              | `test-cap`                | 0025 |
+| `FlowOutcome`, `Messages`                                                                                                   | `test-cap`                | 0025 |
+| `PageAssets`, `PageContext`, `PageLink`, `PageAsset`, `PageAssetSet`                                                        | `test-cap`                | 0025 |
+| `FormModel`, `FieldState`, `Messages`                                                                                       | `test-cap/forms`          | 0025 |
+| `SignInForm`, `SignUpForm`, `RecoverForm`, `MfaChallenge`, `PasskeyEnroll`                                                  | `test-cap/react`          | 0025 |
+| `TotpEnroll`, `RecoveryCodes`, `Sessions`, `StepUp`                                                                         | `test-cap/react`          | 0025 |
+| `samlProvider(options)`                                                                                                     | `test-cap/saml`           | 0028 |
 
 The table is the full design. Six entries exist today: `test-cap`, `test-cap/express`, `test-cap/fetch`,
 `test-cap/next`, `test-cap/tanstack-start` and `test-cap/store/memory`. A `test-cap` row is public only once
@@ -180,8 +185,10 @@ refuses to start without an HTTPS origin, a durable store and both keys (ADR 002
 | sign-out, session list, remote revoke                          | F14      | 3     |
 | default pages and `/auth/assets/*`                             | F21      | 3, 7  |
 
+Every route is counted per client against its request limit before it runs (ADR 0009 §8).
+
 API keys (F15), delegations (F16), impersonation (F17), break-glass (F18) and deprovisioning (F19) are server calls,
-not routes. Audit (F20) is a library the app calls.
+not routes, and no request limit counts them. Audit (F20) is a library the app calls.
 
 ## Data model
 
@@ -211,7 +218,7 @@ Each flow lists what it produces. The threats and the design element stopping ea
   next. No requirement allows the account until it enrols a password plus TOTP; passkeys arrive in phase 5. Produces
   a User Management event (Create).
 - **F02 Password sign-in.** argon2id verify under a fixed cost and a concurrency limit, with a dummy hash whenever no
-  stored password hash is verified. Evidence: one factor, AAL1. Throttling (ADR 0009) is planned for phase 4.
+  stored password hash is verified. Evidence: one factor, AAL1. Failures are throttled (ADR 0009, phase 4).
 - **F03 TOTP enrolment.** Secret generated by the injected random source, shown once, stored AES-GCM encrypted
   (ADR 0027), confirmed by one valid code before it counts.
 - **F04 TOTP verification.** RFC 6238 over Web Crypto HMAC; a time step already used is rejected. With a password,
@@ -220,7 +227,7 @@ Each flow lists what it produces. The threats and the design element stopping ea
   verified when roots are configured; it alone never establishes AAL3 (ADR 0005).
 - **F06 Passkey authentication (planned, phase 5).** UV required; origin and RP ID checked; counter and backup flags recorded as key
   protection. AAL2 and phishing-resistant; AAL3 only with all ADR 0005 conditions.
-- **F07 Recovery codes (planned, phase 4).** 80-bit codes, hashed, each consumed once. Redeeming one yields the recovery-only state, never
+- **F07 Recovery codes.** 80-bit codes, hashed, each consumed once. Redeeming one yields the recovery-only state, never
   more than the account's proven evidence (ADR 0007).
 - **F08 Email confirmation.** At least 6 digits, at most 24 hours, single use. Confirms an address; never raises
   assurance (ADR 0021).
@@ -278,8 +285,9 @@ shape the code:
 
 Support is stated per capability, and a cell counts only once a CI job runs it over the built `dist/`. The table lives
 in [ADR 0023](decisions/0023-runtime-support-per-capability.md), section 1, and only there. Today the `cross-runtime`
-job runs a smoke check of the main entry on Node 22 and 24, Bun 1.3.14 and Deno 2.9.4. The per-capability matrix is
-planned for phase 6.
+job runs the built package on Node 22 and 24, Bun 1.3.14, Deno 2.9.4 and Cloudflare workerd: checks of the exported
+values, then a sign-in journey through `test-cap/fetch` (`test/cross-runtime/journey.mjs`). The per-capability matrix is
+planned for phase 6; until then, ADR 0023's table says more than CI runs, as its dated note records.
 
 ## Stated gaps
 

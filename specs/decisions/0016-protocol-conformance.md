@@ -4,8 +4,9 @@
 
 Accepted (2026-11-15). Implemented across phases: the RFC 4226 and RFC 6238 vectors in phase 3 (TOTP); the WebAuthn
 vectors and OIDC interoperability in phase 5; the Playwright virtual authenticator in phase 7; the SAML test IdP and
-negative cases in phase 8; the OpenID conformance suite in phase 9. The ZAP scans and Playwright attack scripts of
-section 8 first run against the slice in phase 4 and become a release gate in phase 9. Answers [handoff
+negative cases in phase 8; the OpenID conformance suite in phase 9. The ZAP scans of section 8 run in CI from
+phase 4 (the `zap` job, against the slice behind Express); the Playwright attack scripts arrive with Playwright in
+phase 7; both become a release gate in phase 9. Answers [handoff
 question](../../GLOSSARY.md) 16.
 
 Planned tests:
@@ -19,7 +20,7 @@ Planned tests:
   [ADR 0028](0028-saml-library-and-its-own-gate.md))
 - `test/support/frozen-time.ts` (the test-time clock shim of section 6, with its own tests)
 - the `openid-conformance` CI job (section 2)
-- the `zap-scan` CI job (section 8: ZAP baseline and active scans against an example app)
+- the `zap` CI job (section 8: ZAP baseline and active scans against `ci/zap/server.mjs`, the slice behind Express)
 - `test/e2e/attack-scripts.spec.ts` (section 8: Playwright attack scripts against the same example)
 
 The recommendations under Open are provisional defaults until the owner decides.

@@ -27,6 +27,9 @@ export const auth = createAuth({
   policy: defineAuthPolicy({
     version: "tanstack-start example 1",
     requirements: {
+      // Viewing the account needs a signed-in session and no more: a password alone (AAL1) is enough. Billing names no
+      // requirement, so it keeps the default, AAL2.
+      "account.view": { level: "AAL1" },
       // Exporting invoices needs both factors proved in the last 15 minutes.
       "billing.export": { level: "AAL2", multiFactorWithinMs: 15 * 60_000 },
       // Closing the account needs a phishing-resistant authenticator, which this example does not enrol.
@@ -47,5 +50,9 @@ export const auth = createAuth({
 /** The `/auth/$` server route's handlers, and `require` and `session` for server functions. */
 export const authRoutes = tanstackStartAuth(auth)
 
-/** Deny by default: `/` is public; every other page and every server function call needs AAL2. */
-export const authMiddlewareServer = tanstackStartMiddleware(auth, { public: ["/"] })
+/**
+ * Deny by default: `/` is public; every other page and every server function call needs AAL2. `/account` is listed
+ * too, but not because it is open: the middleware only knows the default requirement, which would turn a password-only
+ * session away, so the page's own server function checks `account.view` instead (src/account.functions.ts).
+ */
+export const authMiddlewareServer = tanstackStartMiddleware(auth, { public: ["/", "/account"] })

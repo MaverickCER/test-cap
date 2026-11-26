@@ -23,6 +23,8 @@ storybook-static/
 *.tgz
 
 # Logs & runtime
+# wrangler dev's bundle and local state; test/cross-runtime/workers.mjs removes it after each run.
+.wrangler/
 *.log
 npm-debug.log*
 .DS_Store

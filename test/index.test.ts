@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest"
 import * as entry from "../src/index.js"
 
 describe("the test-cap entry", () => {
-  it("exports exactly its runtime values: createAuth, defineAuthPolicy and the two error types", () => {
+  it("exports exactly its runtime values: createAuth, createStoreLimiter, defineAuthPolicy, platform and the two error types", () => {
     expect(Object.keys(entry).sort()).toEqual([
       "ConfigError",
       "TransportError",
       "createAuth",
+      "createStoreLimiter",
       "defineAuthPolicy",
+      "platform",
     ])
   })
 

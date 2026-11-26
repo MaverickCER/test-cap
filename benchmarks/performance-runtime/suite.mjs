@@ -14,7 +14,7 @@
 import { IncomingMessage, ServerResponse } from "node:http"
 import { Duplex } from "node:stream"
 import { defineSuite } from "internal-package-contract/benchmark"
-import { createAuth, defineAuthPolicy } from "../../dist/index.js"
+import { createAuth, createStoreLimiter, defineAuthPolicy } from "../../dist/index.js"
 import { expressAuth } from "../../dist/express.js"
 import { fetchAuth, withAuth } from "../../dist/fetch.js"
 import { nextAuthHandler, nextProxy, nextServerAuth } from "../../dist/next.js"
@@ -70,9 +70,46 @@ function auth(cost = "test", ringSize = 1, extra = {}) {
     env: env(ringSize),
     hibpFetch: hibpClear,
     sendEmail: keepEmail([]),
+    throttle: UNBLOCKED,
+    rateLimit: UNLIMITED_REQUESTS,
+    emailLimit: UNLIMITED_MAIL,
     ...(cost === "test" ? { argon2Cost: TEST_COST } : {}),
     ...extra,
   })
+}
+
+/**
+ * A benchmark repeats one failing sign-in thousands of times. With the default throttle the sixth would be refused
+ * with 429 before any hash runs, and the figure would be the refusal's. Raising the free attempts past any sample count
+ * keeps every request on the full path: the throttle still reads its blocks and counts each attempt, it never blocks.
+ */
+const UNBLOCKED = { freeFailures: Number.MAX_SAFE_INTEGER }
+
+/**
+ * A benchmark sends thousands of requests from one client in seconds; the default request limits would answer 429
+ * after 10 or 100. Raising every limit past any sample count keeps each request on its full path: the limiter still
+ * counts every request in the store, it never refuses one.
+ */
+const UNLIMITED_REQUESTS = {
+  max: Number.MAX_SAFE_INTEGER,
+  rules: Object.fromEntries(
+    [
+      "sign-in",
+      "step-up",
+      "totp/verify",
+      "totp/enrol",
+      "totp/confirm",
+      "email/confirm",
+      "recovery",
+      "sign-up",
+    ].map((id) => [id, { windowMs: 10_000, max: Number.MAX_SAFE_INTEGER }]),
+  ),
+}
+
+/** The same for confirmation mail: every send is counted against both limits, and none is held back. */
+const UNLIMITED_MAIL = {
+  perAddress: [{ windowMs: 60_000, max: Number.MAX_SAFE_INTEGER }],
+  perClient: { windowMs: 3_600_000, max: Number.MAX_SAFE_INTEGER },
 }
 
 /** A mail sender that keeps every message in `outbox`, so a benchmark can read a confirmation code back. */
@@ -416,9 +453,40 @@ const STORE_FIXED = {
   "config.random": "fixed: absent, the system random source",
   "config.sendEmail": "fixed: keeps each message in memory; sending is the app's own cost",
   "config.onEvent": "fixed: absent; a sink is the app's own cost and cannot change an outcome",
-  "config.trustedProxies": "fixed: absent; phase 3 reads no forwarded header",
+  "config.trustedProxies":
+    "fixed: absent, so the socket address is the client and no forwarded header is read",
+  "config.throttle":
+    "fixed: absent, the defaults; checking them is the same few comparisons for any value",
+  "config.stuffing":
+    "fixed: absent, the defaults; checking them is the same few comparisons for any value",
+  "config.challengeHook": "fixed: absent; createAuth only stores it",
+  "config.forwardedHeader": "fixed: absent; with no trusted proxy it is never read",
+  "config.publicBasePath":
+    "fixed: absent; a prefix is one fixed-length check at startup and one string join per link",
+  "config.onDiagnostic":
+    "fixed: absent; a sink is the app's own cost and runs at most once per code",
   "config.argon2Cost":
     "fixed: the reduced test-mode cost; the sign-in benchmark's variant measures the real one",
+  "config.rateLimit":
+    "fixed: every limit raised past any sample count, so each request is counted once in the store and none is refused; store-limiter measures that count",
+  "config.emailLimit":
+    "fixed: both mail limits raised past any sample count, so each send is counted and none is held back",
+  "config.failureCeiling":
+    "fixed: absent, the default 100; the check is one comparison per failure",
+  "config.emailCodeAttempts":
+    "fixed: absent, the default 5; the check is one comparison per attempt",
+  "config.refusalEvents":
+    "fixed: absent, the default first; it runs only for a refused request, which no benchmark sends",
+  "config.argon2Hasher":
+    "fixed: absent, the built-in hasher; an app's own hasher costs what it costs, and test-cap adds one format check per hash",
+  "config.requireClientAddress":
+    "fixed: absent; it is read only for a request with no client address, and every benchmark request has one",
+}
+
+/** How the Next.js and TanStack Start handlers' `options` are accounted for. */
+const NO_CLIENT_ADDRESS = {
+  options:
+    "fixed: absent, so the core sees no client address and counts no request limit; with one, each request adds the one counter increment fetch-handler measures",
 }
 
 export default defineSuite({
@@ -484,7 +552,10 @@ export default defineSuite({
     ],
   },
 
-  notBenchmarked: {},
+  notBenchmarked: {
+    platform:
+      "Builds a platform preset object once, when the app calls createAuth; its cost is a few property reads at startup and nothing per request.",
+  },
 
   functions: [
     {
@@ -943,7 +1014,7 @@ export default defineSuite({
         },
         CONCURRENT,
       ],
-      covers: { nextAuthHandler: authFixed(["handle"]) },
+      covers: { nextAuthHandler: { ...authFixed(["handle"]), ...NO_CLIENT_ADDRESS } },
       inEndToEnd: ADAPTER_IN_END_TO_END,
       setup: async (n) => {
         const { GET } = nextAuthHandler(auth())
@@ -1097,7 +1168,9 @@ export default defineSuite({
         },
       ],
       notCovered: [SIGNED_IN, REQUEST_BODY, CONCURRENT],
-      covers: { tanstackStartAuth: authFixed(["handle", "require", "session"]) },
+      covers: {
+        tanstackStartAuth: { ...authFixed(["handle", "require", "session"]), ...NO_CLIENT_ADDRESS },
+      },
       inEndToEnd: { ...ADAPTER_IN_END_TO_END, variant: "route-handler" },
       setup: async (n, options) => {
         const start = tanstackStartAuth(auth())
@@ -1387,6 +1460,60 @@ export default defineSuite({
         return store
       },
       run: async (store) => (await store.increment("t", "n0", 60_000, 1)).count,
+    },
+    {
+      id: "store-limiter",
+      name: "createStoreLimiter (consume)",
+      why: "Every request to /auth is counted through it before its route runs, and so is every guess, mail send and failure; it is the one piece of limiter work on every request.",
+      poorPerformanceMeans:
+        "A count that slowed as keys accumulate would tax every request, and most of all the ones a flood sends.",
+      expectedComplexity: "constant",
+      complexityReason:
+        "One consume is one atomic increment of one keyed counter, whatever the number of other keys.",
+      variables: [
+        { name: "keys", how: "swept", description: "Other keys already counted in the store." },
+      ],
+      notCovered: [
+        {
+          name: "a SQL store",
+          reason: "Not exported in phase 4; the memory store's increment is measured.",
+        },
+        {
+          name: "a block read",
+          reason:
+            "Every limit test-cap builds counts with blocks off; a block read is one more keyed record read, the same work as one store read.",
+        },
+      ],
+      covers: {
+        createStoreLimiter: {
+          "options.store":
+            "fixed: the memory store, so the figure is the limiter's own work and no database's",
+          "options.tenant": "fixed: absent, the default tenant",
+          "options.clock": "fixed: absent, the system clock",
+          "options.points": "fixed: past any sample count, so no consume is refused",
+          "options.duration": "fixed: 60 seconds; the window's length changes no work",
+          "options.keyPrefix": "fixed: rate; a prefix is one string join per key",
+          "options.blockDuration": "fixed: absent, no block; blocking runs only past points",
+          "options.blocks": "fixed: false, as every limit test-cap builds counts",
+        },
+      },
+      inEndToEnd: {
+        callsPerOperation: 1,
+        description: "One consume per request, for the route's request limit.",
+      },
+      setup: async (n) => {
+        const store = memoryStore()
+        const limiter = createStoreLimiter({
+          store,
+          points: Number.MAX_SAFE_INTEGER,
+          duration: 60,
+          keyPrefix: "rate",
+          blocks: false,
+        })
+        for (let i = 0; i < n; i += 1) await limiter.consume(`session|198.51.100.${String(i)}`)
+        return limiter
+      },
+      run: async (limiter) => (await limiter.consume("session|198.51.100.0")).consumedPoints,
     },
   ],
 })

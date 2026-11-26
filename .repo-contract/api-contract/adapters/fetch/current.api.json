@@ -247,7 +247,7 @@
         {
           "kind": "Function",
           "canonicalReference": "test-cap!fetchAuth:function(1)",
-          "docComment": "/**\n * Serves test-cap's `/auth/*` routes from a `Request`, and answers `null` for any other path, leaving its body unread,\n * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default.\n */\n",
+          "docComment": "/**\n * Serves test-cap's `/auth/*` routes from a `Request`, and answers `null` for any other path, leaving its body unread,\n * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default. A missing `clientAddress`\n * where production needs one throws a `ConfigError` here.\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -436,7 +436,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "test-cap!FetchAuthOptions#clientAddress:member",
-              "docComment": "/**\n * Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,\n * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address.\n */\n",
+              "docComment": "/**\n * Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,\n * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address, and in production\n * and staging the adapter refuses to start with a `ConfigError`, unless a platform preset reads its header from every\n * request or the app set `requireClientAddress: false` (ADR 0009 §8).\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -563,7 +563,7 @@
         {
           "kind": "Function",
           "canonicalReference": "test-cap!withAuth:function(1)",
-          "docComment": "/**\n * Wraps the app's fetch handler with test-cap: serves `/auth/*` and protects every other route at the default\n * requirement unless `options.public` lists it. A malformed public list throws a `ConfigError` here. An error the\n * app's handler throws reaches the runtime untouched; any other failure is a fixed 500.\n * ```ts\n * Deno.serve(withAuth(auth, handler, { public: [\"/\"], clientAddress: (req, info) => info.remoteAddr.hostname }))\n * ```\n *\n */\n",
+          "docComment": "/**\n * Wraps the app's fetch handler with test-cap: serves `/auth/*` and protects every other route at the default\n * requirement unless `options.public` lists it. A malformed public list, or a missing `clientAddress` where production\n * needs one, throws a `ConfigError` here. An error the app's handler throws reaches the runtime untouched; any other\n * failure is a fixed 500.\n * ```ts\n * Deno.serve(withAuth(auth, handler, { public: [\"/\"], clientAddress: (req, info) => info.remoteAddr.hostname }))\n * ```\n *\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",

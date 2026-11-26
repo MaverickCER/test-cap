@@ -38,6 +38,12 @@ Planned tests:
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: `atomically` runs a change in one transaction when the store has them and directly when it does not.
+The conformance tests gained `transaction-rolls-back-single-use` and `transaction-consume-once-concurrent`
+(`test/store/conformance.test.ts`). After an independent review the same day they also gained `list-by-owner` (oldest
+first, revoked and consumed records included), `update-fields`, `create-unique-existing`, `data-round-trip` and
+`transaction-rolls-back-operations`. A store that listed newest first had passed, and then refused a valid email code.
+
 ## Context
 
 The handoff's storage rule was that users, credentials, sessions and recovery state go through functions the app

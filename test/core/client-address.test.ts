@@ -1,7 +1,7 @@
 // The key a client address counts under (ADR 0009 §2): an IPv4 address as itself, an IPv4-mapped IPv6 address as its
 // IPv4 address, any other IPv6 address as its /64, whatever way it is written.
 import { describe, expect, it } from "vitest"
-import { clientKey } from "../../src/core/client-address.js"
+import { clientKey, parseAddress } from "../../src/core/client-address.js"
 
 describe("clientKey", () => {
   it.each([
@@ -45,5 +45,15 @@ describe("clientKey", () => {
       expect(clientKey(value), value).toBe(value)
     }
     expect(clientKey(undefined)).toBeNull()
+  })
+})
+
+describe("parseAddress", () => {
+  it("reads IPv4 in four decimal parts only, and IPv6 without a zone", () => {
+    for (const odd of ["0x7f.0.0.1", "0177.0.0.1", "127.1", "2130706433", "fe80::1%eth0"]) {
+      expect(parseAddress(odd), odd).toBeNull()
+    }
+    expect(parseAddress("127.0.0.1")?.toString()).toBe("127.0.0.1")
+    expect(parseAddress("2001:db8::1")?.toString()).toBe("2001:db8::1")
   })
 })

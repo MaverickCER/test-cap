@@ -87,6 +87,28 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "An unexpected error; the body is fixed. Codes: `internal`.",
             "content": {
@@ -294,6 +316,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }
@@ -817,6 +861,28 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "An unexpected error; the body is fixed. Codes: `internal`.",
             "content": {
@@ -846,7 +912,7 @@
       "post": {
         "operationId": "password",
         "summary": "Set the password during enrolment",
-        "description": "Sets the password of a `pre-auth` session's account once its address is confirmed. At least 8 characters inside MFA (15 when a deviation lets a password alone pass), at most 256, screened against a blocklist and HIBP.",
+        "description": "Sets the password of a `pre-auth` session's account once its address is confirmed, or replaces it from a `recovery-only` session (ADR 0007 §3). At least 8 characters inside MFA (15 when a deviation lets a password alone pass), at most 256, screened against a blocklist and HIBP.",
         "requestBody": {
           "required": true,
           "content": {
@@ -896,7 +962,7 @@
         ],
         "responses": {
           "200": {
-            "description": "`{ outcome: \"enroll\", enrolled: [\"password\"] }`.",
+            "description": "`{ outcome: \"enroll\", enrolled: [\"password\"] }`; from a `recovery-only` session, `{ outcome: \"recovery-only\", returnTo }`, with the rotated session cookie and the next CSRF token in `X-CSRF-Token`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1007,7 +1073,7 @@
             }
           },
           "409": {
-            "description": "The address is not confirmed yet, or a concurrent change won. Codes: `confirm-email-first`, `conflict`.",
+            "description": "The address is not confirmed yet, the account already has a password (it changes only through recovery), or a concurrent change won. Codes: `confirm-email-first`, `password-set`, `conflict`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1021,6 +1087,7 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "confirm-email-first",
+                        "password-set",
                         "conflict"
                       ]
                     }
@@ -1066,6 +1133,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }
@@ -1331,6 +1420,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }
@@ -1606,6 +1717,28 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "An unexpected error; the body is fixed. Codes: `internal`.",
             "content": {
@@ -1842,6 +1975,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }
@@ -2109,6 +2264,28 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests or too many failures; `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "An unexpected error; the body is fixed. Codes: `internal`.",
             "content": {
@@ -2322,6 +2499,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }
@@ -2581,6 +2780,28 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests or too many failures; `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "An unexpected error; the body is fixed. Codes: `internal`.",
             "content": {
@@ -2618,6 +2839,770 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "busy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/recovery-codes": {
+      "post": {
+        "operationId": "recovery-codes",
+        "summary": "Make a new set of recovery codes",
+        "description": "Makes 10 saved recovery codes. Each is shown once and stored only as an argon2id hash, and the old set stops redeeming once the new set is current. A new set is a credential change: this session is rotated and the account's other sessions are revoked. Needs a session at the default requirement, or a recovery-only one replacing a lost set.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ codes }`: the ten codes, shown once. The rotated session's cookie is set, and the next CSRF token is in `X-CSRF-Token`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session, or the change failed closed: another request made a set first, or this session ended. Every session of the account is then revoked. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session does not meet the default requirement. Codes: `enroll`, `recovery-only`, `step-up`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "enroll",
+                        "recovery-only",
+                        "step-up",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The argon2id concurrency limit is full; nothing was written. Codes: `busy`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "busy"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/recovery": {
+      "post": {
+        "operationId": "recovery",
+        "summary": "Recover the account with a saved code",
+        "description": "Redeems one saved recovery code for a confirmed identifier. The session becomes recovery-only: it has no level, every other session of the account is revoked, and it may only set a password, enrol TOTP or make new codes. The account's confirmed address is told at once. The reply is the same for an unknown account, after the same argon2id work.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identifier",
+                  "code"
+                ],
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "identifier",
+                  "code"
+                ],
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  },
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ outcome: \"recovery-only\", returnTo }`; the next CSRF token is in `X-CSRF-Token`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The identifier and code do not match. Codes: `invalid-credentials`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "invalid-credentials"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The `Origin` or the synchronizer token was refused. Codes: `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many failures; `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/recovery/finish": {
+      "post": {
+        "operationId": "recovery-finish",
+        "summary": "Finish a recovery",
+        "description": "Ends the recovery-only session and clears its cookie, so the person signs in again with the new authenticators.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [],
+                "properties": {
+                  "csrfToken": {
+                    "type": "string",
+                    "description": "The synchronizer token, when it is not sent as `X-CSRF-Token`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "csrfHeader": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "`{ outcome: \"unauthenticated\" }`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body was refused before the route ran. Codes: `undeclared-field`, `invalid-field`, `missing-field`, `malformed-body`, `duplicate-field`, `too-many-fields`, `ambiguous-header`, `aborted`, `invalid-path`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "undeclared-field",
+                        "invalid-field",
+                        "missing-field",
+                        "malformed-body",
+                        "duplicate-field",
+                        "too-many-fields",
+                        "ambiguous-header",
+                        "aborted",
+                        "invalid-path"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session. Codes: `unauthenticated`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unauthenticated"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session is not recovering. Codes: `not-recovering`, `csrf`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "not-recovering",
+                        "csrf"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "The wrong method; `Allow` names the right one. Codes: `method-not-allowed`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The body is over the limit. Codes: `body-too-large`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "body-too-large"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "The body is neither a form nor JSON. Codes: `unsupported-media-type`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "An unexpected error; the body is fixed. Codes: `internal`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "internal"
                       ]
                     }
                   }
@@ -2799,6 +3784,28 @@
               }
             }
           },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
           "500": {
             "description": "An unexpected error; the body is fixed. Codes: `internal`.",
             "content": {
@@ -2923,6 +3930,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "method-not-allowed"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }
@@ -3176,6 +4205,28 @@
                       "description": "A fixed code; never says whether an account exists.",
                       "enum": [
                         "unsupported-media-type"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again. Codes: `rate-limited`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "description": "A fixed code; never says whether an account exists.",
+                      "enum": [
+                        "rate-limited"
                       ]
                     }
                   }

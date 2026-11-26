@@ -4,12 +4,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as AuthSplatRouteImport } from './routes/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillingRoute = BillingRouteImport.update({
@@ -25,30 +31,34 @@ const AuthSplatRoute = AuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/billing': typeof BillingRoute
   '/auth/$': typeof AuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/billing': typeof BillingRoute
   '/auth/$': typeof AuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRoute
   '/billing': typeof BillingRoute
   '/auth/$': typeof AuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/billing' | '/auth/$'
+  fullPaths: '/' | '/account' | '/billing' | '/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/billing' | '/auth/$'
-  id: '__root__' | '/' | '/billing' | '/auth/$'
+  to: '/' | '/account' | '/billing' | '/auth/$'
+  id: '__root__' | '/' | '/account' | '/billing' | '/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRoute
   BillingRoute: typeof BillingRoute
   AuthSplatRoute: typeof AuthSplatRoute
 }
@@ -60,6 +70,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/billing': {
@@ -81,6 +98,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRoute,
   BillingRoute: BillingRoute,
   AuthSplatRoute: AuthSplatRoute,
 }

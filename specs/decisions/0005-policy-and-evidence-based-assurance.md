@@ -3,8 +3,15 @@
 ## Status
 
 Accepted (2026-11-15). Implemented in phase 3 (evidence, session assurance, the level rules for password and TOTP,
-`defineAuthPolicy` and `auth.require`), phase 5 (the rules for passkeys, email and OIDC) and phase 8 (the policy
+`defineAuthPolicy` and `auth.require`), phase 4 (the fresh ceremony credential changes need, section 8), phase 5 (the rules for passkeys, email and OIDC) and phase 8 (the policy
 report that recomputes and checks them).
+
+Amended 2026-11-24: a password sign-in to an account with no confirmed second factor answers `enroll`. Its session is
+`pre-auth`, as after sign-up, unless a deviation lets a password alone meet the default requirement. Signed in at AAL1,
+such an account could reach nothing and enrol nothing, since enrolling needs a recent multi-factor proof (section 8).
+That session may enrol TOTP but not replace the password, which changes only through recovery. Finishing enrolment
+revokes the account's other sessions. A pre-auth session whose account already has a confirmed second factor is signed
+out. So a session that proved only the password never reaches AAL2 on a finished account.
 
 Answers [handoff question](../../GLOSSARY.md) 5 (policy model).
 
@@ -174,6 +181,20 @@ in one list, without reading code.
 
 Why: five explicit outcomes leave an adapter nothing to infer. A boolean would collapse "sign in", "finish enrolling",
 "you are recovering" and "prove more" into one denial, and the UI could not route the person to the right page.
+
+### 8. Credential changes need a recent multi-factor ceremony
+
+Enrolling a TOTP authenticator, confirming one, and making a new set of recovery codes need more than a session at the
+default requirement: the session's newest multi-factor ceremony must be at most 15 minutes old
+(`CREDENTIAL_CHANGE_WITHIN_MS`). Otherwise the reply is 403 with `{ error: "step-up", missing: [{ kind:
+"fresh-multi-factor", withinMs }] }`, and a step-up makes the change possible again. A session in the pre-auth state
+(still enrolling) or the recovery-only state (ADR 0007) is exempt: it has no level to protect, and replacing
+authenticators is all it may do. The credential changes phase 5 adds (passkeys, address changes, linking) are to use
+the same check.
+
+Why: a session can outlive the person who started it: a stolen cookie or an unlocked device keeps its level for up to
+24 hours. A credential change outlasts the session, so it asks for proof that the person is still present (ASVS 7.5.1,
+the OWASP Authentication Cheat Sheet's re-authentication rule).
 
 ## Consequences
 

@@ -1,3 +1,4 @@
+import { ACCOUNT_COLLECTION } from "../../src/core/accounts.js"
 import type { AuthenticationEvidence } from "../../src/assurance/evidence.js"
 import { defineAuthPolicy } from "../../src/assurance/policy.js"
 import {
@@ -26,7 +27,27 @@ export const policy = defineAuthPolicy({
 export function setup(options: { store?: AuthStore; random?: RandomSource } = {}) {
   const store = options.store ?? memoryStore()
   const clock = fixedClock(T0)
-  const sessions = createSessions({ store, clock, random: options.random ?? systemRandom, policy })
+  const base = createSessions({ store, clock, random: options.random ?? systemRandom, policy })
+  // A session counts only for an active account (ADR 0012), so each subject gets one the first time it signs in.
+  const active = async (tenant: string, subject: string): Promise<void> => {
+    await store.createUnique(tenant, {
+      collection: ACCOUNT_COLLECTION,
+      key: subject,
+      owner: subject,
+      data: { status: "active", createdAt: T0 },
+    })
+  }
+  const sessions: typeof base = {
+    ...base,
+    async signIn(tenant, token, input) {
+      await active(tenant, input.subject)
+      return base.signIn(tenant, token, input)
+    },
+    async begin(tenant, token, input) {
+      await active(tenant, input.subject)
+      return base.begin(tenant, token, input)
+    },
+  }
   return { store, clock, sessions }
 }
 

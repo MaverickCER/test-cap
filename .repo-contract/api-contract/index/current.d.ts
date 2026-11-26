@@ -1,12 +1,15 @@
 /**
  * test-cap: the internal authentication package for MaverickCER apps.
  *
- * This entry holds `createAuth` and the policy that configures it (phase 3), and the foundation's public contract
- * (phase 2): the byte transport an adapter speaks, the store port an app implements, the injected clock and random
- * source, the deployment modes, and the two error types. Adapters live in their own entries, such as
- * `test-cap/express`.
+ * This entry holds `createAuth` and the policy that configures it (phase 3); the limits' public types,
+ * `createStoreLimiter` and the `platform` proxy presets (phase 4); and the foundation's public contract (phase 2): the
+ * byte transport an adapter speaks, the store port an app implements, the injected clock and random source, the
+ * deployment modes, and the two error types. Adapters live in their own entries, such as `test-cap/express`.
  * @packageDocumentation
  */
+
+import type { RateLimiterLike } from 'rate-limiter-flexible';
+import type { RateLimiterStoreAbstract } from 'rate-limiter-flexible';
 
 /** An argon2id cost: memory in KiB, passes and lanes. ADR 0018 fixes it; only test mode may pass another (ADR 0026 §4). */
 export declare interface Argon2Cost {
@@ -16,6 +19,30 @@ export declare interface Argon2Cost {
     readonly iterations: number;
     /** Lanes. */
     readonly parallelism: number;
+}
+
+/**
+ * The argon2id computation itself, which `createAuth`'s `argon2Hasher` replaces: by default hash-wasm, or
+ * `@noble/hashes` where WebAssembly cannot compile (ADR 0031). test-cap keeps around it the fixed cost, the salt,
+ * the semaphore and the dummy hash, and refuses what it can check: a hash that is not the argon2id PHC string of the
+ * salt and cost it asked for, a stored hash in any other format, and any answer from `verify` but `true` as a match.
+ *
+ * What the app takes on by replacing it: a correct argon2id (RFC 9106, version 19) that writes the PHC string with
+ * standard base64 and no padding, as hash-wasm does, so hashes stay verifiable when the hasher changes back; a
+ * constant-time comparison in `verify`; and the time and memory each hash costs where the app runs.
+ */
+export declare interface Argon2Hasher {
+    /**
+     * Hashes `password` with `salt` at `cost`, to a 32-byte digest; resolves to the PHC string, such as
+     * `$argon2id$v=19$m=19456,t=2,p=1$<salt>$<digest>`.
+     */
+    readonly hash: (input: {
+        readonly password: string;
+        readonly salt: Uint8Array;
+        readonly cost: Argon2Cost;
+    }) => Promise<string>;
+    /** Resolves to `true` when `password` matches the PHC string `encoded`, at the cost `encoded` records. */
+    readonly verify: (password: string, encoded: string) => Promise<boolean>;
 }
 
 /**
@@ -47,10 +74,15 @@ export declare interface Auth<Id extends string = "default"> {
     readonly admin: AuthAdmin;
 }
 
-/** The server-side calls (ADR 0012, ADR 0014). Phase 3 has `revoke`. */
+/** The server-side calls (ADR 0012, ADR 0014): `revoke` (phase 3) and `deprovision` (phase 4). */
 export declare interface AuthAdmin {
     /** Revokes every session of the account, with immediate visibility; resolves to how many it revoked. */
     revoke(subject: string): Promise<number>;
+    /**
+     * Deprovisions the account (ADR 0012 Open 15, the SCIM hook): disables it, so no ceremony, recovery or session of it
+     * works, and revokes every session. Resolves to `false` when there is no such account.
+     */
+    deprovision(subject: string): Promise<boolean>;
 }
 
 /** What `createAuth` takes (ADR 0026). `Id` is the union of the policy's requirement ids. */
@@ -77,6 +109,12 @@ export declare interface AuthConfig<Id extends string = "default"> {
      */
     readonly argon2Cost?: Argon2Cost | undefined;
     /**
+     * The app's own argon2id, in place of hash-wasm and its `@noble/hashes` fallback (ADR 0031), such as a native
+     * binding on a server that has one. It is allowed in every mode, at the fixed cost test-cap passes it; see
+     * `Argon2Hasher` for what test-cap still checks and what the app takes on.
+     */
+    readonly argon2Hasher?: Argon2Hasher | undefined;
+    /**
      * The fetch the HIBP breach check calls (ADR 0010), usually the global `fetch`. test-cap reaches no network on its
      * own, so the app hands it the capability.
      */
@@ -88,8 +126,93 @@ export declare interface AuthConfig<Id extends string = "default"> {
     readonly sendEmail: SendEmail;
     /** Receives every security event (ADR 0015). A sink that throws never changes an outcome. */
     readonly onEvent?: EventSink | undefined;
-    /** The app's own proxies (ADR 0009 §5); read by the throttles, which arrive in phase 4. */
-    readonly trustedProxies?: TrustedProxies | undefined;
+    /**
+     * Who stands in front of the app (ADR 0009 §5): its own proxies, as IP addresses or CIDR ranges, or a platform
+     * preset from `platform`. Only from such a peer is a forwarding header read, for the client the throttle counts.
+     * Empty by default: the socket is the client.
+     */
+    readonly trustedProxies?: TrustedProxies | PlatformTrust | undefined;
+    /**
+     * The one forwarding header the app's own proxies set: `"x-forwarded-for"` (the default) or `"forwarded"` (RFC
+     * 7239). The other is never read, because a proxy that sets one passes a client's forged copy of the other through.
+     * A platform preset names its own header instead.
+     */
+    readonly forwardedHeader?: ForwardedHeader | undefined;
+    /**
+     * Whether production and staging refuse a request with no client address, which the per-client limits cannot count
+     * (ADR 0009 §8): `true` by default. There, a Web-Request adapter with no `clientAddress` option refuses to start,
+     * unless a platform preset reads its header from every request, and a request that still has none gets the fixed
+     * 500. `false` serves such a request uncounted, for an app that limits requests at its gateway; the operator is told
+     * once. Development and test always serve it uncounted.
+     */
+    readonly requireClientAddress?: boolean | undefined;
+    /**
+     * The guessing throttle (ADR 0009 §1 to §3, §8): changed values, each one left out keeping its default
+     * (`DEFAULT_THROTTLE`); the app's own `Throttle`; or `false` for none, which production and staging refuse.
+     */
+    readonly throttle?: Partial<ThrottleConfig> | Throttle | false | undefined;
+    /**
+     * Consecutive failures an authenticator accepts before it stops (ADR 0009 §3): 100 by default, and never more, as
+     * NIST SP 800-63B-4 allows. A lower number is allowed.
+     */
+    readonly failureCeiling?: number | undefined;
+    /**
+     * The request limits on every `/auth` route (ADR 0009 §8): changed values, rules per route id and the app's own
+     * `RateLimiter`; or `false` for none, for an app that limits requests at its gateway. On by default in every mode.
+     */
+    readonly rateLimit?: RateLimitConfig | RateLimiterLike | false | undefined;
+    /**
+     * The credential-stuffing detector (ADR 0009 §4, §8): changed values, each one left out keeping its default; the
+     * app's own `StuffingDetector`; or `false` for none, which production and staging refuse.
+     */
+    readonly stuffing?: Partial<StuffingConfig> | StuffingDetector | false | undefined;
+    /**
+     * The confirmation-mail send limits (ADR 0009 §7, §8): changed rules per address and per client and the app's own
+     * `RateLimiter`; or `false` for none, which production and staging refuse.
+     */
+    readonly emailLimit?: EmailLimitConfig | false | undefined;
+    /**
+     * Attempts an emailed confirmation code allows over its life (ADR 0009 Open 1): 5 by default, and never more; a
+     * lower number is allowed.
+     */
+    readonly emailCodeAttempts?: number | undefined;
+    /**
+     * Which refusals of a limit emit their failure event (ADR 0009 §8): `"first"` (the default), one per key per window,
+     * so a flood is one event; or `"every"` refusal.
+     */
+    readonly refusalEvents?: "first" | "every" | undefined;
+    /**
+     * The app's challenge for a client the stuffing detector flagged (ADR 0009 §4). Without one, every failure from a
+     * flagged client blocks at once.
+     */
+    readonly challengeHook?: ChallengeHook | undefined;
+    /**
+     * The path a gateway in front of the app adds before every path, such as `/accounts` when the gateway serves the
+     * app's `/auth/sign-in` as `/accounts/auth/sign-in` (ADR 0024 §6). Every link, redirect and email URL test-cap builds
+     * starts with it; routes are still matched on the path the app receives. Empty by default.
+     */
+    readonly publicBasePath?: string | undefined;
+    /**
+     * Receives each operator diagnostic once per `Auth`: a deployment problem test-cap can see from requests, such as
+     * forwarding headers arriving with no trusted proxy (ADR 0009 §5). Not a security event; nothing is stored.
+     */
+    readonly onDiagnostic?: ((diagnostic: AuthDiagnostic) => void) | undefined;
+}
+
+/** One operator diagnostic (ADR 0009 §5, ADR 0011): what was seen, and what to change. */
+export declare interface AuthDiagnostic {
+    /**
+     * `forwarded-header-ignored`: a forwarding header arrived that test-cap did not read, because the peer is not a
+     * trusted proxy or the header is not the one declared. `origin-unverifiable`: a state-changing request carried neither a usable `Origin` nor
+     * `Sec-Fetch-Site`, so the CSRF check refused it. `client-address-missing`: a request had no client address, so the
+     * per-client limits did not count it, or production and staging refused it. `client-address-optional`: the app set
+     * `requireClientAddress: false`. `rate-limit-off`, `throttle-off`, `email-limit-off` and `stuffing-off`: the app
+     * turned that limit off. `argon2-fallback`: the runtime cannot compile WebAssembly, so argon2id runs on
+     * `@noble/hashes`, slower (ADR 0031).
+     */
+    readonly code: "forwarded-header-ignored" | "origin-unverifiable" | "client-address-missing" | "client-address-optional" | "rate-limit-off" | "throttle-off" | "email-limit-off" | "stuffing-off" | "argon2-fallback";
+    /** A sentence for the operator, naming the setting to check. */
+    readonly message: string;
 }
 
 /** An Authentication (3002) activity test-cap reports. */
@@ -173,7 +296,10 @@ export declare interface AuthenticationInput extends EventInput {
     readonly reason?: string | undefined;
 }
 
-/** The methods that produce evidence. Email sign-in and recovery codes produce none (ADR 0005 §5, ADR 0007). */
+/**
+ * The method ids evidence and events name. `recovery-code` is one that produces no evidence: redeeming a code yields a
+ * recovery-only session (ADR 0007). Email sign-in produces none either (ADR 0005 §5).
+ */
 export declare type AuthenticationMethod = "password" | "totp" | "passkey" | "recovery-code" | "oidc" | "saml";
 
 /** A validated policy. `Id` is the union of its requirement ids. */
@@ -226,6 +352,17 @@ export declare interface AuthStore extends StoreOperations {
 }
 
 /**
+ * The app's challenge (ADR 0009 §4): called for each sign-in from a flagged client, before any password is checked.
+ * It answers `true` when the request carries a challenge the app accepts, such as a token its own widget issued.
+ */
+export declare type ChallengeHook = (input: {
+    /** The sign-in request, so the hook can read its own challenge answer from a header. */
+    readonly request: PlainRequest;
+    /** The client key the detector flagged: an IPv4 address or an IPv6 /64. */
+    readonly client: string;
+}) => boolean | Promise<boolean>;
+
+/**
  * The injected clock and random source (ADR 0003). Every expiry, window and time step reads a `Clock`; every token,
  * code and challenge draws from a `RandomSource`. The defaults read the system clock and Web Crypto.
  */
@@ -246,6 +383,12 @@ export declare class ConfigError extends Error {
 export declare interface ConformanceOptions {
     /** Parallel calls per race check (default 25, at least 2). */
     readonly concurrency?: number;
+    /**
+     * How long one check may run, in milliseconds (default 30,000, at least 1). A check still running then fails with
+     * that as its detail, so a store that deadlocks, such as a transaction that calls the outer store on a pool of one
+     * connection, is reported instead of hanging the run.
+     */
+    readonly timeoutMs?: number;
 }
 
 /** Every check's outcome; `passed` is true only when none failed. */
@@ -284,6 +427,12 @@ export declare interface CounterState {
 export declare function createAuth<Id extends string = "default">(config: AuthConfig<Id>): Auth<Id>;
 
 /**
+ * A rate-limiter-flexible limiter over the app's `AuthStore`: the default behind every limit test-cap keeps, and a
+ * piece an app can combine with the library's own, such as in a `RateLimiterUnion`.
+ */
+export declare function createStoreLimiter(options: StoreLimiterOptions): RateLimiterStoreAbstract;
+
+/**
  * Validates a policy and returns it. Throws a `ConfigError` listing every problem: an empty version, a malformed or
  * reserved requirement id, an unknown level, a bad time limit, or a trust config that maps anything to AAL3.
  */
@@ -304,6 +453,19 @@ export declare interface Deviation {
     readonly kind: "email-sign-in" | "default-below-aal2" | "timeout-lengthened";
     /** One sentence for the policy report. */
     readonly detail: string;
+}
+
+/** The `emailLimit` option of `createAuth` (ADR 0009 §7, §8). Each value left out keeps its default. */
+export declare interface EmailLimitConfig {
+    /**
+     * The limits per destination address, each counted on its own: 1 a minute and 5 an hour by default. Each is a
+     * `{ windowMs, max }` or a rate-limiter-flexible limiter.
+     */
+    readonly perAddress?: readonly (RateRule | RateLimiterLike)[] | undefined;
+    /** The limit per client (an IPv4 address or an IPv6 /64): 20 an hour by default; `false` for none. */
+    readonly perClient?: RateRule | RateLimiterLike | false | undefined;
+    /** Builds the limiter for each `{ windowMs, max }` rule, over the app's own backend; the `AuthStore` by default. */
+    readonly limiter?: LimiterFactory | undefined;
 }
 
 /** One email test-cap asks the app to send (ADR 0021). */
@@ -412,7 +574,7 @@ export declare interface FieldState {
 /** Why a flow refused a valid-looking submission. */
 export declare interface FlowOutcome {
     /** What went wrong, in words that never reveal whether an account exists. */
-    readonly error: "invalid-credentials" | "invalid-code" | "too-common" | "breached" | "rate-limited" | "unexpected";
+    readonly error: "invalid-credentials" | "invalid-code" | "too-common" | "breached" | "rate-limited" | "challenge-required" | "invalid-challenge" | "unexpected";
     /** For `rate-limited`: how long until the next attempt is allowed. */
     readonly retryAfterMs?: number | undefined;
 }
@@ -458,6 +620,22 @@ export declare interface FormOptions {
     readonly passwordAlone?: boolean | undefined;
 }
 
+/**
+ * Which client a request comes from when proxies stand in front of the app (ADR 0009 §5). The socket's peer is the
+ * client unless the app said otherwise. It can say so in two ways, never ad hoc:
+ *
+ * - **Its own proxies**, as `trustedProxies: ["10.0.0.5", "10.1.0.0/16"]`: addresses or CIDR ranges. From a peer in
+ *   the list, the one forwarding header the app named (`X-Forwarded-For`, or `Forwarded` from RFC 7239) is read from
+ *   the right, each listed proxy skipped, and the client is the right-most hop that is not one of them.
+ * - **A platform preset**, `platform(name, options)`, which names the one header that platform sets, how to read it,
+ *   and the peers it may come from. Vendor headers such as `CF-Connecting-IP` are read only through a preset.
+ *
+ * A header from an untrusted peer is never read, and no other header is read at all, so a client cannot choose its own
+ * counter key: a proxy that sets one header passes a client's forged copy of any other through untouched.
+ */
+/** The forwarding header an app's own proxies set (ADR 0009 §5); test-cap reads that one and no other. */
+export declare type ForwardedHeader = "x-forwarded-for" | "forwarded";
+
 /** The fetch the check calls; the global `fetch` fits it. */
 export declare type HibpFetch = (url: string, init: {
     readonly method: "GET";
@@ -482,6 +660,19 @@ export declare type JsonValue = null | boolean | number | string | readonly Json
 
 /** How the key behind a possession factor is held: `non-exportable` is required for AAL3 (ADR 0005 §3). */
 export declare type KeyProtection = "non-exportable" | "syncable" | "unknown";
+
+/** Builds the limiter for one rule, such as `(options) => new RateLimiterRedis({ storeClient, ...options })`. */
+export declare type LimiterFactory = (options: LimiterOptions) => RateLimiterLike;
+
+/** What a limiter factory is asked for: rate-limiter-flexible's own options for one rule. */
+export declare interface LimiterOptions {
+    /** Requests allowed per key in each window: the rule's `max`. */
+    readonly points: number;
+    /** The window, in seconds: the rule's `windowMs` / 1000. */
+    readonly duration: number;
+    /** A prefix that keeps this rule's keys apart from every other's. */
+    readonly keyPrefix: string;
+}
 
 /** Every string the forms show. Each one can be replaced; `{min}`, `{max}` and `{seconds}` are filled in. */
 export declare interface Messages {
@@ -579,6 +770,10 @@ export declare interface Messages {
     readonly rateLimitedOneSecond: string;
     /** Rate-limited for an unknown time. */
     readonly rateLimitedUnknown: string;
+    /** The app's credential-stuffing challenge is needed, and this page cannot show it. */
+    readonly challengeRequired: string;
+    /** The step-up form's challenge expired or was used: nothing was checked, so the person only needs to try again. */
+    readonly challengeExpired: string;
     /** A failure on the server's side. */
     readonly unexpected: string;
     /** The show-password toggle while the password is hidden. */
@@ -819,6 +1014,48 @@ export declare interface PlainResponse {
 }
 
 /**
+ * The preset for a platform test-cap knows, for `trustedProxies`. Vendor headers are read only through one of these,
+ * never named ad hoc (ADR 0009 §5).
+ *
+ * - `vercel`, `fly`, `netlify`: every request reaches the app through the platform, so the header is read from any
+ *   peer. Do not use one where the app can also be reached another way.
+ * - `aws-alb`, `cloudfront`, `cloudflare`: pass `peers`, the addresses or CIDR ranges requests arrive from: the load
+ *   balancer's subnets, or the vendor's current published ranges. test-cap ships no ranges, so none go stale in it.
+ * - `nginx`: pass `peers`, the nginx addresses, and `header` if it sets `X-Forwarded-For` rather than `X-Real-IP`.
+ *
+ * Each is tested in simulation only: none has been verified on the real platform.
+ */
+export declare function platform(name: "vercel" | "fly" | "netlify"): PlatformTrust;
+
+export declare function platform(name: "aws-alb" | "cloudfront" | "cloudflare", options: {
+    readonly peers: readonly string[];
+}): PlatformTrust;
+
+export declare function platform(name: "nginx", options: {
+    readonly peers: readonly string[];
+    readonly header?: "x-real-ip" | "x-forwarded-for" | undefined;
+}): PlatformTrust;
+
+/** The platforms test-cap has a preset for (ADR 0009 §5). */
+export declare type PlatformName = "aws-alb" | "cloudfront" | "cloudflare" | "vercel" | "fly" | "netlify" | "nginx";
+
+/**
+ * A platform preset, from `platform`: which header that platform sets with the client's address, how to read it, and
+ * the peers it may come from. Built from the vendor's documentation and tested in simulation only, never on the
+ * platform itself (ADR 0009 §5).
+ */
+export declare interface PlatformTrust {
+    /** Marks a preset, so `createAuth` tells it apart from a list of addresses. */
+    readonly kind: "platform";
+    /** The platform the preset is for. */
+    readonly name: PlatformName;
+    /** The addresses and CIDR ranges the platform's requests arrive from; empty for a platform every request comes through. */
+    readonly peers: readonly string[];
+    /** For `nginx`: the header its configuration sets. */
+    readonly header?: "x-real-ip" | "x-forwarded-for" | undefined;
+}
+
+/**
  * The random source every token, code and challenge draws from. It must be cryptographically secure in production;
  * a predictable source makes every token guessable.
  */
@@ -826,6 +1063,41 @@ export declare interface RandomSource {
     /** Fills `bytes` with random values and returns the same array. */
     fill(bytes: Uint8Array): Uint8Array;
 }
+
+/** The `rateLimit` option of `createAuth`. Each value left out keeps its default. */
+export declare interface RateLimitConfig {
+    /** The default rule's window, in milliseconds: 10 seconds by default. */
+    readonly windowMs?: number | undefined;
+    /** The default rule's count: 100 by default. */
+    readonly max?: number | undefined;
+    /** A rule per route id, in place of that route's default. */
+    readonly rules?: Readonly<Partial<Record<RateLimitRouteId, RateRuleSetting>>> | undefined;
+    /** Builds the limiter for each `{ windowMs, max }` rule, over the app's own backend; the `AuthStore` by default. */
+    readonly limiter?: LimiterFactory | undefined;
+}
+
+export { RateLimiterLike }
+
+/**
+ * A route id a rule can be keyed by. A route's id is its path after `/auth/`, such as `sign-in`. `pages` is every
+ * default page shown by `GET`, `assets` the hashed page assets, and `unmatched` every request no route answers (a 404
+ * or a 405).
+ */
+export declare type RateLimitRouteId = "session" | "sign-up" | "email/confirm" | "email/resend" | "password" | "totp/enrol" | "totp/confirm" | "sign-in" | "totp/verify" | "step-up/start" | "step-up" | "recovery-codes" | "recovery" | "recovery/finish" | "sign-out" | "sessions" | "sessions/revoke" | "pages" | "assets" | "unmatched";
+
+/** One limit: at most `max` requests from a client in each window of `windowMs`. */
+export declare interface RateRule {
+    /** The window requests are counted in, in milliseconds. */
+    readonly windowMs: number;
+    /** The requests a client may make in one window. */
+    readonly max: number;
+}
+
+/**
+ * A route's rule: a `RateRule`, `false` for no limit, a rate-limiter-flexible limiter of its own, or a function that
+ * decides per request.
+ */
+export declare type RateRuleSetting = RateRule | false | RateLimiterLike | ((request: PlainRequest) => RateRule | false);
 
 /** The fields `update` may change. Absent fields keep their value. */
 export declare interface RecordChange {
@@ -1029,6 +1301,29 @@ export declare interface StoredRecord {
     readonly data: JsonValue;
 }
 
+/** What `createStoreLimiter` takes. */
+export declare interface StoreLimiterOptions {
+    /** The store the counts and blocks live in. */
+    readonly store: AuthStore;
+    /** The tenant they are kept under; `default` when absent. */
+    readonly tenant?: TenantId | undefined;
+    /** The clock; the system clock when absent. */
+    readonly clock?: Clock | undefined;
+    /** Requests allowed per key in each window. */
+    readonly points: number;
+    /** The window, in seconds; 0 for one that never ends. */
+    readonly duration: number;
+    /** Put before every key, so limiters sharing a store keep apart; `test-cap` when absent. */
+    readonly keyPrefix?: string | undefined;
+    /** Seconds to block a key once it goes past `points`; 0 (the default) for no block. */
+    readonly blockDuration?: number | undefined;
+    /**
+     * Whether counting reads the key's block too, so a blocked key's `consume` is refused. `false` saves that read for a
+     * limiter whose blocks are read with `get` instead, or that never blocks.
+     */
+    readonly blocks?: boolean | undefined;
+}
+
 /** The operations a transaction's steps run with. */
 export declare interface StoreOperations {
     /** Tenant-scoped uniqueness: of any number of concurrent creates of one key, exactly one gets `created`. */
@@ -1082,6 +1377,22 @@ export declare interface StoreTraits {
 /** The handle a transaction's function receives. */
 export declare type StoreTransaction = StoreOperations;
 
+/** When the detector fires (ADR 0009 Open 3). */
+export declare interface StuffingConfig {
+    /** Distinct accounts failing from one client in the window that flag it. */
+    readonly distinctAccounts: number;
+    /** The window, in milliseconds. */
+    readonly windowMs: number;
+}
+
+/** The detector over one store and tenant; an app can pass its own in place of the default (ADR 0009 §8). */
+export declare interface StuffingDetector {
+    /** The flagged client key of an address, or `null` when it is not flagged (or the adapter supplied no address). */
+    flagged(clientAddress: string | undefined): Promise<string | null>;
+    /** Counts a failure of `account` from the client; resolves to `true` when this failure flags the client. */
+    failed(account: string, clientAddress: string | undefined): Promise<boolean>;
+}
+
 /**
  * The `AuthStore` port (ADR 0002). test-cap never opens a connection: the app supplies a store, and every guarantee
  * the flows rely on is an operation of this port, so the hard part (atomicity) is tested once, in the store, by the
@@ -1111,6 +1422,48 @@ export declare interface TestCapFacts {
     readonly deviation?: string;
     /** The stated reason for an impersonation or break-glass. */
     readonly reason?: string;
+}
+
+/** A throttle over one store and tenant. */
+export declare interface Throttle {
+    /**
+     * Asks to make an attempt. Resolves to 0 when it may go ahead (the attempt is then counted on the account's keys),
+     * or to how long to wait, in milliseconds, when a key is blocked or a parallel attempt took the slot. `strict` counts
+     * nothing as free, for a client the stuffing detector flagged with no challenge hook to send it to.
+     */
+    attempt(subject: ThrottleSubject, strict?: boolean): Promise<number>;
+    /** Counts a failure on the client's key and blocks it past its free failures; resolves to that block's length. */
+    failed(subject: ThrottleSubject, strict?: boolean): Promise<number>;
+    /** Clears the account's keys for the subject's kind of secret after a success. The client's key keeps counting. */
+    succeeded(subject: ThrottleSubject): Promise<void>;
+}
+
+/** The throttle's values (ADR 0009 Open 1). */
+export declare interface ThrottleConfig {
+    /** Failures on one key in a window that cost nothing. */
+    readonly freeFailures: number;
+    /** The window failures are counted in, in milliseconds. */
+    readonly windowMs: number;
+    /** The block after the first failure past the free ones, in milliseconds; each further failure doubles it. */
+    readonly firstDelayMs: number;
+    /** The longest block, in milliseconds. */
+    readonly maxDelayMs: number;
+}
+
+/** The kinds of secret the throttle counts apart: each has its own account keys. */
+export declare type ThrottleSecret = "password" | "totp" | "recovery-code";
+
+/** What one attempt is throttled by. */
+export declare interface ThrottleSubject {
+    /**
+     * The identifier as typed, normalised when it is an address. A signed-in session's TOTP check or step-up passes its
+     * account's address, or the account id when the account has none.
+     */
+    readonly account: string;
+    /** The socket address, already resolved through any trusted proxy; `undefined` when the adapter had none. */
+    readonly clientAddress: string | undefined;
+    /** The kind of secret checked; a success clears only this kind's account keys. */
+    readonly secret: ThrottleSecret;
 }
 
 /** A request refused by the transport. The message is for logs; responses carry only the code. */
@@ -1145,7 +1498,7 @@ export declare interface TrustedIssuer {
     readonly maxAuthAgeMs: number;
 }
 
-/** The addresses of the app's own proxies, whose `X-Forwarded-For` may be read (ADR 0009 §5). */
+/** The app's own proxies, as IP addresses or CIDR ranges, whose forwarding header may be read (ADR 0009 §5). */
 export declare type TrustedProxies = readonly string[];
 
 /** A User Management (3007) activity test-cap reports. */

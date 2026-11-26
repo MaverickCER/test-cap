@@ -8,7 +8,7 @@ const root = path.resolve(import.meta.dirname, "../..")
 const read = (file: string): string => readFileSync(path.join(root, file), "utf8")
 
 const audit = read("specs/claims-phase-3.md")
-const rows = audit.split("\n").filter((line) => /^\| \d+ \|/.test(line))
+const rows = audit.split("\n").filter((line) => /^\| \d+ +\|/.test(line))
 
 /** Each cited test as `path` "name", in the order the table gives them. */
 const tests = [...audit.matchAll(/`(test\/[\w./-]+\.test\.ts)` "([^"]+)"/g)].map((match) => ({

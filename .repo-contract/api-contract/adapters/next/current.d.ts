@@ -12,8 +12,8 @@
  *
  * Next.js has no global check that covers every route, so a route handler or server function that never calls a
  * server helper is unprotected (ADR 0024, Limits). Next.js is typed structurally: this entry has no dependency on it.
- * Next.js gives a route handler no socket address, so the core sees none here; the address is never read from a
- * header (ADR 0009).
+ * Next.js gives a route handler no socket address. The core sees one only from `nextAuthHandler`'s `clientAddress`
+ * option, or reads a platform preset's header (ADR 0009 §5); no other header is ever read.
  * @packageDocumentation
  */
 
@@ -36,10 +36,15 @@ declare interface Auth<Id extends string = "default"> {
     readonly admin: AuthAdmin;
 }
 
-/** The server-side calls (ADR 0012, ADR 0014). Phase 3 has `revoke`. */
+/** The server-side calls (ADR 0012, ADR 0014): `revoke` (phase 3) and `deprovision` (phase 4). */
 declare interface AuthAdmin {
     /** Revokes every session of the account, with immediate visibility; resolves to how many it revoked. */
     revoke(subject: string): Promise<number>;
+    /**
+     * Deprovisions the account (ADR 0012 Open 15, the SCIM hook): disables it, so no ceremony, recovery or session of it
+     * works, and revokes every session. Resolves to `false` when there is no such account.
+     */
+    deprovision(subject: string): Promise<boolean>;
 }
 
 /** What one successful ceremony proves. A failed ceremony produces none. */
@@ -78,7 +83,10 @@ declare interface AuthenticationEvidence {
     };
 }
 
-/** The methods that produce evidence. Email sign-in and recovery codes produce none (ADR 0005 §5, ADR 0007). */
+/**
+ * The method ids evidence and events name. `recovery-code` is one that produces no evidence: redeeming a code yields a
+ * recovery-only session (ADR 0007). Email sign-in produces none either (ADR 0005 §5).
+ */
 declare type AuthenticationMethod = "password" | "totp" | "passkey" | "recovery-code" | "oidc" | "saml";
 
 /** The kinds of proof an authenticator gives. */
@@ -112,7 +120,18 @@ declare type MissingEvidence = {
  * The route handler for `app/auth/[...path]/route.ts`. Mounted anywhere else, every request is a 404, because the
  * core serves only paths under `/auth/`.
  */
-export declare function nextAuthHandler(auth: Auth<string>): NextAuthHandlers;
+export declare function nextAuthHandler(auth: Auth<string>, options?: NextAuthHandlerOptions): NextAuthHandlers;
+
+/** What `nextAuthHandler` takes. */
+export declare interface NextAuthHandlerOptions {
+    /**
+     * The client's address for the throttle, read from what the app's own server knows, such as a custom server's
+     * socket. Next.js gives a route handler none. Behind a platform preset whose header every request carries, such as
+     * `platform("vercel")`, leave it out: the core reads the preset's header (ADR 0009 §5). Otherwise production and
+     * staging refuse to start without it, unless the app set `requireClientAddress: false` (ADR 0009 §8).
+     */
+    readonly clientAddress?: ((request: Request) => string | undefined) | undefined;
+}
 
 /** What `nextAuthHandler` returns: `export const { GET, POST } = nextAuthHandler(auth)`. */
 export declare interface NextAuthHandlers {
@@ -146,8 +165,8 @@ export declare interface NextProxyOptions {
     /** The paths a visitor without a session cookie may reach; the same form as `withAuth`'s `public` list. */
     readonly public?: readonly string[] | undefined;
     /**
-     * The path on `APP_ORIGIN` a visitor without a session cookie is sent to, with `returnTo`; `/auth/sign-in` when
-     * absent.
+     * The path a visitor without a session cookie is sent to, with `returnTo`, as the app receives it; `/auth/sign-in`
+     * when absent. Any `publicBasePath` is added before it in the redirect.
      */
     readonly signIn?: string | undefined;
 }

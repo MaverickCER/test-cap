@@ -7,9 +7,11 @@
 // Plain JavaScript with no imports but dist/ and no test framework, so every runtime runs it as it is. It checks the
 // standard globals the core is built on, then runs exercised.mjs's check function for every value dist/index.js exports;
 // test/cross-runtime/coverage.test.ts fails when src/index.ts exports a value that has no check function, so the job
-// grows with the package. Exits 1 on the first failed check.
+// grows with the package. Last it runs journey.mjs, a real sign-up, sign-in and step-up through test-cap/fetch.
+// Exits 1 on the first failed check. workers.mjs runs the same checks and journey in Cloudflare workerd.
 
 import { CHECKS } from "./exercised.mjs"
+import { journey } from "./journey.mjs"
 
 /** Fails with a message naming the runtime and the check. */
 function check(condition, message) {
@@ -80,7 +82,8 @@ const runtime =
 try {
   await globals()
   await exports()
-  console.log(`cross-runtime: ${runtime}: all checks passed`)
+  await journey(check, { fallback: false })
+  console.log(`cross-runtime: ${runtime}: all checks and the sign-in journey passed`)
 } catch (error) {
   console.error(
     `cross-runtime: ${runtime}: ${error instanceof Error ? error.message : String(error)}`,

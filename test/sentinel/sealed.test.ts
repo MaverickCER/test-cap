@@ -65,7 +65,7 @@ describe("email confirmation codes", () => {
       tenant: "t1",
       clock: fixedClock(T0),
       random: sequenceRandom([1, 2, 3, 4, 5, 6]),
-      origin: "https://app.example",
+      linkBase: "https://app.example/auth",
       sendEmail: (message: EmailMessage) => {
         sent.push(message)
         return Promise.resolve()
@@ -107,7 +107,7 @@ describe("email confirmation codes", () => {
       tenant: "t1",
       clock: fixedClock(T0),
       random: sequenceRandom([1, 2, 3, 4, 5, 6]),
-      origin: "https://app.example",
+      linkBase: "https://app.example/auth",
       sendEmail: () => {
         sent += 1
         return Promise.resolve()

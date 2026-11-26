@@ -76,17 +76,37 @@ export interface TanstackStartAuth<Id extends string> {
   require(request: Request, requirementId: Id): Promise<RequireResult>
 }
 
+/** What `tanstackStartAuth` takes. */
+export interface TanstackStartAuthOptions {
+  /**
+   * The client's address for the throttle, read from what the app's server knows, such as srvx's remote address.
+   * A Web `Request` carries none. Behind a platform preset whose header every request carries, leave it out: the core
+   * reads the preset's header (ADR 0009 §5). Otherwise production and staging refuse to start without it, unless the
+   * app set `requireClientAddress: false` (ADR 0009 §8).
+   */
+  readonly clientAddress?: ((request: Request) => string | undefined) | undefined
+}
+
 /**
  * The `/auth/$` server route and the server helpers. Serve the route with
  * `server: { handlers: tanstackStartAuth(auth).handlers }`.
  */
-export function tanstackStartAuth<Id extends string>(auth: Auth<Id>): TanstackStartAuth<Id> {
+export function tanstackStartAuth<Id extends string>(
+  auth: Auth<Id>,
+  options: TanstackStartAuthOptions = {},
+): TanstackStartAuth<Id> {
+  internalsOf(auth).requireAddressSource(options.clientAddress !== undefined)
   return {
     handlers: {
       async ANY({ request }) {
         try {
-          // A Web `Request` carries no socket, so the core sees no client address.
-          const response = await serveAuth(auth, request, headOf(request, undefined))
+          // A Web `Request` carries no socket: the core sees the address only from `clientAddress`, or reads a
+          // platform preset's header (ADR 0009 §5).
+          const response = await serveAuth(
+            auth,
+            request,
+            headOf(request, options.clientAddress?.(request)),
+          )
           // The router decodes the path before matching `/auth/$`; the core reads it raw, so `/%61uth/session`
           // reaches this route but is outside `/auth/` for the core.
           return response ?? toResponse(errorResponse(404, "not-found"))

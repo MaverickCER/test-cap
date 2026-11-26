@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import manifest from "../../package.json" with { type: "json" }
 import * as express from "../../src/adapters/express/index.js"
 import * as fetch from "../../src/adapters/fetch/index.js"
 import * as next from "../../src/adapters/next/index.js"
@@ -27,5 +28,17 @@ describe("the adapter entries", () => {
 
   it("test-cap/store/memory exports exactly memoryStore", () => {
     expect(Object.keys(memory)).toEqual(["memoryStore"])
+  })
+
+  it("are four adapters and the memory store: Nest is not built yet (ADR 0024)", () => {
+    expect(Object.keys(manifest.exports)).toEqual([
+      ".",
+      "./express",
+      "./fetch",
+      "./next",
+      "./tanstack-start",
+      "./store/memory",
+      "./package.json",
+    ])
   })
 })

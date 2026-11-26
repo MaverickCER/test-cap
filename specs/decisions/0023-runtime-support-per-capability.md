@@ -18,6 +18,12 @@ package exports. Pinned by:
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: none of the eight "Pinned by" files above exists yet, and the section 1 table says more than CI
+runs. What CI runs today is `test/cross-runtime/run.mjs` and `test/cross-runtime/journey.mjs` (a sign-in journey
+through `test-cap/fetch`) on Node 22 and 24, Bun 1.3.14 and Deno 2.9.4, and `test/cross-runtime/workers.mjs` on
+Cloudflare workerd ([ADR 0031](0031-replaceable-argon2id-and-a-fallback-without-webassembly.md)). The table and its
+pinning tests follow in phase 6.
+
 ## Context
 
 Owner requirement 6 asks for Node, Bun and Deno. A single "runs everywhere" line would over-claim: test-cap's

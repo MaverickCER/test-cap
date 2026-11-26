@@ -1,0 +1,7 @@
+# workers.mjs serves worker.mjs with this configuration. test-cap needs nodejs_compat on Workers: forwarded-parse
+# imports Node's `util`. Cloudflare turns the flag on by default from compatibility date 2026-08-04; it is named here so
+# the requirement is visible and holds on any date.
+name = "test-cap-cross-runtime"
+main = "worker.mjs"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]

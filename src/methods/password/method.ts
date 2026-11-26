@@ -4,9 +4,16 @@
  * password once, before the length check and the hash.
  */
 
+import type { FailureCeiling } from "../../security/ceiling.js"
 import type { AuthenticationEvidence } from "../../assurance/evidence.js"
 import { type Clock, type RandomSource, randomToken } from "../../core/clock.js"
-import type { AuthStore, JsonValue, StoredRecord, TenantId } from "../../store/port.js"
+import type {
+  AuthStore,
+  JsonValue,
+  StoredRecord,
+  StoreOperations,
+  TenantId,
+} from "../../store/port.js"
 import type { PasswordHasher } from "./argon2.js"
 import { type HibpFetch, screenWithHibp } from "./hibp.js"
 import {
@@ -33,6 +40,8 @@ export interface PasswordDeps {
   readonly hibp: HibpFetch | "off"
   /** argon2id at the ADR 0018 cost, or in test mode the cost the test chose (ADR 0026 §4). */
   readonly hasher: PasswordHasher
+  /** The failure ceiling (ADR 0009 §3); `createAuth` always supplies it, a bare method test may leave it out. */
+  readonly ceiling?: FailureCeiling | undefined
 }
 
 /** What breach screening found when the password was set; `breached` passwords are never stored. */
@@ -89,6 +98,11 @@ export async function setPassword(
     readonly alone: boolean
     /** The app's system id, the account identifier and other words a password must not contain. */
     readonly contextWords?: readonly string[]
+    /**
+     * Runs the write, for instance inside the caller's transaction; resolves to false when nothing was written. The
+     * write runs on the store when absent.
+     */
+    readonly commit?: (write: (ops: StoreOperations) => Promise<boolean>) => Promise<boolean>
   },
 ): Promise<SetPasswordResult> {
   const password = normalisePassword(input.password)
@@ -104,22 +118,20 @@ export async function setPassword(
       screening,
     }
     const data = { ...record }
-    const existing = await deps.store.get(input.tenant, PASSWORD_COLLECTION, input.accountId)
-    const written =
-      existing === null
-        ? (await deps.store.createUnique(input.tenant, {
+    const write = async (ops: StoreOperations): Promise<boolean> => {
+      const existing = await ops.get(input.tenant, PASSWORD_COLLECTION, input.accountId)
+      return existing === null
+        ? (await ops.createUnique(input.tenant, {
             collection: PASSWORD_COLLECTION,
             key: input.accountId,
             owner: input.accountId,
             data,
           })) === "created"
-        : (await deps.store.update(
-            input.tenant,
-            PASSWORD_COLLECTION,
-            input.accountId,
-            existing.version,
-            { data },
-          )) === "updated"
+        : (await ops.update(input.tenant, PASSWORD_COLLECTION, input.accountId, existing.version, {
+            data,
+          })) === "updated"
+    }
+    const written = await (input.commit === undefined ? write(deps.store) : input.commit(write))
     if (!written) return { ok: false, reason: "conflict" }
     return { ok: true, authenticatorId: record.authenticatorId, screening }
   })
@@ -132,7 +144,7 @@ export type PasswordSignInResult =
       readonly evidence: AuthenticationEvidence
       readonly screening: PasswordScreening
     }
-  | { readonly ok: false; readonly reason: "invalid" | "too-long" | "busy" }
+  | { readonly ok: false; readonly reason: "invalid" | "too-long" | "busy" | "ceiling" }
 
 /**
  * Verifies a password. `accountId` is `null` when the identifier matched no account; a dummy hash then runs, as it
@@ -158,7 +170,16 @@ export async function signInWithPassword(
       await deps.hasher.dummyVerify(password)
       return { ok: false, reason: "invalid" }
     }
-    if (!(await deps.hasher.verify(password, record.hash))) return { ok: false, reason: "invalid" }
+    // At the ceiling the password is not checked, but the same argon2id work runs, so the reply time says nothing.
+    if ((await deps.ceiling?.reached(record.authenticatorId)) === true) {
+      await deps.hasher.dummyVerify(password)
+      return { ok: false, reason: "ceiling" }
+    }
+    if (!(await deps.hasher.verify(password, record.hash))) {
+      await deps.ceiling?.failed(record.authenticatorId)
+      return { ok: false, reason: "invalid" }
+    }
+    await deps.ceiling?.succeeded(record.authenticatorId)
     if (deps.hasher.needsRehash(record.hash)) {
       const hash = await deps.hasher.hash(password, deps.random)
       // A lost race leaves the old hash in place; it still verifies and is moved at the next sign-in.

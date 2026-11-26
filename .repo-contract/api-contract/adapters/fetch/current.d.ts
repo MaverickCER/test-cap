@@ -38,10 +38,15 @@ declare interface Auth<Id extends string = "default"> {
     readonly admin: AuthAdmin;
 }
 
-/** The server-side calls (ADR 0012, ADR 0014). Phase 3 has `revoke`. */
+/** The server-side calls (ADR 0012, ADR 0014): `revoke` (phase 3) and `deprovision` (phase 4). */
 declare interface AuthAdmin {
     /** Revokes every session of the account, with immediate visibility; resolves to how many it revoked. */
     revoke(subject: string): Promise<number>;
+    /**
+     * Deprovisions the account (ADR 0012 Open 15, the SCIM hook): disables it, so no ceremony, recovery or session of it
+     * works, and revokes every session. Resolves to `false` when there is no such account.
+     */
+    deprovision(subject: string): Promise<boolean>;
 }
 
 /** What one successful ceremony proves. A failed ceremony produces none. */
@@ -80,7 +85,10 @@ declare interface AuthenticationEvidence {
     };
 }
 
-/** The methods that produce evidence. Email sign-in and recovery codes produce none (ADR 0005 §5, ADR 0007). */
+/**
+ * The method ids evidence and events name. `recovery-code` is one that produces no evidence: redeeming a code yields a
+ * recovery-only session (ADR 0007). Email sign-in produces none either (ADR 0005 §5).
+ */
 declare type AuthenticationMethod = "password" | "totp" | "passkey" | "recovery-code" | "oidc" | "saml";
 
 /**
@@ -94,7 +102,8 @@ declare type Factor = "knowledge" | "possession" | "inherence";
 
 /**
  * Serves test-cap's `/auth/*` routes from a `Request`, and answers `null` for any other path, leaving its body unread,
- * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default.
+ * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default. A missing `clientAddress`
+ * where production needs one throws a `ConfigError` here.
  */
 export declare function fetchAuth<Args extends unknown[] = []>(auth: Auth<string>, options?: FetchAuthOptions<Args>): (req: Request, ...args: Args) => Promise<Response | null>;
 
@@ -108,7 +117,9 @@ export declare type FetchAuthInfo = {
 export declare interface FetchAuthOptions<Args extends unknown[]> {
     /**
      * Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,
-     * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address.
+     * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address, and in production
+     * and staging the adapter refuses to start with a `ConfigError`, unless a platform preset reads its header from every
+     * request or the app set `requireClientAddress: false` (ADR 0009 §8).
      */
     readonly clientAddress?: ClientAddress<Args> | undefined;
 }
@@ -249,8 +260,9 @@ declare interface StepUpRecord {
 
 /**
  * Wraps the app's fetch handler with test-cap: serves `/auth/*` and protects every other route at the default
- * requirement unless `options.public` lists it. A malformed public list throws a `ConfigError` here. An error the
- * app's handler throws reaches the runtime untouched; any other failure is a fixed 500.
+ * requirement unless `options.public` lists it. A malformed public list, or a missing `clientAddress` where production
+ * needs one, throws a `ConfigError` here. An error the app's handler throws reaches the runtime untouched; any other
+ * failure is a fixed 500.
  *
  * ```ts
  * Deno.serve(withAuth(auth, handler, { public: ["/"], clientAddress: (req, info) => info.remoteAddr.hostname }))

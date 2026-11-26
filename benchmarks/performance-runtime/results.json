@@ -13753,6 +13753,12 @@
             "shareOfTotal": 0
           }
         ]
+      },
+      {
+        "id": "store-limiter",
+        "group": "fn:store-limiter",
+        "description": "One consume per request, for the route's request limit.",
+        "rows": []
       }
     ],
     "cost": {
@@ -13819,8 +13825,21 @@
               "config.random": "fixed: absent, the system random source",
               "config.sendEmail": "fixed: keeps each message in memory; sending is the app's own cost",
               "config.onEvent": "fixed: absent; a sink is the app's own cost and cannot change an outcome",
-              "config.trustedProxies": "fixed: absent; phase 3 reads no forwarded header",
-              "config.argon2Cost": "fixed: the reduced test-mode cost; the sign-in benchmark's variant measures the real one"
+              "config.trustedProxies": "fixed: absent, so the socket address is the client and no forwarded header is read",
+              "config.throttle": "fixed: absent, the defaults; checking them is the same few comparisons for any value",
+              "config.stuffing": "fixed: absent, the defaults; checking them is the same few comparisons for any value",
+              "config.challengeHook": "fixed: absent; createAuth only stores it",
+              "config.forwardedHeader": "fixed: absent; with no trusted proxy it is never read",
+              "config.publicBasePath": "fixed: absent; a prefix is one fixed-length check at startup and one string join per link",
+              "config.onDiagnostic": "fixed: absent; a sink is the app's own cost and runs at most once per code",
+              "config.argon2Cost": "fixed: the reduced test-mode cost; the sign-in benchmark's variant measures the real one",
+              "config.rateLimit": "fixed: every limit raised past any sample count, so each request is counted once in the store and none is refused; store-limiter measures that count",
+              "config.emailLimit": "fixed: both mail limits raised past any sample count, so each send is counted and none is held back",
+              "config.failureCeiling": "fixed: absent, the default 100; the check is one comparison per failure",
+              "config.emailCodeAttempts": "fixed: absent, the default 5; the check is one comparison per attempt",
+              "config.refusalEvents": "fixed: absent, the default first; it runs only for a refused request, which no benchmark sends",
+              "config.argon2Hasher": "fixed: absent, the built-in hasher; an app's own hasher costs what it costs, and test-cap adds one format check per hash",
+              "config.requireClientAddress": "fixed: absent; it is read only for a request with no client address, and every benchmark request has one"
             }
           }
         },
@@ -13894,7 +13913,8 @@
               "auth.admin": "fixed: one test-mode Auth from createAuth over the suite's memory store; nothing it returns calls auth.admin",
               "auth.handle": "fixed: one test-mode Auth from createAuth over the suite's memory store, called on every request that reaches it",
               "auth.require": "fixed: one test-mode Auth from createAuth over the suite's memory store; nothing it returns calls auth.require",
-              "auth.session": "fixed: one test-mode Auth from createAuth over the suite's memory store; nothing it returns calls auth.session"
+              "auth.session": "fixed: one test-mode Auth from createAuth over the suite's memory store; nothing it returns calls auth.session",
+              "options": "fixed: absent, so the core sees no client address and counts no request limit; with one, each request adds the one counter increment fetch-handler measures"
             }
           }
         },
@@ -13930,7 +13950,8 @@
               "auth.admin": "fixed: one test-mode Auth from createAuth over the suite's memory store; nothing it returns calls auth.admin",
               "auth.handle": "fixed: one test-mode Auth from createAuth over the suite's memory store, called on every request that reaches it",
               "auth.require": "fixed: one test-mode Auth from createAuth over the suite's memory store, called on every request that reaches it",
-              "auth.session": "fixed: one test-mode Auth from createAuth over the suite's memory store, called on every request that reaches it"
+              "auth.session": "fixed: one test-mode Auth from createAuth over the suite's memory store, called on every request that reaches it",
+              "options": "fixed: absent, so the core sees no client address and counts no request limit; with one, each request adds the one counter increment fetch-handler measures"
             }
           }
         },
@@ -13965,9 +13986,26 @@
         {
           "id": "store-increment",
           "covers": {}
+        },
+        {
+          "id": "store-limiter",
+          "covers": {
+            "createStoreLimiter": {
+              "options.store": "fixed: the memory store, so the figure is the limiter's own work and no database's",
+              "options.tenant": "fixed: absent, the default tenant",
+              "options.clock": "fixed: absent, the system clock",
+              "options.points": "fixed: past any sample count, so no consume is refused",
+              "options.duration": "fixed: 60 seconds; the window's length changes no work",
+              "options.keyPrefix": "fixed: rate; a prefix is one string join per key",
+              "options.blockDuration": "fixed: absent, no block; blocking runs only past points",
+              "options.blocks": "fixed: false, as every limit test-cap builds counts"
+            }
+          }
         }
       ],
-      "notBenchmarked": {}
+      "notBenchmarked": {
+        "platform": "Builds a platform preset object once, when the app calls createAuth; its cost is a few property reads at startup and nothing per request."
+      }
     }
   }
 }

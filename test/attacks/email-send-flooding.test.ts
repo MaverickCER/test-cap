@@ -35,6 +35,9 @@ async function signUp(
   return { browser, reply }
 }
 
+/** Sign-up's request limit (20 an hour per client) off, so the send limit is what each test meets. */
+const MAIL_ONLY = { rateLimit: { rules: { "sign-up": false } } } as const
+
 const SIGN_UP_REPLY = '{"outcome":"enroll","returnTo":"/"}'
 
 describe("email-send-flooding", () => {
@@ -77,7 +80,7 @@ describe("email-send-flooding", () => {
   })
 
   it("sends at most 20 an hour from one IP address, across addresses", async () => {
-    const setup = testAuth()
+    const setup = testAuth(MAIL_ONLY)
     const replies: string[] = []
     for (let send = 0; send < 22; send += 1) {
       replies.push((await signUp(setup, `person${send}@example.com`)).reply.text)
@@ -89,7 +92,7 @@ describe("email-send-flooding", () => {
   })
 
   it("counts the addresses of one IPv6 /64 as one, however they are written", async () => {
-    const setup = testAuth()
+    const setup = testAuth(MAIL_ONLY)
     const addresses = [
       "2001:db8:1:2::1",
       "2001:0db8:0001:0002:ffff:ffff:ffff:ffff",
@@ -105,7 +108,7 @@ describe("email-send-flooding", () => {
   })
 
   it("counts an IPv4-mapped IPv6 address as its IPv4 address", async () => {
-    const setup = testAuth()
+    const setup = testAuth(MAIL_ONLY)
     for (let send = 0; send < 20; send += 1) {
       await signUp(setup, `person${send}@example.com`, "192.0.2.10")
     }

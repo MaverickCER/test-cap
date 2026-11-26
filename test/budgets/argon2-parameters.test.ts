@@ -158,11 +158,13 @@ describe("a hasher at another cost (test mode only, ADR 0018 §1)", () => {
       release = resolve
     })
     const seen: number[] = []
+    // The PHC string of SALT at `cost`, with a digest nothing computed: the hasher only holds the slot open.
+    const encoded = `$argon2id$v=19$m=8,t=1,p=1$AQIDBAUGBwgJCgsMDQ4PEA$${"a".repeat(43)}`
     const hasher = createHasher(cost, {
       hash: async () => {
         seen.push(hashing.active)
         await held
-        return "x"
+        return encoded
       },
       verify: async () => {
         seen.push(hashing.active)
@@ -172,13 +174,13 @@ describe("a hasher at another cost (test mode only, ADR 0018 §1)", () => {
     })
     const pending = [
       hasher.hash(normalisePassword("a"), sequenceRandom(SALT)),
-      hasher.verify(normalisePassword("a"), "x"),
+      hasher.verify(normalisePassword("a"), encoded),
       hasher.dummyVerify(normalisePassword("a")),
     ]
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(hashing.active).toBe(3)
     release()
-    expect(await Promise.all(pending)).toEqual(["x", true, false])
+    expect(await Promise.all(pending)).toEqual([encoded, true, false])
     expect(seen).toEqual([3, 3, 3])
     expect(hashing.active).toBe(0)
   })

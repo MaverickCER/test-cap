@@ -5,6 +5,7 @@
  * new step with a compare-and-set, so of two requests with the same code only one succeeds.
  */
 
+import type { FailureCeiling } from "../../security/ceiling.js"
 import type { AuthenticationEvidence } from "../../assurance/evidence.js"
 import { type Clock, type RandomSource, randomBytes, randomToken } from "../../core/clock.js"
 import type { RingKey } from "../../core/mode.js"
@@ -31,6 +32,8 @@ export interface TotpDeps {
   readonly store: AuthStore
   /** The parsed `AUTH_ENCRYPTION_KEY` ring, current key first. */
   readonly keyRing: readonly RingKey[]
+  /** The failure ceiling (ADR 0009 §3); `createAuth` always supplies it, a bare method test may leave it out. */
+  readonly ceiling?: FailureCeiling | undefined
 }
 
 /** The outcome of a TOTP ceremony. `replayed` covers a used step and a lost compare-and-set. */
@@ -127,16 +130,23 @@ async function attempt(
   return { ok: true, evidence: evidence(stored.key, now) }
 }
 
+/** How many confirmed, unrevoked TOTP authenticators the account holds. */
+export async function confirmedTotpCount(
+  deps: Pick<TotpDeps, "store">,
+  input: { readonly tenant: TenantId; readonly accountId: string },
+): Promise<number> {
+  const records = await deps.store.listByOwner(input.tenant, TOTP_COLLECTION, input.accountId)
+  return records.filter(
+    (record) => record.revokedAt === null && readRecord(record.data)?.confirmed === true,
+  ).length
+}
+
 /** True while the account holds fewer than `TOTP_MAX_AUTHENTICATORS` confirmed, unrevoked TOTP authenticators. */
 export async function totpEnrolmentAllowed(
   deps: TotpDeps,
   input: { readonly tenant: TenantId; readonly accountId: string },
 ): Promise<boolean> {
-  const records = await deps.store.listByOwner(input.tenant, TOTP_COLLECTION, input.accountId)
-  const held = records.filter(
-    (record) => record.revokedAt === null && readRecord(record.data)?.confirmed === true,
-  )
-  return held.length < TOTP_MAX_AUTHENTICATORS
+  return (await confirmedTotpCount(deps, input)) < TOTP_MAX_AUTHENTICATORS
 }
 
 /**
@@ -191,7 +201,10 @@ export async function confirmTotpEnrolment(
   return attempt(deps, input.tenant, input.accountId, stored, input.code, true)
 }
 
-/** Verifies a code against the account's confirmed authenticators. */
+/**
+ * Verifies a code against the account's confirmed authenticators. A failure counts toward an authenticator's ceiling
+ * only when none of them takes the code, so a person who always uses one device never wears out another.
+ */
 export async function verifyTotp(
   deps: TotpDeps,
   input: { readonly tenant: TenantId; readonly accountId: string; readonly code: string },
@@ -199,9 +212,19 @@ export async function verifyTotp(
   const records = await deps.store.listByOwner(input.tenant, TOTP_COLLECTION, input.accountId)
   let result: TotpResult = { ok: false, reason: "invalid" }
   for (const stored of records) {
+    // An authenticator at the ceiling accepts no attempt; the account's others still do (ADR 0009 §3).
+    if ((await deps.ceiling?.reached(stored.key)) === true) continue
     const outcome = await attempt(deps, input.tenant, input.accountId, stored, input.code, false)
-    if (outcome.ok) return outcome
+    if (outcome.ok) {
+      await deps.ceiling?.succeeded(stored.key)
+      return outcome
+    }
     if (outcome.reason === "replayed") result = outcome
+  }
+  // No authenticator took the code, so each confirmed one counts a failure; a pending one counts nothing. One revoked or
+  // already at the ceiling is never tried again, so what it counts does not matter.
+  for (const stored of records) {
+    if (readRecord(stored.data)?.confirmed === true) await deps.ceiling?.failed(stored.key)
   }
   return result
 }

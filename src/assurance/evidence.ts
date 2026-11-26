@@ -9,7 +9,10 @@ export type AssuranceLevel = "AAL1" | "AAL2" | "AAL3"
 /** How the key behind a possession factor is held: `non-exportable` is required for AAL3 (ADR 0005 §3). */
 export type KeyProtection = "non-exportable" | "syncable" | "unknown"
 
-/** The methods that produce evidence. Email sign-in and recovery codes produce none (ADR 0005 §5, ADR 0007). */
+/**
+ * The method ids evidence and events name. `recovery-code` is one that produces no evidence: redeeming a code yields a
+ * recovery-only session (ADR 0007). Email sign-in produces none either (ADR 0005 §5).
+ */
 export type AuthenticationMethod =
   "password" | "totp" | "passkey" | "recovery-code" | "oidc" | "saml"
 

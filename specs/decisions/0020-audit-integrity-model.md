@@ -20,6 +20,11 @@ Accepted (2026-11-15). Implemented in phase 8. Flow: F20 (audit: record, checkpo
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: the sentence under Consequences that maps audit to HIPAA §164.312(b) and PCI DSS v4
+requirement 10 is withdrawn. It stays below as the record of what was accepted. test-cap makes no compliance claim
+(ADR 0017, ADR 0019), and `test/docs/no-regulation-named.test.ts` fails if any other doc names a regulation. Audit is
+planned for phase 8.
+
 ## Context
 
 The owner wants an optional audit trail for healthcare and fintech apps (owner requirement 4): who signed in to which

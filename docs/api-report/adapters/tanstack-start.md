@@ -76,6 +76,35 @@ The request's session, read from the store; `null` when it has none, or it is re
 
 ***
 
+### TanstackStartAuthOptions
+
+What `tanstackStartAuth` takes.
+
+#### Properties
+
+##### clientAddress?
+
+```ts
+readonly optional clientAddress?: (request) => string | undefined;
+```
+
+The client's address for the throttle, read from what the app's server knows, such as srvx's remote address.
+A Web `Request` carries none. Behind a platform preset whose header every request carries, leave it out: the core
+reads the preset's header (ADR 0009 §5). Otherwise production and staging refuse to start without it, unless the
+app set `requireClientAddress: false` (ADR 0009 §8).
+
+###### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `request` | `Request` |
+
+###### Returns
+
+`string` \| `undefined`
+
+***
+
 ### TanstackStartContext
 
 The context the middleware adds for the routes and server functions after it.
@@ -253,7 +282,7 @@ A server route handler: TanStack Start passes more than the request, and the ada
 ### tanstackStartAuth()
 
 ```ts
-function tanstackStartAuth<Id>(auth): TanstackStartAuth<Id>;
+function tanstackStartAuth<Id>(auth, options?): TanstackStartAuth<Id>;
 ```
 
 The `/auth/$` server route and the server helpers. Serve the route with
@@ -270,6 +299,7 @@ The `/auth/$` server route and the server helpers. Serve the route with
 | Parameter | Type |
 | ------ | ------ |
 | `auth` | [`Auth`](../index.md#auth)\<`Id`\> |
+| `options` | [`TanstackStartAuthOptions`](#tanstackstartauthoptions) |
 
 #### Returns
 

@@ -29,7 +29,10 @@ anyone else ([ADR 0019](specs/decisions/0019-internal-use-disclosure-and-distrib
 
 A hosted identity provider runs sign-in for you and keeps the accounts. test-cap runs inside the app, in the app's
 own store. test-cap writes the flows, sessions and assurance rules itself, and leaves each protocol to a library that
-specialises in it. Today that is `hash-wasm` for argon2id. `@simplewebauthn/server` and `oauth4webapi` are planned for
+specialises in it. Today that is `hash-wasm` for argon2id, with `@noble/hashes` where WebAssembly cannot compile
+([ADR 0031](specs/decisions/0031-replaceable-argon2id-and-a-fallback-without-webassembly.md)), rate-limiter-flexible for
+every limit, and ipaddr.js and forwarded-parse for client addresses
+([ADR 0030](specs/decisions/0030-use-existing-libraries-for-limits-and-client-addresses.md)). `@simplewebauthn/server` and `oauth4webapi` are planned for
 passkeys and OpenID Connect (phase 5). Web Crypto covers TOTP and every key test-cap holds
 ([ADR 0001](specs/decisions/0001-compose-audited-primitives-instead-of-better-auth.md)).
 
@@ -136,21 +139,22 @@ the [Guide](GUIDE.md) from sign-up to `/account` answering with your subject.
 **Use it for** a server-rendered or API app of the owner's that needs its own accounts. It gives MFA by default and
 evidence of how each session was proven.
 
-| Capability                                                   | Status                                        |
-| ------------------------------------------------------------ | --------------------------------------------- |
-| Password (argon2id, breach screening) + TOTP, AAL2 by design | built (phase 3)                               |
-| Sessions: rotation, idle and absolute limits, remote revoke  | built (phase 3)                               |
-| `require`, step-up, `defineAuthPolicy`                       | built (phase 3)                               |
-| Express, `fetch`, Next.js and TanStack Start adapters        | built (phase 3)                               |
-| OCSF security events                                         | built (phase 3)                               |
-| Email address confirmation at sign-up                        | built (phase 3)                               |
-| Default pages and hashed assets, served by `handle()`        | built (phase 3)                               |
-| SQL store (Postgres, SQLite, MySQL)                          | built, not exported; export planned (phase 6) |
-| Throttling, recovery codes, proxy trust                      | planned (phase 4)                             |
-| Nest adapter                                                 | planned (phase 4)                             |
-| Passkeys, email recovery, OpenID Connect                     | planned (phase 5)                             |
-| Browser client, React components                             | planned (phase 7)                             |
-| Machine keys, delegation, impersonation, audit trail, SAML   | planned (phase 8)                             |
+| Capability                                                    | Status                                        |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| Password (argon2id, breach screening) + TOTP, AAL2 by design  | built (phase 3)                               |
+| Sessions: rotation, idle and absolute limits, remote revoke   | built (phase 3)                               |
+| `require`, step-up, `defineAuthPolicy`                        | built (phase 3)                               |
+| Express, `fetch`, Next.js and TanStack Start adapters         | built (phase 3)                               |
+| OCSF security events                                          | built (phase 3)                               |
+| Email address confirmation at sign-up                         | built (phase 3)                               |
+| Default pages and hashed assets, served by `handle()`         | built (phase 3)                               |
+| SQL store (Postgres, SQLite, MySQL)                           | built, not exported; export planned (phase 6) |
+| Throttling, recovery codes, proxy trust                       | built (phase 4)                               |
+| Request limits on every route, each changeable or replaceable | built (phase 4)                               |
+| Nest adapter                                                  | in progress, after phase 4                    |
+| Passkeys, email recovery, OpenID Connect                      | planned (phase 5)                             |
+| Browser client, React components                              | planned (phase 7)                             |
+| Machine keys, delegation, impersonation, audit trail, SAML    | planned (phase 8)                             |
 
 **How it fits together:** the adapter turns the framework's request into a `PlainRequest` of bytes and hands it to
 the core. The core parses, checks CSRF and runs the route against the app's `AuthStore`. A store implements a few
@@ -158,10 +162,12 @@ atomic operations (`consumeOnce`, `increment`, `createUnique`, `appendAudit`) ov
 only exported store is the memory store; the SQL store passes the conformance kit on SQLite and PGlite.
 
 **Runtimes:** the core uses Web Crypto and standard globals, and imports no `node:` module. CI runs the full suite on
-Node 22 and 24. On Bun 1.3.14 and Deno 2.9.4, CI runs only a smoke check of the built main entry. It covers the
-globals, the error types, `defineAuthPolicy` and `createAuth`'s readiness check. No sign-in runs on Bun or Deno yet; the
+Node 22 and 24. On Node 22 and 24, Bun 1.3.14, Deno 2.9.4 and Cloudflare workerd (with `nodejs_compat`), CI also
+runs the built package through `test-cap/fetch` and the memory store: sign-up, email confirmation, a password and
+TOTP enrolment, sign-out, a refused and an accepted sign-in, and a TOTP step-up. That journey hashes at a test cost.
+On Workers, argon2id runs on `@noble/hashes`, and each hash at the production cost spent 200 to 300 ms of CPU in a
+local probe ([ADR 0031](specs/decisions/0031-replaceable-argon2id-and-a-fallback-without-webassembly.md)). The
 per-capability matrix of [ADR 0023](specs/decisions/0023-runtime-support-per-capability.md) is planned for phase 6.
-No edge runtime is claimed.
 
 **Configure and extend:** `defineAuthPolicy` names requirements (`billing.update: { level: "AAL2",
 multiFactorWithinMs: 300_000 }`) that routes check with `auth.require`. `createAuth` reads `APP_ENV`, `APP_ORIGIN`,
@@ -172,13 +178,15 @@ multiFactorWithinMs: 300_000 }`) that routes check with `auth.require`. `createA
 
 - **Internal use only.** There is no support promise and no npm package. An app outside the owner's should use a
   maintained provider or framework.
-- **Phase 3 of 9.** Passwords and TOTP are the only sign-in methods today. An app that needs passkeys, social sign-in
+- **Phase 4 of 9.** Passwords and TOTP are the only sign-in methods today. An app that needs passkeys, social sign-in
   or SAML waits for the phase that adds them, or uses something else.
-- **No Nest adapter yet.** Express, `fetch`, Next.js and TanStack Start are built; Nest is planned for phase 4.
+- **No Nest adapter yet.** Express, `fetch`, Next.js and TanStack Start are built; Nest is in progress and follows phase 4.
 - **No durable store exported.** Only the memory store is exported, so test-cap runs in development and test only.
 - **No authorization.** test-cap says who the subject is and at what level; access-cap decides what they may do.
 - **No hosted pieces.** The app stores the accounts, sends any email and keeps the security events.
-- **Edge runtimes** are not claimed, and argon2id's fixed cost may exceed an edge host's CPU limit.
+- **Edge runtimes other than Cloudflare Workers** are not claimed. On Workers, test-cap needs the `nodejs_compat`
+  flag (the default from compatibility date 2026-08-04), and your plan's CPU limit must allow 200 to 300 ms for each
+  password hash.
 
 ## Security and supply chain
 
@@ -201,7 +209,8 @@ the network through the `hibpFetch` the app hands it.
 its negative test. An entry reads `tested` only when that test exists, and `test/docs/attack-catalogue.test.ts` keeps it
 so. Standards appear only as "maps to" (NIST SP 800-63B-4, OWASP ASVS 5.0). There has been no
 external penetration test. Report a vulnerability privately as [SECURITY.md](SECURITY.md) describes. Installing
-test-cap adds one package, `hash-wasm`; [ADOPTION.md](ADOPTION.md) lists it with its reason.
+test-cap adds five packages, each with no dependencies of its own; [ADOPTION.md](ADOPTION.md) lists them with their
+reasons.
 
 ## Maturity, versioning and support
 

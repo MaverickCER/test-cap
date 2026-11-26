@@ -33,6 +33,10 @@ const ENROLLING: ReplyDoc = {
   description: "The session neither is enrolling nor meets the default requirement.",
   codes: ["recovery-only", "step-up"],
 }
+const RATE_LIMITED: ReplyDoc = {
+  description: "Too many requests or too many failures; `Retry-After` says when to try again.",
+  codes: ["rate-limited"],
+}
 const BAD_RETURN_TO: ReplyDoc = {
   description: "`returnTo` is not a same-origin relative path.",
   codes: ["invalid-return-to"],
@@ -90,9 +94,12 @@ export const ROUTE_DOCS: Readonly<Record<string, RouteDoc>> = {
   "/auth/password": {
     summary: "Set the password during enrolment",
     description:
-      "Sets the password of a `pre-auth` session's account once its address is confirmed. At least 8 characters inside MFA (15 when a deviation lets a password alone pass), at most 256, screened against a blocklist and HIBP.",
+      "Sets the password of a `pre-auth` session's account once its address is confirmed, or replaces it from a `recovery-only` session (ADR 0007 §3). At least 8 characters inside MFA (15 when a deviation lets a password alone pass), at most 256, screened against a blocklist and HIBP.",
     replies: {
-      "200": { description: '`{ outcome: "enroll", enrolled: ["password"] }`.' },
+      "200": {
+        description:
+          '`{ outcome: "enroll", enrolled: ["password"] }`; from a `recovery-only` session, `{ outcome: "recovery-only", returnTo }`, with the rotated session cookie and the next CSRF token in `X-CSRF-Token`.',
+      },
       "400": {
         description: "The password was refused.",
         codes: ["too-short", "too-long", "too-common", "breached"],
@@ -100,8 +107,9 @@ export const ROUTE_DOCS: Readonly<Record<string, RouteDoc>> = {
       "401": NO_SESSION,
       "403": { description: "The session is not enrolling.", codes: ["not-enrolling"] },
       "409": {
-        description: "The address is not confirmed yet, or a concurrent change won.",
-        codes: ["confirm-email-first", "conflict"],
+        description:
+          "The address is not confirmed yet, the account already has a password (it changes only through recovery), or a concurrent change won.",
+        codes: ["confirm-email-first", "password-set", "conflict"],
       },
       "503": { description: "The argon2id concurrency limit is full.", codes: ["busy"] },
     },
@@ -165,6 +173,7 @@ export const ROUTE_DOCS: Readonly<Record<string, RouteDoc>> = {
         description: "The session has not finished enrolment.",
         codes: ["enroll", "recovery-only"],
       },
+      "429": RATE_LIMITED,
     },
   },
   "/auth/step-up/start": {
@@ -199,6 +208,57 @@ export const ROUTE_DOCS: Readonly<Record<string, RouteDoc>> = {
         codes: ["invalid-challenge", "enroll", "recovery-only"],
       },
       "503": { description: "The argon2id concurrency limit is full.", codes: ["busy"] },
+      "429": RATE_LIMITED,
+    },
+  },
+  "/auth/recovery-codes": {
+    summary: "Make a new set of recovery codes",
+    description:
+      "Makes 10 saved recovery codes. Each is shown once and stored only as an argon2id hash, and the old set stops redeeming once the new set is current. A new set is a credential change: this session is rotated and the account's other sessions are revoked. Needs a session at the default requirement, or a recovery-only one replacing a lost set.",
+    replies: {
+      "200": {
+        description:
+          "`{ codes }`: the ten codes, shown once. The rotated session's cookie is set, and the next CSRF token is in `X-CSRF-Token`.",
+      },
+      "401": {
+        description:
+          "No session, or the change failed closed: another request made a set first, or this session ended. Every session of the account is then revoked.",
+        codes: ["unauthenticated"],
+      },
+      "403": NOT_ALLOWED,
+      "503": {
+        description: "The argon2id concurrency limit is full; nothing was written.",
+        codes: ["busy"],
+      },
+    },
+  },
+  "/auth/recovery": {
+    summary: "Recover the account with a saved code",
+    description:
+      "Redeems one saved recovery code for a confirmed identifier. The session becomes recovery-only: it has no level, every other session of the account is revoked, and it may only set a password, enrol TOTP or make new codes. The account's confirmed address is told at once. The reply is the same for an unknown account, after the same argon2id work.",
+    replies: {
+      "200": {
+        description:
+          '`{ outcome: "recovery-only", returnTo }`; the next CSRF token is in `X-CSRF-Token`.',
+      },
+      "401": {
+        description: "The identifier and code do not match.",
+        codes: ["invalid-credentials"],
+      },
+      "429": {
+        description: "Too many failures; `Retry-After` says when to try again.",
+        codes: ["rate-limited"],
+      },
+    },
+  },
+  "/auth/recovery/finish": {
+    summary: "Finish a recovery",
+    description:
+      "Ends the recovery-only session and clears its cookie, so the person signs in again with the new authenticators.",
+    replies: {
+      "200": { description: '`{ outcome: "unauthenticated" }`.' },
+      "401": NO_SESSION,
+      "403": { description: "The session is not recovering.", codes: ["not-recovering"] },
     },
   },
   "/auth/sign-out": {
@@ -253,6 +313,11 @@ export const ANY_REPLIES: Readonly<Record<string, ReplyDoc>> = {
   "405": {
     description: "The wrong method; `Allow` names the right one.",
     codes: ["method-not-allowed"],
+  },
+  "429": {
+    description:
+      "Too many requests from this client to this route (ADR 0009 §8); `Retry-After` says when to try again.",
+    codes: ["rate-limited"],
   },
   "500": { description: "An unexpected error; the body is fixed.", codes: ["internal"] },
 }
