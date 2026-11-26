@@ -81,10 +81,36 @@ export const FLOWS: readonly Flow[] = [
   {
     // F02: a browser already holding a password session signs in again, so the presented token is revoked first.
     name: "password sign-in",
-    profile: ["get", "get", "get", "revoke", "createUnique"],
+    profile: [
+      "increment",
+      "get",
+      "get",
+      "get",
+      "get",
+      "get",
+      "get",
+      "increment",
+      "increment",
+      "get",
+      "get",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "listByOwner",
+      "revoke",
+      "createUnique",
+      "get",
+    ],
     async prepare(faulty) {
       const setup = faultyAuth(faulty)
-      const { subject } = await seedAccount(setup, { password: true })
+      const { subject } = await seedAccount(setup, { password: true, totp: true })
       const { browser } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
       const before = await standingOf(setup, browser)
       const run = () =>
@@ -96,12 +122,14 @@ export const FLOWS: readonly Flow[] = [
     // F08: a pre-auth session redeems the right confirmation code.
     name: "email confirmation",
     profile: [
+      "increment",
+      "get",
       "get",
       "update",
       "listByOwner",
+      "listByOwner",
       "increment",
       "consumeOnce",
-      "resetCounter",
       "createUnique",
     ],
     async prepare(faulty) {
@@ -119,16 +147,38 @@ export const FLOWS: readonly Flow[] = [
     // F04: a password session completes its second factor with the right TOTP code.
     name: "TOTP verification",
     profile: [
+      "increment",
+      "get",
       "get",
       "update",
       "get",
       "listByOwner",
+      "get",
+      "get",
+      "get",
+      "increment",
+      "increment",
+      "listByOwner",
+      "get",
       "update",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "get",
       "get",
       "createUnique",
       "get",
       "get",
+      "get",
       "consumeOnce",
+      "get",
       "get",
       "update",
       "createUnique",
@@ -148,18 +198,43 @@ export const FLOWS: readonly Flow[] = [
     // F13: a password session opens a step-up challenge and answers it with the right TOTP code.
     name: "step-up",
     profile: [
+      "increment",
+      "get",
       "get",
       "update",
+      "get",
       "get",
       "createUnique",
+      "increment",
+      "get",
       "get",
       "update",
+      "get",
       "get",
       "listByOwner",
+      "get",
+      "get",
+      "get",
+      "increment",
+      "increment",
+      "listByOwner",
+      "get",
       "update",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "get",
       "get",
       "get",
       "consumeOnce",
+      "get",
       "get",
       "update",
       "createUnique",
@@ -183,7 +258,7 @@ export const FLOWS: readonly Flow[] = [
   {
     // F14: an AAL2 session reads itself through the session route.
     name: "session read",
-    profile: ["get", "update"],
+    profile: ["increment", "get", "get", "update"],
     async prepare(faulty) {
       const setup = faultyAuth(faulty)
       const { browser } = await seedSession(setup, { evidence: aal2(setup.clock) })
@@ -195,10 +270,36 @@ export const FLOWS: readonly Flow[] = [
   {
     // F02 with an outdated argon2id cost: the verified password is re-hashed and written back before the session.
     name: "password sign-in with rehash",
-    profile: ["get", "get", "get", "update", "createUnique"],
+    profile: [
+      "increment",
+      "get",
+      "get",
+      "get",
+      "get",
+      "get",
+      "get",
+      "increment",
+      "increment",
+      "get",
+      "get",
+      "resetCounter",
+      "delete",
+      "update",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "resetCounter",
+      "delete",
+      "listByOwner",
+      "createUnique",
+      "get",
+    ],
     async prepare(faulty) {
       const setup = faultyAuth(faulty)
-      const { subject } = await seedAccount(setup)
+      const { subject } = await seedAccount(setup, { totp: true })
       const older = createHasher({ memoryKiB: 8, iterations: 2, parallelism: 1 })
       const deps = {
         clock: setup.clock,
@@ -222,6 +323,7 @@ export const FLOWS: readonly Flow[] = [
     // F01: a new browser signs up; the account, its unconfirmed address, the code and the pre-auth session are written.
     name: "sign-up",
     profile: [
+      "increment",
       "createUnique",
       "createUnique",
       "increment",
@@ -246,11 +348,14 @@ export const FLOWS: readonly Flow[] = [
     // F03 on a signed-in account: confirming a second TOTP is a credential change, which rotates the session.
     name: "TOTP enrolment by a signed-in account",
     profile: [
+      "increment",
+      "get",
       "get",
       "update",
       "get",
       "get",
       "update",
+      "get",
       "get",
       "update",
       "createUnique",
@@ -272,7 +377,7 @@ export const FLOWS: readonly Flow[] = [
   {
     // F14: an AAL2 session signs out.
     name: "sign-out",
-    profile: ["get", "update", "revoke"],
+    profile: ["increment", "get", "get", "update", "revoke"],
     async prepare(faulty) {
       const setup = faultyAuth(faulty)
       const { browser } = await seedSession(setup, { evidence: aal2(setup.clock) })

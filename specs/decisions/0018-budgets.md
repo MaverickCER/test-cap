@@ -17,6 +17,10 @@ Planned tests:
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: phase 4 re-measured the server entries a second time in its own pull request, once it also grew the
+request limits, the client-address requirement, the replaceable argon2id hasher, single transactions for recovery and
+limit keys named by HMAC (about 7.3 KB gzip more; `ci/size-budgets.mjs`).
+
 ## Context
 
 The handoff asked for login latency targets and a bundle-size budget per entry point. Two kinds of cost matter.
@@ -91,8 +95,9 @@ the contract's `Size` check over `ci/size-budgets.mjs`, one budget per `exports`
 `test/budgets/size-budgets.test.ts` fails when an entry has no budget. Each entry is measured together with every
 `dist/` chunk it imports, since an entry file may only re-export from shared chunks; a library it imports by package
 name is a dependency and is left out. The default pages' assets are measured as `auth.handle` serves them. Since
-2026-11-16 the server entries carry their first measurement plus 10 percent and the page assets the fixed 15 KiB of
-Open 4.
+2026-11-16 the server entries carry a measurement plus 10 percent and the page assets the fixed 15 KiB of Open 4.
+Until phase 9 fixes them, a phase that adds a capability re-measures the server entries in its own pull request and
+says so: phase 4 did on 2026-11-17, for throttling, recovery codes and proxy trust (about 6.9 KB gzip).
 
 Why: the plan puts "size and benchmark budgets" in release verification. Gating size inside test-cap closes the one
 gap the shared benchmarks leave.

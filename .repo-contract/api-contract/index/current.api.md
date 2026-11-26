@@ -4,11 +4,24 @@
 
 ```ts
 
+import type { RateLimiterLike } from 'rate-limiter-flexible';
+import type { RateLimiterStoreAbstract } from 'rate-limiter-flexible';
+
 // @public
 export interface Argon2Cost {
     readonly iterations: number;
     readonly memoryKiB: number;
     readonly parallelism: number;
+}
+
+// @public
+export interface Argon2Hasher {
+    readonly hash: (input: {
+        readonly password: string;
+        readonly salt: Uint8Array;
+        readonly cost: Argon2Cost;
+    }) => Promise<string>;
+    readonly verify: (password: string, encoded: string) => Promise<boolean>;
 }
 
 // @public
@@ -31,22 +44,42 @@ export interface Auth<Id extends string = "default"> {
 
 // @public
 export interface AuthAdmin {
+    deprovision(subject: string): Promise<boolean>;
     revoke(subject: string): Promise<number>;
 }
 
 // @public
 export interface AuthConfig<Id extends string = "default"> {
     readonly argon2Cost?: Argon2Cost | undefined;
+    readonly argon2Hasher?: Argon2Hasher | undefined;
+    readonly challengeHook?: ChallengeHook | undefined;
     readonly clock?: Clock | undefined;
+    readonly emailCodeAttempts?: number | undefined;
+    readonly emailLimit?: EmailLimitConfig | false | undefined;
     readonly env: Readonly<Record<string, string | undefined>>;
+    readonly failureCeiling?: number | undefined;
+    readonly forwardedHeader?: ForwardedHeader | undefined;
     readonly hibpFetch: HibpFetch;
+    readonly onDiagnostic?: ((diagnostic: AuthDiagnostic) => void) | undefined;
     readonly onEvent?: EventSink | undefined;
     readonly policy?: AuthPolicy<Id> | undefined;
+    readonly publicBasePath?: string | undefined;
     readonly random?: RandomSource | undefined;
+    readonly rateLimit?: RateLimitConfig | RateLimiterLike | false | undefined;
+    readonly refusalEvents?: "first" | "every" | undefined;
+    readonly requireClientAddress?: boolean | undefined;
     readonly sendEmail: SendEmail;
     readonly store: AuthStore;
+    readonly stuffing?: Partial<StuffingConfig> | StuffingDetector | false | undefined;
     readonly tenant?: TenantId | undefined;
-    readonly trustedProxies?: TrustedProxies | undefined;
+    readonly throttle?: Partial<ThrottleConfig> | Throttle | false | undefined;
+    readonly trustedProxies?: TrustedProxies | PlatformTrust | undefined;
+}
+
+// @public
+export interface AuthDiagnostic {
+    readonly code: "forwarded-header-ignored" | "origin-unverifiable" | "client-address-missing" | "client-address-optional" | "rate-limit-off" | "throttle-off" | "email-limit-off" | "stuffing-off" | "argon2-fallback";
+    readonly message: string;
 }
 
 // @public
@@ -130,6 +163,12 @@ export interface AuthStore extends StoreOperations {
 }
 
 // @public
+export type ChallengeHook = (input: {
+    readonly request: PlainRequest;
+    readonly client: string;
+}) => boolean | Promise<boolean>;
+
+// @public
 export interface Clock {
     now(): number;
 }
@@ -143,6 +182,7 @@ export class ConfigError extends Error {
 // @public
 export interface ConformanceOptions {
     readonly concurrency?: number;
+    readonly timeoutMs?: number;
 }
 
 // @public
@@ -171,6 +211,9 @@ export interface CounterState {
 export function createAuth<Id extends string = "default">(config: AuthConfig<Id>): Auth<Id>;
 
 // @public
+export function createStoreLimiter(options: StoreLimiterOptions): RateLimiterStoreAbstract;
+
+// @public
 export function defineAuthPolicy<const Id extends string = never>(input: AuthPolicyInput<Id>): AuthPolicy<Id | "default">;
 
 // @public
@@ -180,6 +223,13 @@ export type DeploymentMode = "production" | "staging" | "development" | "test";
 export interface Deviation {
     readonly detail: string;
     readonly kind: "email-sign-in" | "default-below-aal2" | "timeout-lengthened";
+}
+
+// @public
+export interface EmailLimitConfig {
+    readonly limiter?: LimiterFactory | undefined;
+    readonly perAddress?: readonly (RateRule | RateLimiterLike)[] | undefined;
+    readonly perClient?: RateRule | RateLimiterLike | false | undefined;
 }
 
 // @public
@@ -255,7 +305,7 @@ export interface FieldState {
 
 // @public
 export interface FlowOutcome {
-    readonly error: "invalid-credentials" | "invalid-code" | "too-common" | "breached" | "rate-limited" | "unexpected";
+    readonly error: "invalid-credentials" | "invalid-code" | "too-common" | "breached" | "rate-limited" | "challenge-required" | "invalid-challenge" | "unexpected";
     readonly retryAfterMs?: number | undefined;
 }
 
@@ -277,6 +327,9 @@ export interface FormOptions {
     readonly messages?: Partial<Messages> | undefined;
     readonly passwordAlone?: boolean | undefined;
 }
+
+// @public
+export type ForwardedHeader = "x-forwarded-for" | "forwarded";
 
 // @public
 export type HibpFetch = (url: string, init: {
@@ -301,10 +354,22 @@ export type JsonValue = null | boolean | number | string | readonly JsonValue[] 
 export type KeyProtection = "non-exportable" | "syncable" | "unknown";
 
 // @public
+export type LimiterFactory = (options: LimiterOptions) => RateLimiterLike;
+
+// @public
+export interface LimiterOptions {
+    readonly duration: number;
+    readonly keyPrefix: string;
+    readonly points: number;
+}
+
+// @public
 export interface Messages {
     readonly badCode: string;
     readonly badEmail: string;
     readonly badEmailCode: string;
+    readonly challengeExpired: string;
+    readonly challengeRequired: string;
     readonly codeHelp: string;
     readonly codeLabel: string;
     readonly codeRequired: string;
@@ -506,9 +571,56 @@ export interface PlainResponse {
 }
 
 // @public
+export function platform(name: "vercel" | "fly" | "netlify"): PlatformTrust;
+
+// @public (undocumented)
+export function platform(name: "aws-alb" | "cloudfront" | "cloudflare", options: {
+    readonly peers: readonly string[];
+}): PlatformTrust;
+
+// @public (undocumented)
+export function platform(name: "nginx", options: {
+    readonly peers: readonly string[];
+    readonly header?: "x-real-ip" | "x-forwarded-for" | undefined;
+}): PlatformTrust;
+
+// @public
+export type PlatformName = "aws-alb" | "cloudfront" | "cloudflare" | "vercel" | "fly" | "netlify" | "nginx";
+
+// @public
+export interface PlatformTrust {
+    readonly header?: "x-real-ip" | "x-forwarded-for" | undefined;
+    readonly kind: "platform";
+    readonly name: PlatformName;
+    readonly peers: readonly string[];
+}
+
+// @public
 export interface RandomSource {
     fill(bytes: Uint8Array): Uint8Array;
 }
+
+// @public
+export interface RateLimitConfig {
+    readonly limiter?: LimiterFactory | undefined;
+    readonly max?: number | undefined;
+    readonly rules?: Readonly<Partial<Record<RateLimitRouteId, RateRuleSetting>>> | undefined;
+    readonly windowMs?: number | undefined;
+}
+
+export { RateLimiterLike }
+
+// @public
+export type RateLimitRouteId = "session" | "sign-up" | "email/confirm" | "email/resend" | "password" | "totp/enrol" | "totp/confirm" | "sign-in" | "totp/verify" | "step-up/start" | "step-up" | "recovery-codes" | "recovery" | "recovery/finish" | "sign-out" | "sessions" | "sessions/revoke" | "pages" | "assets" | "unmatched";
+
+// @public
+export interface RateRule {
+    readonly max: number;
+    readonly windowMs: number;
+}
+
+// @public
+export type RateRuleSetting = RateRule | false | RateLimiterLike | ((request: PlainRequest) => RateRule | false);
 
 // @public
 export interface RecordChange {
@@ -647,6 +759,18 @@ export interface StoredRecord {
 }
 
 // @public
+export interface StoreLimiterOptions {
+    readonly blockDuration?: number | undefined;
+    readonly blocks?: boolean | undefined;
+    readonly clock?: Clock | undefined;
+    readonly duration: number;
+    readonly keyPrefix?: string | undefined;
+    readonly points: number;
+    readonly store: AuthStore;
+    readonly tenant?: TenantId | undefined;
+}
+
+// @public
 export interface StoreOperations {
     appendAudit(tenant: TenantId, stream: string, seq: number, record: JsonValue): Promise<"appended" | "gap" | "duplicate">;
     consumeOnce(tenant: TenantId, collection: string, key: string, now: number): Promise<StoredRecord | null>;
@@ -674,6 +798,18 @@ export interface StoreTraits {
 export type StoreTransaction = StoreOperations;
 
 // @public
+export interface StuffingConfig {
+    readonly distinctAccounts: number;
+    readonly windowMs: number;
+}
+
+// @public
+export interface StuffingDetector {
+    failed(account: string, clientAddress: string | undefined): Promise<boolean>;
+    flagged(clientAddress: string | undefined): Promise<string | null>;
+}
+
+// @public
 export type TenantId = string;
 
 // @public
@@ -686,6 +822,31 @@ export interface TestCapFacts {
     readonly step_up?: true;
     readonly subject_kind: EventSubject["kind"];
     readonly system: string;
+}
+
+// @public
+export interface Throttle {
+    attempt(subject: ThrottleSubject, strict?: boolean): Promise<number>;
+    failed(subject: ThrottleSubject, strict?: boolean): Promise<number>;
+    succeeded(subject: ThrottleSubject): Promise<void>;
+}
+
+// @public
+export interface ThrottleConfig {
+    readonly firstDelayMs: number;
+    readonly freeFailures: number;
+    readonly maxDelayMs: number;
+    readonly windowMs: number;
+}
+
+// @public
+export type ThrottleSecret = "password" | "totp" | "recovery-code";
+
+// @public
+export interface ThrottleSubject {
+    readonly account: string;
+    readonly clientAddress: string | undefined;
+    readonly secret: ThrottleSecret;
 }
 
 // @public

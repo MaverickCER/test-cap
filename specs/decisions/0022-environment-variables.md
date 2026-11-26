@@ -15,6 +15,9 @@ keys); the audit keys land in phase 8 with the audit trail, and the SAML keys in
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: there is no `test-cap/env` entry, and the main entry does not re-export the contracts; Open 1
+is still open. The schema ships as `src/env.schema.ts`, which `package.json` names under `envCap.schema`.
+
 ## Context
 
 Owner requirement 7: env-cap shares the required environment variables across the cap packages. Each cap needs some

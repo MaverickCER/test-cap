@@ -21,6 +21,7 @@ import {
   type Reply,
   seedAccount,
   seedSession,
+  TENANT,
   testAuth,
 } from "../support/auth.js"
 import { codeAt } from "../support/totp.js"
@@ -196,6 +197,23 @@ describe("GET on a default page", () => {
     expect([done.status, done.headers.get("location")]).toEqual([303, "/"])
   })
 
+  it("sends a sign-in to TOTP enrolment when the account has no second factor yet, and to step-up when it has", async () => {
+    for (const totp of [false, true]) {
+      const setup = testAuth()
+      await seedAccount(setup, { password: true, totp })
+      const browser = new Browser(inProcess(setup.auth))
+      await browser.start()
+      const reply = await submit(browser, "/auth/sign-in", {
+        identifier: "ada@example.com",
+        password: PASSWORD,
+      })
+      expect([reply.status, reply.headers.get("location")], String(totp)).toEqual([
+        303,
+        totp ? "/auth/step-up" : "/auth/totp/enrol",
+      ])
+    }
+  })
+
   it("sends TOTP enrolment to sign-in without a session, and to the password page before a password", async () => {
     const setup = testAuth()
     const signedOut = await open(new Browser(inProcess(setup.auth)), "/auth/totp/enrol")
@@ -206,6 +224,16 @@ describe("GET on a default page", () => {
     ])
     const noPassword = await open(await enrolling(setup, "confirm"), "/auth/totp/enrol")
     expect([noPassword.status, noPassword.headers.get("location")]).toEqual([303, "/auth/password"])
+  })
+
+  it("sends a session whose multi-factor proof is older than 15 minutes to sign in again, starting no enrolment", async () => {
+    const setup = testAuth()
+    const { subject } = await seedAccount(setup, { password: true })
+    const { browser } = await seedSession(setup, { subject, evidence: aal2(setup.clock) })
+    setup.clock.advance(16 * 60_000)
+    const stale = await open(browser, "/auth/totp/enrol")
+    expect([stale.status, stale.headers.get("location")]).toEqual([303, "/auth/sign-in"])
+    expect(await setup.store.listByOwner(TENANT, "totp", subject)).toEqual([])
   })
 
   it("lets a session at the default requirement add an authenticator from the TOTP page, password or not", async () => {
@@ -516,7 +544,7 @@ describe("a form post that accepts HTML", () => {
     )
   })
 
-  it("shows a refused challenge on the step-up page as an unexpected failure, not a wrong code", async () => {
+  it("shows a refused challenge on the step-up page as an expired form, not a wrong code", async () => {
     const setup = testAuth()
     const { subject, secret } = await seedAccount(setup, { password: true, totp: true })
     const { browser } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
@@ -527,7 +555,7 @@ describe("a form post that accepts HTML", () => {
     })
     expect(reply.status).toBe(403)
     expect(doc(reply).querySelector('[role="alert"]')?.textContent).toBe(
-      "Something went wrong on our side. Please try again.",
+      "This form expired. Enter your code again.",
     )
   })
 

@@ -323,7 +323,7 @@ describe("dependency failure policies", () => {
   const failureDir = path.join(root, "test", "failure")
   const failureFiles = readdirSync(failureDir).filter((file) => file.endsWith(".test.ts"))
 
-  it("covers every dependency phase 3 uses", () => {
+  it("covers every dependency test-cap uses", () => {
     expect(dependencySections.map((section) => section.slice(0, section.indexOf("\n")))).toEqual([
       "The store (SQL and memory)",
       "Email delivery",
@@ -332,6 +332,8 @@ describe("dependency failure policies", () => {
       "The random source",
       "Key material",
       "The event sink",
+      "A proxy in front of the app",
+      "The request limiter's counter",
     ])
   })
 

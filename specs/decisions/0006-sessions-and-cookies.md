@@ -29,6 +29,9 @@ Planned tests:
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: making a new set of recovery codes is a credential change too. It rotates the session and revokes
+the account's others (`test/sessions/credential-change-revokes-others.test.ts`).
+
 ## Context
 
 Question 6 asked for server-side sessions or signed tokens and the revocation each allows, cookie attributes,

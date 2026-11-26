@@ -109,9 +109,10 @@ jobs:
       - run: npm ci
       - run: npx --yes -p typescript@7 tsc --noEmit -p tsconfig.json
 
-  # ADR 0023: the built dist/ runs on Node 22 and 24, Bun and Deno. One plain script, no test framework, so each runtime
-  # runs exactly what ships. test/cross-runtime/coverage.test.ts keeps it covering every value the package exports.
-  # Runtime versions are pinned so a new release cannot change the result without a pull request.
+  # ADR 0023: the built dist/ runs on Node 22 and 24, Bun, Deno and Cloudflare workerd. One plain script, no test
+  # framework, so each runtime runs exactly what ships: the exported values, then a sign-up, sign-in and step-up journey.
+  # test/cross-runtime/coverage.test.ts keeps it covering every value the package exports. Runtime versions are pinned
+  # so a new release cannot change the result without a pull request.
   cross-runtime:
     runs-on: ubuntu-latest
     permissions:
@@ -138,6 +139,9 @@ jobs:
         with:
           deno-version: v2.9.4
       - run: deno run --allow-read test/cross-runtime/run.mjs
+      # workerd through wrangler dev, with nodejs_compat (forwarded-parse needs Node's util): the same checks and journey, where argon2id falls back to
+      # @noble/hashes (ADR 0031). workers.mjs fetches wrangler 4.129.0 with npx; it is not a dependency.
+      - run: node test/cross-runtime/workers.mjs
 
   # The examples are e2e tests of the packed package. Each is its own npm project that installs the
   # tarball `npm pack` makes, as an app would, so it tests what ships rather than the source tree.
@@ -174,11 +178,60 @@ jobs:
           npm run typecheck
       - run: npx vitest run test/examples/
 
+  # ZAP, OWASP's free scanner, against the built package behind Express (ci/zap/server.mjs). The baseline scan spiders
+  # the default pages and runs the passive rules; the API scan imports docs/api-reference/openapi.json and runs the
+  # active rules against every /auth route. ci/zap/check-report.mjs fails the job on any alert of medium risk or above
+  # and prints every alert. This is a scan, not a penetration test (ADR 0019): it finds what its rules know about.
+  zap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+      - run: npm ci
+      - run: npm run build
+      - name: Start the scan target
+        run: |
+          PORT=8080 HOST=127.0.0.1 node ci/zap/server.mjs > zap-server.log 2>&1 &
+          tries=0
+          until curl -sf http://127.0.0.1:8080/ > /dev/null; do
+            tries=$((tries + 1))
+            if [ "$tries" -ge 30 ]; then cat zap-server.log; exit 1; fi
+            sleep 1
+          done
+      - name: Baseline scan
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-baseline.py -t http://localhost:8080/ -J baseline.json -I
+        env:
+          ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af # stable, 2026-11-03
+      - name: Active scan of every /auth route
+        run: |
+          cp docs/api-reference/openapi.json zap/openapi.json
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" "$ZAP_IMAGE" \
+            zap-api-scan.py -t /zap/wrk/openapi.json -f openapi -O http://localhost:8080 -J api.json -I
+        env:
+          ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af # stable, 2026-11-03
+      - run: node ci/zap/check-report.mjs zap/baseline.json zap/api.json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-reports
+          path: zap/
+          retention-days: 14
+
   # Badge data for the Pages site, on a push to main only, after every gate job passed: coverage and size from a fresh
   # run, the mutation score from the report the `contract` job already paid for. The writers are
   # internal-package-contract's shared ones.
   badges:
-    needs: [contract, node-floor, typescript-7, cross-runtime, examples]
+    needs: [contract, node-floor, typescript-7, cross-runtime, examples, zap]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -305,7 +358,7 @@ jobs:
   # request, so they gate nothing. `benchmark-pr` is in, and may be skipped: it runs only on a same-repository pull
   # request, so a push to main or a fork's pull request skips it.
   required:
-    needs: [node-floor, typescript-7, cross-runtime, examples, benchmark-pr]
+    needs: [node-floor, typescript-7, cross-runtime, examples, zap, benchmark-pr]
     if: always()
     runs-on: ubuntu-latest
     permissions:

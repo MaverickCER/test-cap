@@ -91,6 +91,7 @@ Every function the package exposes is measured on its own across the full size l
 | `memoryStore().listByOwner` | request | O(n) | O(n) | ✅ matches | 1.08 ms | 17.0 ms |
 | `memoryStore().consumeOnce` | request | O(1) | O(log n) | 🟡 close (neighbouring class) | 13.5 µs | 28.2 µs |
 | `memoryStore().increment` | request | O(1) | O(1) | ✅ matches | 0.735 µs | 0.725 µs |
+| `createStoreLimiter (consume)` | request | O(1) | n/a | ❔ not enough data | n/a | n/a |
 
 ### `auth.handle (GET /auth/session)`
 
@@ -1070,6 +1071,27 @@ A code no authenticator accepts: every one is tried.
 | 2560 | 0.747 µs | 0.896 µs | 0.762 µs | 1.9 KiB | 1,338,804 |
 | 5120 | 0.748 µs | 0.817 µs | 0.761 µs | 1.9 KiB | 1,336,606 |
 | 10240 | 0.725 µs | 0.804 µs | 0.741 µs | 1.9 KiB | 1,379,698 |
+
+### `createStoreLimiter (consume)`
+
+**Why we benchmark it.** Every request to /auth is counted through it before its route runs, and so is every guess, mail send and failure; it is the one piece of limiter work on every request.
+
+**What poor performance would mean.** A count that slowed as keys accumulate would tax every request, and most of all the ones a flood sends.
+
+**Expected growth: O(1).** One consume is one atomic increment of one keyed counter, whatever the number of other keys.
+
+**Variables that could change its cost**
+
+| Variable | How it is handled | What it is |
+| --- | --- | --- |
+| keys | swept | Other keys already counted in the store. |
+
+**Deliberately not covered**
+
+- **a SQL store**: Not exported in phase 4; the memory store's increment is measured.
+- **a block read**: Every limit test-cap builds counts with blocks off; a block read is one more keyed record read, the same work as one store read.
+
+**In the end-to-end run:** One consume per request, for the route's request limit.
 
 ## 3. What makes up one end-to-end operation
 

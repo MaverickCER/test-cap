@@ -2,9 +2,9 @@
   "entries": {
     ".": {
       "source": "src/",
-      "environment": "isomorphic, one runtime dependency (hash-wasm)",
+      "environment": "isomorphic; runtime dependencies hash-wasm, @noble/hashes (argon2 module only, loaded where WebAssembly cannot compile), rate-limiter-flexible (deep imports only), ipaddr.js and forwarded-parse",
       "tier": "Stable",
-      "purpose": "`createAuth` and `defineAuthPolicy`, the `Auth` it returns and the types its signature needs; the `PlainRequest` and `PlainResponse` transport types, the `AuthStore` port and its record types, `Clock`, `RandomSource`, `DeploymentMode`, the `TransportError` and `ConfigError` classes, and the OCSF security event types."
+      "purpose": "`createAuth` and `defineAuthPolicy`, the `Auth` it returns and the types its signature needs; the `PlainRequest` and `PlainResponse` transport types, the `AuthStore` port and its record types, `Clock`, `RandomSource`, `DeploymentMode`, the `TransportError` and `ConfigError` classes, and the OCSF security event types; the limits' types, `createStoreLimiter`, the `platform` proxy presets and the `Argon2Hasher` an app may pass."
     },
     "./express": {
       "source": "src/adapters/express/",
@@ -14,7 +14,7 @@
     },
     "./fetch": {
       "source": "src/adapters/fetch/",
-      "environment": "Web Request and Response globals; its tests run on Node, and Bun and Deno are planned for phase 6",
+      "environment": "Web Request and Response globals; CI runs a sign-in journey through it on Node, Bun, Deno and Cloudflare workerd",
       "tier": "Stable",
       "purpose": "`withAuth(auth, handler, { public, clientAddress })`: wraps an app's fetch handler, serves `/auth/*` and protects every other route at the default requirement unless it is listed as public; `fetchAuth(auth)` serves the `/auth/*` routes alone and answers `null` for any other path."
     },
@@ -22,13 +22,13 @@
       "source": "src/adapters/next/",
       "environment": "Next.js 16 App Router on the Node.js runtime (typed structurally; no dependency on next)",
       "tier": "Stable",
-      "purpose": "`nextAuthHandler(auth)` for `app/auth/[...path]/route.ts`; `nextServerAuth(auth, { headers })`, the authoritative check for route handlers, server functions and the data-access layer; `nextProxy(auth, { public })`, an optional proxy for early redirects that is not protection."
+      "purpose": "`nextAuthHandler(auth, { clientAddress })` for `app/auth/[...path]/route.ts` (production needs `clientAddress` except behind the vercel, fly or netlify preset); `nextServerAuth(auth, { headers })`, the authoritative check for route handlers, server functions and the data-access layer; `nextProxy(auth, { public })`, an optional proxy for early redirects that is not protection."
     },
     "./tanstack-start": {
       "source": "src/adapters/tanstack-start/",
       "environment": "Web Request and Response, TanStack Start 1.169 (typed structurally; no dependency on TanStack Start)",
       "tier": "Stable",
-      "purpose": "`tanstackStartMiddleware(auth, { public })`, the server function of a global request middleware that protects every route and server function call at the default requirement unless its path is listed as public, and puts the subject in `context.auth`; `tanstackStartAuth(auth)`, whose `handlers` serve the `/auth/$` server route and whose `require` and `session` let a server function check a requirement itself."
+      "purpose": "`tanstackStartMiddleware(auth, { public })`, the server function of a global request middleware that protects every route and server function call at the default requirement unless its path is listed as public, and puts the subject in `context.auth`; `tanstackStartAuth(auth, { clientAddress })` (production needs `clientAddress` except behind the vercel, fly or netlify preset), whose `handlers` serve the `/auth/$` server route and whose `require` and `session` let a server function check a requirement itself."
     },
     "./store/memory": {
       "source": "src/store/memory.ts",
@@ -39,6 +39,10 @@
   },
   "dependencies": {
     "@maverickcer/env-cap": "Optional peer. Only `src/env.schema.ts` imports it, so env-cap can document and validate test-cap's variables in an app that uses env-cap; without it, `createAuth` takes plain values (ADR 0022).",
-    "hash-wasm": "Runtime. argon2id password hashing in WebAssembly, with no native build (ADR 0018). It was chosen because it is the only argon2id found that runs on Node, Bun and Deno (ADR 0023); CI hashes on Node only so far. MIT, no dependencies of its own."
+    "hash-wasm": "Runtime. argon2id password hashing in WebAssembly, with no native build (ADR 0018). It runs on Node, Bun and Deno, where CI signs in through it (ADR 0023). Cloudflare Workers refuse to compile its WebAssembly, so there `@noble/hashes` takes over (ADR 0031). MIT, no dependencies of its own.",
+    "@noble/hashes": "Runtime. argon2id in plain JavaScript, used only where WebAssembly cannot compile, such as Cloudflare Workers, at the same cost and with the same encoded hashes as hash-wasm (ADR 0031). Loaded on first use, by its `argon2.js` path only. Several times slower than hash-wasm: check the CPU time limit of your Workers plan. MIT, no dependencies of its own.",
+    "rate-limiter-flexible": "Runtime. Counts every limit: the request limits, the mail send limits, the guessing throttle, the failure ceiling and the stuffing detector's counts (ADR 0030), so an app can plug in any limiter with the library's interface; test-cap's tests run its memory limiter and the store limiter over the app's store. Imported by deep path only: its index loads every store it ships, one of which needs Node's `cluster`. Runs on Node, Bun, Deno and workerd. ISC, no dependencies of its own.",
+    "ipaddr.js": "Runtime. Parses IPv4 and IPv6 client addresses, reads an IPv4-mapped address as IPv4 and matches the CIDR ranges of `trustedProxies` and the platform presets (ADR 0030). Runs on Node, Bun, Deno and workerd. MIT, no dependencies of its own.",
+    "forwarded-parse": "Runtime. Parses the RFC 7239 `Forwarded` header when the app's proxies set it (ADR 0030). It requires Node's `util`, which Bun, Deno and Cloudflare Workers with `nodejs_compat` provide. Workers turn that flag on by default from compatibility date 2026-08-04; without it, a Worker's build cannot resolve `util`. MIT, no dependencies of its own."
   }
 }

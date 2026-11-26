@@ -12,8 +12,8 @@
  *
  * Next.js has no global check that covers every route, so a route handler or server function that never calls a
  * server helper is unprotected (ADR 0024, Limits). Next.js is typed structurally: this entry has no dependency on it.
- * Next.js gives a route handler no socket address, so the core sees none here; the address is never read from a
- * header (ADR 0009).
+ * Next.js gives a route handler no socket address. The core sees one only from `nextAuthHandler`'s `clientAddress`
+ * option, or reads a platform preset's header (ADR 0009 §5); no other header is ever read.
  * @packageDocumentation
  */
 
@@ -39,12 +39,26 @@ export interface NextAuthHandlers {
   readonly POST: NextRouteHandler
 }
 
+/** What `nextAuthHandler` takes. */
+export interface NextAuthHandlerOptions {
+  /**
+   * The client's address for the throttle, read from what the app's own server knows, such as a custom server's
+   * socket. Next.js gives a route handler none. Behind a platform preset whose header every request carries, such as
+   * `platform("vercel")`, leave it out: the core reads the preset's header (ADR 0009 §5). Otherwise production and
+   * staging refuse to start without it, unless the app set `requireClientAddress: false` (ADR 0009 §8).
+   */
+  readonly clientAddress?: ((request: Request) => string | undefined) | undefined
+}
+
 /**
  * The route handler for `app/auth/[...path]/route.ts`. Mounted anywhere else, every request is a 404, because the
  * core serves only paths under `/auth/`.
  */
-export function nextAuthHandler(auth: Auth<string>): NextAuthHandlers {
-  const serve = fetchAuth(auth)
+export function nextAuthHandler(
+  auth: Auth<string>,
+  options: NextAuthHandlerOptions = {},
+): NextAuthHandlers {
+  const serve = fetchAuth(auth, { clientAddress: options.clientAddress })
   const handler: NextRouteHandler = async (req) =>
     (await serve(req)) ?? toResponse(errorResponse(404, "not-found"))
   return { GET: handler, POST: handler }
@@ -105,8 +119,8 @@ export interface NextProxyOptions {
   /** The paths a visitor without a session cookie may reach; the same form as `withAuth`'s `public` list. */
   readonly public?: readonly string[] | undefined
   /**
-   * The path on `APP_ORIGIN` a visitor without a session cookie is sent to, with `returnTo`; `/auth/sign-in` when
-   * absent.
+   * The path a visitor without a session cookie is sent to, with `returnTo`, as the app receives it; `/auth/sign-in`
+   * when absent. Any `publicBasePath` is added before it in the redirect.
    */
   readonly signIn?: string | undefined
 }
@@ -140,6 +154,8 @@ export function nextProxy(auth: Auth<string>, options: NextProxyOptions = {}): N
   const internals = internalsOf(auth)
   const isPublic = internals.publicPaths(options.public ?? [])
   const signIn = options.signIn ?? `${BASE_PATH}/sign-in`
+  // Behind a gateway that strips a prefix, the app sees paths without it; the browser must be sent paths with it.
+  const prefix = internals.publicBasePath
   if (!CLEAN_PATH.test(signIn)) {
     throw new ConfigError([`The sign-in path "${signIn}" must be a clean path such as /sign-in.`])
   }
@@ -149,7 +165,7 @@ export function nextProxy(auth: Auth<string>, options: NextProxyOptions = {}): N
     if (isPublic(url.pathname) || url.pathname === signIn) return undefined
     if (readSessionToken(req.headers) !== null) return undefined
     // Next.js wants an absolute Location from a proxy; it is built on APP_ORIGIN, never on the request's Host.
-    const location = `${internals.origin}${signIn}?returnTo=${encodeURIComponent(url.pathname + url.search)}`
+    const location = `${internals.origin}${prefix}${signIn}?returnTo=${encodeURIComponent(prefix + url.pathname + url.search)}`
     return new Response(null, {
       status: 307,
       headers: { Location: location, "Cache-Control": "no-store" },

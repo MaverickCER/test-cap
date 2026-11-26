@@ -50,7 +50,7 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 | `INV-ASSURANCE-EVIDENCE`    | tested            | Assurance rises only with new evidence from a ceremony bound to this session  |
 | `INV-REVOCATION`            | tested            | A revoked session is refused on the next request, and a failed revoke says so |
 | `INV-EXPIRY`                | tested            | Nothing is accepted at or after its expiry, measured on the server's clock    |
-| `INV-RECOVERY-NO-ELEVATION` | partial (phase 4) | Recovery never raises assurance                                               |
+| `INV-RECOVERY-NO-ELEVATION` | partial (phase 5) | Recovery never raises assurance                                               |
 | `INV-SUBJECT-KINDS`         | partial (phase 8) | People, services and agents stay distinct subjects                            |
 | `INV-FAIL-CLOSED`           | tested            | A failing dependency never yields `allow`, a session or a higher level        |
 | `INV-ORIGIN`                | tested            | Every origin and absolute URL comes from `APP_ORIGIN`                         |
@@ -60,6 +60,9 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 | `INV-NO-ENUMERATION`        | tested            | Replies and timing do not say whether an account exists                       |
 | `INV-BROWSER-BOUNDARY`      | tested            | Another site cannot drive, frame or cache an auth route                       |
 | `INV-BOUNDED-WORK`          | tested            | No request makes test-cap do unbounded work or send unbounded mail            |
+| `INV-GUESS-THROTTLE`        | tested            | Guessing a secret is slowed and capped, and never locks the account           |
+| `INV-REQUEST-LIMIT`         | tested            | Every request is counted per client before its route runs                     |
+| `INV-CLIENT-ADDRESS`        | tested            | The client address comes from the socket or a proxy the app declared          |
 | `INV-STRICT-DEFAULTS`       | tested            | A deployment that is not explicitly development or test starts only when safe |
 | `INV-IDENTIFIER-PROOF`      | tested            | Only a proven identifier finds an account                                     |
 | `INV-DELEGATION-CEILING`    | planned (phase 8) | A delegation never exceeds what its issuing session could do                  |
@@ -96,20 +99,21 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   `src/core/public-paths.ts`, `src/transport/body.ts`
 - **Limitations:** A route the app mounts before the adapter, or outside the framework middleware's reach, is never
   seen and so never protected. The app's public list is configuration test-cap cannot judge. The Next.js `proxy` is
-  for early redirects only; the server helpers are the protection. The NestJS adapter arrives in phase 4.
+  for early redirects only; the server helpers are the protection. The NestJS adapter follows phase 4.
 
 ### INV-SESSION-IDENTITY: only an issued token names a session
 
 - **Status:** tested
 - **Property:** The account a request acts as comes only from the session record found by the SHA-256 of a token
-  test-cap issued. No header, body field, session id or hash in a cookie names a session, and a cookie sent twice
-  names none. A token the client presents at sign-in or sign-up is revoked, never adopted. Evidence from a step-up
+  test-cap issued, in the tenant the app configured. No header, body field, session id or hash in a cookie names a
+  session, no signed value stands in for a token, and a cookie sent twice names none. A session id names another
+  session only to its own account. A token the client presents at sign-in or sign-up is revoked, never adopted. Evidence from a step-up
   lands only on the session that opened the challenge.
 - **Enforcement:** `src/sessions/sessions.ts` `createSessions` (its `load`, which reads by the token's hash, and
   `signIn`, `begin` and `stepUp`), `src/sessions/sessions.ts` `readSessionToken`, `src/transport/cookies.ts`
   `readCookie`
 - **Attacks:** `forged-cookie-names-other-session`, `session-fixation`, `step-up-bound-to-other-session`,
-  `cookie-tossing`, `session-rotation-race`
+  `cookie-tossing`, `session-rotation-race`, `signing-oracle-key-reuse`, `idor-session-revoke`, `cross-tenant-reference`
 - **Flows:** F01, F02, F11, F12, F13, F14
 - **Positive tests:**
   - `test/sessions/token-entropy-and-hashing.test.ts`: "stores the session under the SHA-256 of the token and nowhere holds the token"
@@ -119,10 +123,14 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/attacks/forged-cookie-names-other-session.test.ts`: "signs out nothing when the cookie carries another session's id or hash instead of its token"
   - `test/attacks/step-up-bound-to-other-session.test.ts`: "refuses a challenge another session asked for, and leaves it usable by its own session"
   - `test/sessions/cookie-attributes.test.ts`: "reads the token by its exact name, and reads nothing when the name arrives twice"
+  - `test/attacks/cookie-tossing.test.ts`: "treats a tossed second session cookie as no session, rather than picking one"
+  - `test/attacks/session-rotation-race.test.ts`: "issues exactly one new session from parallel rotations of one token"
+  - `test/attacks/signing-oracle-key-reuse.test.ts`: "issues a session token that is a random reference, which no CSRF token can stand in for"
+  - `test/attacks/idor-session-revoke.test.ts`: "refuses to revoke another account's session, which stays signed in"
+  - `test/attacks/cross-tenant-reference.test.ts`: "does not let a session or an account of one tenant act in another tenant over the same store"
 - **Mutation evidence:** `src/sessions/sessions.ts`, `src/transport/cookies.ts`
 - **Limitations:** A token copied off the person's device is a valid bearer token: sessions are not bound to a
-  device key (threat model, "What test-cap does not defend against"). The `cookie-tossing` and
-  `session-rotation-race` attack tests arrive in phase 4.
+  device key (threat model, "What test-cap does not defend against").
 
 ### INV-ASSURANCE-EVIDENCE: assurance rises only with new evidence
 
@@ -130,12 +138,14 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 - **Property:** A session's level is computed on every read from the evidence still valid; nothing stores a level.
   Evidence enters a session only from a ceremony that succeeded in the same request: sign-in, the end of enrolment, or
   a step-up through a challenge this session opened. Email confirmation, an unconfirmed TOTP secret, a failed
-  ceremony and a repeated one add nothing. A pre-auth session answers `enroll`, never `allow`, whatever it holds.
+  ceremony and a repeated one add nothing. A pre-auth session answers `enroll`, never `allow`, whatever it holds. A
+  credential change needs a multi-factor ceremony in the last 15 minutes, whatever the session's level (ADR 0005 §8).
 - **Enforcement:** `src/assurance/policy.ts` `defineAuthPolicy` (its `assurance` and `require`),
   `src/assurance/levels.ts` `levelOf`, `src/sessions/sessions.ts` `createSessions` (its `stepUp` and
-  `completeEnrolment`), `src/methods/totp/method.ts` `verifyTotp`
+  `completeEnrolment`), `src/methods/totp/method.ts` `verifyTotp`, `src/core/dispatcher.ts` `createDispatcher` (its
+  `recentlyVerified`, before every credential change)
 - **Attacks:** `session-cache-skips-mfa`, `assurance-downgrade`, `totp-unconfirmed-enrolment-counts`,
-  `alternate-path-skips-second-factor`, `email-raises-assurance`
+  `alternate-path-skips-second-factor`, `email-raises-assurance`, `sensitive-change-without-reauth`
 - **Flows:** F02, F03, F04, F06, F08, F09, F10, F13, F14, F15, F16
 - **Positive tests:**
   - `test/policy/require-outcomes.test.ts`: "allows a session that meets the requirement, with its subject and assurance"
@@ -148,11 +158,13 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/assurance/email-never-raises.test.ts`: "leaves every level unchanged when the email deviation is on"
   - `test/policy/types.test.ts`: "hold no stored level outside the assurance computed from evidence"
   - `test/core/email-confirmation.test.ts`: "answers enroll to every requirement after sign-up, after the confirmation and after the password"
+  - `test/attacks/alternate-path-skips-second-factor.test.ts`: "gives a password-only session no session list, no recovery codes, no new authenticator and no access"
+  - `test/attacks/sensitive-change-without-reauth.test.ts`: "refuses a new authenticator and new recovery codes on a session whose last multi-factor ceremony is stale"
 - **Mutation evidence:** `src/assurance/policy.ts`, `src/assurance/levels.ts`, `src/sessions/sessions.ts`,
-  `src/methods/totp/method.ts`
+  `src/methods/totp/method.ts`, `src/core/dispatcher.ts`
 - **Limitations:** Phase 3 produces password and TOTP evidence only; the passkey and federation mappings arrive in
   phase 5. The levels map to NIST SP 800-63B-4 and are computed only from evidence the server holds; they are not a
-  certification. `alternate-path-skips-second-factor` is tested in phase 4 and `email-raises-assurance` in phase 5.
+  certification. `email-raises-assurance` is tested in phase 5, with email sign-in.
 
 ### INV-REVOCATION: a revoked session is refused at once
 
@@ -162,12 +174,16 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   there is no cache. A revocation that fails is answered as a failure, never as done. A credential change rotates the
   session and revokes the account's other sessions; when that rotation fails or finds its session gone, every
   session of the account is revoked instead (finding F-1 in
-  [dependency-failures.md](dependency-failures.md#findings)).
+  [dependency-failures.md](dependency-failures.md#findings)). A deprovisioned account is disabled before its sessions
+  are revoked: every session read checks the account's status, so none of its sessions, ceremonies or recoveries
+  works even while the revoke is still running.
 - **Enforcement:** `src/sessions/sessions.ts` `createSessions` (its `load`, `signOut`, `revoke` and
   `credentialChanged`), `src/core/dispatcher.ts` `createDispatcher` (its `revokeAll` and `afterCredentialChange`),
-  `src/store/memory.ts` `memoryStore` (its `revoke` and `revokeByOwner`), `src/store/sql.ts` `sqlStore`
+  `src/store/memory.ts` `memoryStore` (its `revoke` and `revokeByOwner`), `src/store/sql.ts` `sqlStore`,
+  `src/core/accounts.ts` `accountActive` and `deactivateAccount`
 - **Attacks:** `cached-session-survives-revocation`, `sign-out-leaves-session-valid`, `session-fixation`,
-  `sessions-survive-credential-change`, `bulk-revoke-race-misses-session`, `deleted-account-sessions-survive`
+  `sessions-survive-credential-change`, `bulk-revoke-race-misses-session`, `deleted-account-sessions-survive`,
+  `deprovisioned-account-signs-in`
 - **Flows:** F01, F02, F03, F05, F09, F14, F19
 - **Positive tests:**
   - `test/sessions/revocation-immediate.test.ts`: "answers unauthenticated on the request after sign-out, remote revoke or a store revoke"
@@ -178,10 +194,15 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/attacks/sign-out-leaves-session-valid.test.ts`: "revokes the session in the store and clears the cookie"
   - `test/failure/store.test.ts`: "never answers a sign-out whose revoke failed as signed out, and a retry revokes"
   - `test/failure/store.test.ts`: "leaves no session of the account standing when the rotation finds its session already claimed"
+  - `test/attacks/sessions-survive-credential-change.test.ts`: "revokes every session when the account is recovered and the password replaced"
+  - `test/attacks/sessions-survive-credential-change.test.ts`: "revokes a session whose sign-in checked the old password while the owner replaced it"
+  - `test/attacks/bulk-revoke-race-misses-session.test.ts`: "revokes every session the account holds, in one operation"
+  - `test/attacks/bulk-revoke-race-misses-session.test.ts`: "revokes a session written while the revocation is already running"
+  - `test/attacks/deleted-account-sessions-survive.test.ts`: "refuses a session of a disabled account even before it is revoked"
+  - `test/attacks/deprovisioned-account-signs-in.test.ts`: "refuses the right password of a deprovisioned account, with the reply any wrong one gets"
 - **Mutation evidence:** `src/sessions/sessions.ts`, `src/core/dispatcher.ts`, `src/store/memory.ts`,
-  `src/store/sql.ts`
-- **Limitations:** Revoke-all under concurrent writes, deprovision and the credential-change attack test arrive in
-  phase 4. The SQL store's revocation under real database concurrency is phase 6's persistence work (success metric
+  `src/store/sql.ts`, `src/core/accounts.ts`
+- **Limitations:** The SQL store's revocation under real database concurrency is phase 6's persistence work (success metric
   15). When the store fails the credential change's rotation and then its fallback revoke too, the other sessions
   stay until an operator revokes them (F-1, residual).
 
@@ -219,28 +240,34 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 
 ### INV-RECOVERY-NO-ELEVATION: recovery never raises assurance
 
-- **Status:** partial (phase 4)
+- **Status:** partial (phase 5)
 - **Property:** A recovery-only session holds no assurance: it answers `recovery-only` to every requirement whatever
   evidence it carries, a recovery code gives no level, and the session is revoked when recovery finishes, so its token
-  carries no later trust. Phase 3 builds the state, its outcome and its end. Redeeming a saved recovery code (F07)
-  arrives in phase 4, and email recovery (F09) in phase 5; until then no route starts a recovery-only session.
+  carries no later trust. Redeeming a saved recovery code (F07, built in phase 4) starts that state, revokes the
+  account's other sessions, and allows only replacing authenticators; the level comes only from signing in again.
+  Email recovery (F09) arrives in phase 5.
 - **Enforcement:** `src/assurance/policy.ts` `defineAuthPolicy` (its `require`, which answers `recovery-only` before
   reading any level), `src/assurance/levels.ts` `levelOf` (no level for a recovery code), `src/sessions/sessions.ts`
-  `createSessions` (its `begin` and `endRecovery`)
+  `createSessions` (its `begin` and `endRecovery`), `src/core/dispatcher.ts` `createDispatcher` (its `recovery` route,
+  which begins a recovery-only session and adds no evidence)
 - **Attacks:** `recovery-below-account-level`, `outstanding-codes-survive-recovery`, `session-fixation`
 - **Flows:** F01, F02, F07, F09, F14
 - **Positive tests:**
   - `test/sessions/rotation.test.ts`: "starts a pre-auth or recovery-only session with no evidence unless given, and no step-ups"
+  - `test/recovery/recovery-flow.test.ts`: "lets the session replace the password and enrol TOTP, still with no level"
 - **Negative tests:**
   - `test/policy/require-outcomes.test.ts`: "answers enroll for a pre-auth session and recovery-only for a recovering one, whatever it holds"
   - `test/assurance/email-never-raises.test.ts`: "gives a recovery code no level: it moves a session to recovery-only, never to assurance (ADR 0007)"
   - `test/attacks/session-fixation.test.ts`: "stops a recovery-only token working once recovery ends"
   - `test/sessions/rotation.test.ts`: "ends the recovery-only session when recovery finishes, so its token carries no later trust"
   - `test/core/sign-in-and-step-up.test.ts`: "needs a signed-in session, and a good returnTo"
-- **Mutation evidence:** `src/assurance/policy.ts`, `src/assurance/levels.ts`, `src/sessions/sessions.ts`
-- **Limitations:** The recovery flows themselves, and the attack tests that a recovery yields no more than the
-  account's proven evidence, arrive in phases 4 and 5. A compromised mailbox reaches the recovery-only state by
-  design (threat model O6).
+  - `test/attacks/recovery-below-account-level.test.ts`: "leaves a recovered AAL2 account's session with no level and no access to what needs one"
+  - `test/recovery/recovery-flow.test.ts`: "answers recovery-only for every requirement, so the session reaches nothing protected"
+- **Mutation evidence:** `src/assurance/policy.ts`, `src/assurance/levels.ts`, `src/sessions/sessions.ts`,
+  `src/core/dispatcher.ts`
+- **Limitations:** Email recovery, and the test that an emailed code issued before a completed recovery no longer
+  works (`outstanding-codes-survive-recovery`), arrive in phase 5. A compromised mailbox reaches the recovery-only
+  state by design (threat model O6).
 
 ### INV-SUBJECT-KINDS: people, services and agents stay distinct
 
@@ -324,16 +351,18 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   compare-and-set on the last step. An email code is redeemed once through `consumeOnce`, keyed by an HMAC over its
   purpose, account, address and code, and only within its attempt limit: every attempt counts with the atomic
   `increment` before the code is checked, over the code's whole life, so the count refuses a sixth attempt even when
-  the write that kills the code failed. A step-up challenge is consumed once, only by the session that opened it.
+  the write that kills the code failed. An app may lower the limit below 5, never raise or remove it. A step-up challenge is consumed once, only by the session that opened it. A
+  saved recovery code is consumed once through `consumeOnce`, and only for the account whose row it names.
 - **Enforcement:** `src/methods/totp/method.ts` `verifyTotp`, `src/core/email.ts` `redeemConfirmation`,
   `src/sessions/sessions.ts` `createSessions` (its `stepUp`), `src/store/memory.ts` `memoryStore` (its
-  `consumeOnce` and `increment`)
+  `consumeOnce` and `increment`), `src/methods/recovery/codes.ts` `redeemRecoveryCode`
 - **Attacks:** `totp-code-replay`, `email-code-brute-force`, `step-up-bound-to-other-session`,
-  `one-time-secret-cross-purpose`, `otp-attempt-limit-race`, `totp-brute-force`
+  `one-time-secret-cross-purpose`, `otp-attempt-limit-race`, `totp-brute-force`, `redemption-race`
 - **Flows:** F04, F07, F08, F09, F10, F13
 - **Positive tests:**
   - `test/core/email-confirmation.test.ts`: "confirms the address: the account now resolves by it, an Update event says so, and nothing else changes"
 - **Negative tests:**
+  - `test/abuse/mail-and-stuffing-options.test.ts`: "can be neither raised above 5 nor turned off, and says why"
   - `test/attacks/totp-code-replay.test.ts`: "refuses the same code a second time within its step"
   - `test/attacks/totp-code-replay.test.ts`: "lets exactly one of many concurrent requests with the same code succeed"
   - `test/attacks/email-code-brute-force.test.ts`: "counts parallel guesses one by one, so a burst checks no more codes than the limit"
@@ -341,10 +370,11 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/failure/store.test.ts`: "refuses the right code for the rest of the code's life, even though the kill write failed"
   - `test/core/email-confirmation.test.ts`: "refuses a code issued to another account, even for the same address"
   - `test/attacks/step-up-bound-to-other-session.test.ts`: "uses each challenge once, and never after 10 minutes"
+  - `test/attacks/redemption-race.test.ts`: "lets exactly one of twenty parallel redemptions of one code succeed"
+  - `test/attacks/one-time-secret-cross-purpose.test.ts`: "refuses one account's recovery code for another account, and as a TOTP code"
 - **Mutation evidence:** `src/methods/totp/method.ts`, `src/core/email.ts`, `src/sessions/sessions.ts`,
-  `src/store/memory.ts`
-- **Limitations:** TOTP throttles and the race and
-  cross-purpose attack tests arrive in phase 4; the SQL store under real concurrency in phase 6.
+  `src/store/memory.ts`, `src/methods/recovery/codes.ts`
+- **Limitations:** The SQL store under real concurrency is phase 6's work.
 
 ### INV-SECRETS-AT-REST: no secret leaves, and nothing stored is usable as it stands
 
@@ -352,12 +382,14 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 - **Property:** No reply carries a key, a configuration value or a submitted secret, and an error answers a fixed
   body. Nothing the store holds can be used as it stands: session tokens are stored as their SHA-256, email codes as
   an HMAC key under `AUTH_ENCRYPTION_KEY`, TOTP seeds sealed with AES-GCM under a key held outside the store and bound
-  to their tenant, account, authenticator and key id, and passwords as argon2id hashes.
+  to their tenant, account, authenticator and key id, and passwords and saved recovery codes as argon2id hashes, each
+  with its own salt. Secrets that must be compared, not looked up, are compared in constant time.
 - **Enforcement:** `src/methods/totp/secret-box.ts` `sealSecret` and `openSecret`, `src/sessions/sessions.ts`
   `createSessions` (it stores only the token's hash), `src/core/email.ts` `sendConfirmation` (it stores only the
-  HMAC key), `src/security/headers.ts` `errorResponse`, `src/core/dispatcher.ts` `failure`
+  HMAC key), `src/security/headers.ts` `errorResponse`, `src/core/dispatcher.ts` `failure`,
+  `src/methods/recovery/codes.ts` `generateRecoveryCodes`, `src/core/encoding.ts` `constantTimeEqual`
 - **Attacks:** `secret-in-response`, `totp-secret-read-at-rest`, `totp-key-rotation-confusion`,
-  `secret-in-security-event`, `weak-secret-generation`
+  `secret-in-security-event`, `weak-secret-generation`, `recovery-code-weak-storage`, `secret-comparison-timing`
 - **Flows:** F02, F03, F04, F07, F08, F09, F14, F20, F21, F22
 - **Positive tests:**
   - `test/crypto/key-rotation.test.ts`: "opens a secret sealed under an older key while that key stays in the ring"
@@ -368,8 +400,10 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/attacks/totp-key-rotation-confusion.test.ts`: "refuses a ciphertext swapped in from another account's row"
   - `test/sessions/token-entropy-and-hashing.test.ts`: "stores the session under the SHA-256 of the token and nowhere holds the token"
   - `test/core/email-confirmation.test.ts`: "stores only a keyed hash of the code, for 24 hours (email-code-storage.test.ts checks the key)"
+  - `test/attacks/recovery-code-weak-storage.test.ts`: "stores nothing but an argon2id hash at the production cost, never the secret"
+  - `test/attacks/secret-comparison-timing.test.ts`: "compares every byte whatever the first difference"
 - **Mutation evidence:** `src/methods/totp/secret-box.ts`, `src/sessions/sessions.ts`, `src/core/email.ts`,
-  `src/security/headers.ts`, `src/core/dispatcher.ts`
+  `src/security/headers.ts`, `src/core/dispatcher.ts`, `src/methods/recovery/codes.ts`, `src/core/encoding.ts`
 - **Limitations:** Anyone holding the database and `AUTH_ENCRYPTION_KEY` holds every seed (threat model, attacker
   with database write and keys). The `secret-in-security-event` and `weak-secret-generation` rows are still
   `planned`: their attack tests are not written yet.
@@ -415,9 +449,9 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/attacks/user-enumeration-responses.test.ts`: "gives sign-in one reply, byte for byte, for every way the account can be missing or wrong"
   - `test/attacks/user-enumeration-responses.test.ts`: "gives sign-up one reply for a new address and one an account already holds"
   - `test/attacks/user-enumeration-timing.test.ts`: "takes as long to refuse a missing account, or one with no password, as a wrong password"
+  - `test/abuse/counter-keys.test.ts`: "throttles an address no account holds exactly as one an account holds"
 - **Mutation evidence:** `src/core/dispatcher.ts`, `src/methods/password/method.ts`, `src/methods/password/argon2.ts`
-- **Limitations:** Timing is measured on the test machine, within the tolerance its test states. Throttles, whose
-  replies must also stay uniform, arrive in phase 4.
+- **Limitations:** Timing is measured on the test machine, within the tolerance its test states.
 
 ### INV-BROWSER-BOUNDARY: another site cannot drive, frame or cache an auth route
 
@@ -449,11 +483,13 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 - **Status:** tested
 - **Property:** A body is capped before it is parsed, with depth and field limits. argon2id runs at a fixed cost,
   behind a semaphore with a bounded queue, on at most 256 characters. Confirmation mail is counted per address and
-  per IP address or IPv6 /64 before it is sent. An account holds at most 5 confirmed TOTP authenticators and one
+  per IP address or IPv6 /64 before it is sent; an app may change those limits, and production and staging refuse to
+  start with them off. An account holds at most 5 confirmed TOTP authenticators and one
   pending enrolment, and a session keeps only the newest evidence of each authenticator.
 - **Enforcement:** `src/transport/body.ts` `readBody`, `parseForm` and `parseJsonObject`,
   `src/methods/password/semaphore.ts` `createSemaphore`, `src/methods/password/argon2.ts` `createHasher`,
-  `src/core/email.ts` `sendConfirmation`, `src/methods/totp/method.ts` `totpEnrolmentAllowed`
+  `src/core/email.ts` `sendConfirmation`, `src/methods/totp/method.ts` `totpEnrolmentAllowed`, `src/core/auth.ts`
+  `createAuth` (its startup check of `emailLimit`)
 - **Attacks:** `request-parser-resource-exhaustion`, `argon2-cost-exhaustion`, `email-send-flooding`,
   `totp-authenticator-flood`
 - **Flows:** F01, F02, F03, F04, F08, F09, F10, F22
@@ -463,11 +499,109 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/attacks/request-parser-resource-exhaustion.test.ts`: "refuses an oversized body before parsing it"
   - `test/attacks/argon2-cost-exhaustion.test.ts`: "runs at most 4 hashes at once and refuses what the queue cannot hold"
   - `test/attacks/email-send-flooding.test.ts`: "sends at most 20 an hour from one IP address, across addresses"
+  - `test/abuse/mail-and-stuffing-options.test.ts`: "refuse emailLimit: false in production and staging, naming inbox flooding"
   - `test/attacks/totp-authenticator-flood.test.ts`: "answers a sixth enrolment, by the API or the page, with 409 too-many-authenticators"
   - `test/sessions/evidence-bound.test.ts`: "is at most one TOTP entry per authenticator after 1,000 verifies"
 - **Mutation evidence:** `src/transport/body.ts`, `src/methods/password/semaphore.ts`,
-  `src/methods/password/argon2.ts`, `src/core/email.ts`, `src/methods/totp/method.ts`, `src/sessions/sessions.ts`
-- **Limitations:** Volumetric denial of service is out of scope (threat model). Sign-in throttles arrive in phase 4.
+  `src/methods/password/argon2.ts`, `src/core/email.ts`, `src/methods/totp/method.ts`, `src/sessions/sessions.ts`,
+  `src/core/auth.ts`
+- **Limitations:** Volumetric denial of service is out of scope (threat model). The throttle (`INV-GUESS-THROTTLE`)
+  slows guessing, and the request limit (`INV-REQUEST-LIMIT`) bounds each client's requests; neither bounds a flood
+  spread across many clients.
+
+### INV-GUESS-THROTTLE: guessing is slowed and capped, never a lockout
+
+- **Status:** tested
+- **Property:** Every password, TOTP code and saved recovery code is checked only after the throttle lets the
+  attempt through. Attempts count on the typed identifier (a signed-in session's TOTP check and step-up on its
+  account's address, so every flow of one account shares the count), on the identifier and client, and on the client
+  (an IPv4 address or an IPv6 /64); past 5 free failures in 15 minutes each key is blocked for a wait that doubles to 15
+  minutes, and a parallel burst gets one attempt, not one each. Failures never disable an account: an authenticator
+  stops after 100 consecutive failures, the account's others keep working, and recovery replaces it. A TOTP code that
+  one of the account's authenticators takes counts a failure on none of them. A client that
+  fails across many accounts is sent to the app's challenge, or loses its free attempts. Production and staging refuse
+  to start with the throttle or the stuffing detector off, and no deployment can raise the ceiling above 100; an app
+  may lower it, or put its own throttle or detector in place of the default.
+- **Enforcement:** `src/security/throttle.ts` `createThrottle` (its `attempt`, which counts and reserves before any
+  check), `src/security/ceiling.ts` `createFailureCeiling`, `src/security/stuffing.ts` `createStuffingDetector`,
+  `src/core/dispatcher.ts` `createDispatcher` (its `throttled` wrapper around every guessable ceremony),
+  `src/core/auth.ts` `createAuth` (its startup checks of `throttle` and `failureCeiling`)
+- **Attacks:** `throttle-counter-race`, `credential-stuffing`, `password-brute-force`, `lockout-denial-of-service`,
+  `recovery-code-brute-force`, `ipv6-rotation-throttle-bypass`
+- **Flows:** F02, F04, F07
+- **Positive tests:**
+  - `test/abuse/throttle.test.ts`: "lets an untouched subject try now"
+  - `test/attacks/lockout-denial-of-service.test.ts`: "never disables the account: once the throttle's wait ends, the owner signs in"
+- **Negative tests:**
+  - `test/abuse/throttle.test.ts`: "lets six attempts through, then blocks for the delay and lets the subject try once it ends"
+  - `test/attacks/throttle-counter-race.test.ts`: "counts every one of a burst of parallel failures from one client"
+  - `test/attacks/password-brute-force.test.ts`: "doubles the wait for each guess past the free ones, whatever address the guesses come from"
+  - `test/attacks/credential-stuffing.test.ts`: "sends a client that failed on many accounts to the app's challenge, even with a working pair"
+  - `test/attacks/recovery-code-brute-force.test.ts`: "throttles recovery guesses on the account, from any address"
+  - `test/abuse/failure-ceiling.test.ts`: "refuses even the right password after 100 consecutive failures, with the same reply as a wrong one"
+  - `test/methods/totp.test.ts`: "counts no failure on the account's other authenticators when one of them takes the code"
+  - `test/abuse/sign-in-paths.test.ts`: "is the one a session's password step-up uses, so the two flows share one budget"
+  - `test/abuse/limit-options.test.ts`: "is refused in production and staging, citing NIST SP 800-63B"
+  - `test/abuse/limit-options.test.ts`: "cannot be raised above 100, citing NIST SP 800-63B"
+  - `test/abuse/mail-and-stuffing-options.test.ts`: "refuses stuffing: false in production and staging"
+- **Mutation evidence:** `src/security/throttle.ts`, `src/security/ceiling.ts`, `src/security/stuffing.ts`,
+  `src/core/dispatcher.ts`, `src/core/auth.ts`
+- **Limitations:** A throttle slows guessing; it does not stop a distributed attack that stays under every key's
+  threshold, which is the challenge hook's job, and the hook is only as strong as the app's challenge. Anyone who knows
+  an identifier can drive its password to the failure ceiling (ADR 0009, Consequences).
+
+### INV-REQUEST-LIMIT: every request is counted per client before its route runs
+
+- **Status:** tested
+- **Property:** Every request the dispatcher answers is counted per client (an IPv4 address or an IPv6 /64) with the
+  store's atomic `increment`, under the route its raw path names, before anything else runs. Over its rule, it
+  answers `429 rate-limited` and runs nothing; sign-up is refused before an account exists. A parallel burst gets the
+  rule's count and no more, and no spelling of a path counts under one rule while running another route. Each rule
+  can be changed, replaced or turned off by the app; a counter that fails ends the request with a 500.
+- **Enforcement:** `src/security/rate-limit.ts` `createRequestLimits` (its `check`, which picks the route's rule),
+  `src/security/store-limiter.ts` `createStoreLimiter` (its `_upsert`, one atomic `increment` per request),
+  `src/core/dispatcher.ts` `createDispatcher` (its `limitIdOf` and `overLimit`, before any route runs)
+- **Attacks:** `sign-up-flooding`, `request-flooding`, `limiter-path-bypass`
+- **Flows:** F01, F02, F22
+- **Positive tests:**
+  - `test/abuse/request-limit.test.ts`: "count each client on its own"
+  - `test/security/store-limiter.test.ts`: "allows points in a window, then refuses with the wait, counted on the injected clock"
+- **Negative tests:**
+  - `test/attacks/sign-up-flooding.test.ts`: "refuses the 21st sign-up from one client in an hour before any account row exists"
+  - `test/attacks/request-flooding.test.ts`: "lets through exactly the rule's count of a parallel burst from one client"
+  - `test/attacks/request-flooding.test.ts`: "counts every address of one IPv6 /64 as one client, in any spelling"
+  - `test/attacks/limiter-path-bypass.test.ts`: "never runs the sign-in route for another spelling of its path, before or after the budget is spent"
+  - `test/failure/rate-limit.test.ts`: "ends sign-up with the fixed 500 before an account exists when the store's increment fails"
+  - `test/abuse/client-address-required.test.ts`: "is refused with the fixed 500 before it is counted or run, and the operator is told once"
+  - `test/abuse/client-address-required.test.ts`: "refuses to start in production and staging, naming the fix"
+- **Mutation evidence:** `src/security/rate-limit.ts`, `src/security/store-limiter.ts`, `src/core/dispatcher.ts`
+- **Limitations:** The window is fixed, so a client can make up to twice a rule's count across a window boundary. A
+  request with no client address is not counted in development and test, or with `requireClientAddress: false`;
+  production and staging refuse it (ADR 0009 §8). An app that sets `rateLimit: false`, or a rule to
+  `false`, takes that limit on itself. A flood spread across many clients stays under every client's rule.
+
+### INV-CLIENT-ADDRESS: the client address comes from the socket or a declared proxy
+
+- **Status:** tested
+- **Property:** The address the throttle counts is the socket's peer, unless the app declared that peer a proxy, by
+  address, CIDR range or platform preset. Then exactly one header is read, the one the app or its preset names, and
+  only from that peer, except under the `vercel`, `fly` and `netlify` presets, which have no peer to check: every
+  request reaches the app through the platform's edge. No other forwarding header is ever read. An IPv4 address and its IPv4-mapped IPv6 form are one
+  client, and an IPv6 client is its /64.
+- **Enforcement:** `src/core/proxy-trust.ts` `resolveClient`, `src/core/client-address.ts` `clientKey`
+- **Attacks:** `spoofed-forwarded-for`, `ipv6-rotation-throttle-bypass`
+- **Flows:** F02, F22
+- **Positive tests:**
+  - `test/abuse/client-address.test.ts`: "reads the right-most address that is not a trusted proxy"
+- **Negative tests:**
+  - `test/attacks/spoofed-forwarded-for.test.ts`: "still counts every attempt against the real socket when the client forges the header"
+  - `test/attacks/spoofed-forwarded-for.test.ts`: "reads only the header the app named, so a forged copy of the other one changes nothing"
+  - `test/attacks/spoofed-forwarded-for.test.ts`: "counts a client that prepends its own Forwarded elements, well-formed or not, under the address its proxy appended"
+  - `test/attacks/ipv6-rotation-throttle-bypass.test.ts`: "counts every address of one /64 as one client"
+- **Mutation evidence:** `src/core/proxy-trust.ts`, `src/core/client-address.ts`
+- **Limitations:** The platform presets follow the vendors' documentation and are tested in simulation only
+  (`test/topology/`); a platform's shared address ranges do not prove a request came through the app's own account
+  (ADR 0009 §5, Limits).
 
 ### INV-STRICT-DEFAULTS: only a safe deployment starts
 
@@ -507,9 +641,10 @@ A phase that changes an invariant changes its section, its catalogue rows and it
   - `test/attacks/pre-account-hijack.test.ts`: "does not let the victim's code confirm the attacker's account"
   - `test/attacks/unverified-identifier-trusted.test.ts`: "gives an account holding only an unconfirmed address and a valid password the unknown-account reply"
   - `test/core/accounts.test.ts`: "makes no uniqueness claim: two sign-ups with one address are two accounts, and neither resolves"
+  - `test/attacks/identifier-normalisation-collision.test.ts`: "signs in to the one account whichever spelling is typed, and refuses a padded one"
+  - `test/attacks/concurrent-enrolment-collision.test.ts`: "lets exactly one of many accounts confirming one address in parallel claim it"
 - **Mutation evidence:** `src/core/accounts.ts`, `src/core/email.ts`, `src/core/identifier.ts`
-- **Limitations:** A compromised mailbox confirms the address (threat model). The normalisation-collision and
-  concurrent-enrolment attack tests arrive in phase 4.
+- **Limitations:** A compromised mailbox confirms the address (threat model).
 
 ### INV-DELEGATION-CEILING: a delegation never exceeds its issuer
 

@@ -12,6 +12,7 @@ import {
   CONFIRMATION_LIFETIME_MS,
 } from "../../src/core/email.js"
 import { defineAuthPolicy } from "../../src/assurance/policy.js"
+import { memoryStore } from "../../src/store/memory.js"
 import {
   aal2,
   body,
@@ -22,6 +23,7 @@ import {
   CREATE,
   enrol,
   expectOk,
+  hookedStore,
   inProcess,
   ORIGIN,
   PASSWORD,
@@ -31,6 +33,7 @@ import {
   testAuth,
   UPDATE,
 } from "../support/auth.js"
+import { within } from "../support/within.js"
 
 type Setup = ReturnType<typeof testAuth>
 
@@ -272,22 +275,6 @@ describe("POST /auth/email/confirm", () => {
     expect(reply.headers.get("retry-after")).toBe("86399")
   })
 
-  it("forgets earlier wrong codes once the right one is redeemed", async () => {
-    const setup = testAuth({ random: codeSource([1, 2, 3, 4, 5, 6]) })
-    const { browser, subject } = await signedUp(setup)
-    for (let attempt = 1; attempt < CONFIRMATION_FAILURE_LIMIT; attempt += 1) {
-      await browser.post("/auth/email/confirm", { code: "000000" })
-    }
-    await expectOk(browser.post("/auth/email/confirm", { code: "123456" }))
-    const counter = await setup.store.increment(
-      TENANT,
-      `email-confirm-failures:${subject}`,
-      CONFIRMATION_LIFETIME_MS,
-      setup.clock.now(),
-    )
-    expect(counter.count).toBe(1)
-  })
-
   it("claims nothing when another account already confirmed the address, and answers the same", async () => {
     const setup = testAuth()
     const owner = await signedUp(setup)
@@ -441,5 +428,92 @@ describe("the pre-auth flow: sign-up, confirm, password, TOTP", () => {
     expect((body(await later.get("/auth/session"))["session"] as { subject: string }).subject).toBe(
       subject,
     )
+  })
+})
+
+describe("the attempts of a code belong to the code they were counted against (ADR 0021 §2)", () => {
+  /**
+   * A signed-up browser whose codes are 123456 and then 654321, over a store that, once `armed`, runs `during` the
+   * first time a request reaches one of `operations` on `target` (a collection or counter name prefix).
+   */
+  async function racing(operations: readonly string[], target: string) {
+    const hook: { armed: boolean; during: () => Promise<unknown> } = {
+      armed: false,
+      during: () => Promise.resolve(),
+    }
+    const store = hookedStore(memoryStore(), async (op, args) => {
+      if (!hook.armed || !operations.includes(op) || !String(args[1]).startsWith(target)) return
+      hook.armed = false
+      await hook.during()
+    })
+    const setup = testAuth({ store, random: codeSource([1, 2, 3, 4, 5, 6], [6, 5, 4, 3, 2, 1]) })
+    const { browser, subject } = await signedUp(setup)
+    const resend = () => {
+      setup.clock.advance(60_000)
+      return expectOk(browser.post("/auth/email/resend"))
+    }
+    return { setup, browser, subject, hook, resend }
+  }
+
+  it("keeps the new code working when a resend races the attempt that kills the old one", async () => {
+    const { browser, hook, resend } = await racing(
+      ["revoke", "revokeByOwner"],
+      CONFIRMATION_COLLECTION,
+    )
+    for (let attempt = 1; attempt < CONFIRMATION_FAILURE_LIMIT; attempt += 1) {
+      await browser.post("/auth/email/confirm", { code: "000000" })
+    }
+    // The fifth wrong code reaches the kill of its code only after the resend has stored the new one.
+    hook.during = resend
+    hook.armed = true
+    const fifth = await within(browser.post("/auth/email/confirm", { code: "000000" }))
+    expect([fifth.status, fifth.text, hook.armed]).toEqual([400, '{"error":"invalid-code"}', false])
+    await expectOk(browser.post("/auth/email/confirm", { code: "654321" }))
+  })
+
+  it("charges the new code nothing for an attempt counted against the old one", async () => {
+    const { setup, browser, subject, hook, resend } = await racing(
+      ["increment"],
+      "email-confirm-failures",
+    )
+    // The resend lands between the attempt's choice of code and its count.
+    hook.during = resend
+    hook.armed = true
+    const raced = await within(browser.post("/auth/email/confirm", { code: "000000" }))
+    expect([raced.status, hook.armed]).toEqual([400, false])
+    for (let attempt = 1; attempt < CONFIRMATION_FAILURE_LIMIT; attempt += 1) {
+      await browser.post("/auth/email/confirm", { code: "000000" })
+    }
+    const live = (await setup.store.listByOwner(TENANT, CONFIRMATION_COLLECTION, subject)).filter(
+      (record) => record.revokedAt === null,
+    )
+    expect(live).toHaveLength(1)
+    await expectOk(browser.post("/auth/email/confirm", { code: "654321" }))
+  })
+
+  it("redeems only the code an attempt was counted against, never one issued while it ran", async () => {
+    const { browser, hook, resend } = await racing(["increment"], "email-confirm-failures")
+    hook.during = resend
+    hook.armed = true
+    // Counted against the first code, so the second code's value redeems nothing here.
+    const raced = await within(browser.post("/auth/email/confirm", { code: "654321" }))
+    expect([raced.status, raced.text, hook.armed]).toEqual([400, '{"error":"invalid-code"}', false])
+    await expectOk(browser.post("/auth/email/confirm", { code: "654321" }))
+  })
+
+  it("refuses a sixth attempt at a code whose kill write never landed, while a new code takes its own five", async () => {
+    const setup = testAuth({ random: codeSource([1, 2, 3, 4, 5, 6], [6, 5, 4, 3, 2, 1]) })
+    const { browser } = await signedUp(setup)
+    for (let attempt = 1; attempt <= CONFIRMATION_FAILURE_LIMIT; attempt += 1) {
+      await browser.post("/auth/email/confirm", { code: "000000" })
+    }
+    expect((await browser.post("/auth/email/confirm", { code: "123456" })).status).toBe(429)
+    setup.clock.advance(60_000)
+    await expectOk(browser.post("/auth/email/resend"))
+    for (let attempt = 1; attempt < CONFIRMATION_FAILURE_LIMIT; attempt += 1) {
+      const reply = await browser.post("/auth/email/confirm", { code: "000000" })
+      expect([attempt, reply.status]).toEqual([attempt, 400])
+    }
+    await expectOk(browser.post("/auth/email/confirm", { code: "654321" }))
   })
 })

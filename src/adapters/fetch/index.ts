@@ -45,7 +45,9 @@ export type FetchHandler<Args extends unknown[]> = (
 export interface FetchAuthOptions<Args extends unknown[]> {
   /**
    * Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,
-   * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address.
+   * `(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address, and in production
+   * and staging the adapter refuses to start with a `ConfigError`, unless a platform preset reads its header from every
+   * request or the app set `requireClientAddress: false` (ADR 0009 §8).
    */
   readonly clientAddress?: ClientAddress<Args> | undefined
 }
@@ -61,8 +63,9 @@ export interface WithAuthOptions<Args extends unknown[]> extends FetchAuthOption
 
 /**
  * Wraps the app's fetch handler with test-cap: serves `/auth/*` and protects every other route at the default
- * requirement unless `options.public` lists it. A malformed public list throws a `ConfigError` here. An error the
- * app's handler throws reaches the runtime untouched; any other failure is a fixed 500.
+ * requirement unless `options.public` lists it. A malformed public list, or a missing `clientAddress` where production
+ * needs one, throws a `ConfigError` here. An error the app's handler throws reaches the runtime untouched; any other
+ * failure is a fixed 500.
  *
  * ```ts
  * Deno.serve(withAuth(auth, handler, { public: ["/"], clientAddress: (req, info) => info.remoteAddr.hostname }))
@@ -75,7 +78,9 @@ export function withAuth<Args extends unknown[] = []>(
   handler: NoInfer<FetchHandler<Args>>,
   options: WithAuthOptions<Args> = {},
 ): (req: Request, ...args: Args) => Promise<Response> {
-  const isPublic = internalsOf(auth).publicPaths(options.public ?? [])
+  const internals = internalsOf(auth)
+  internals.requireAddressSource(options.clientAddress !== undefined)
+  const isPublic = internals.publicPaths(options.public ?? [])
   return async (req, ...args) => {
     const gated = await gate(auth, isPublic, req, options.clientAddress?.(req, ...args))
     if (gated.kind === "respond") return gated.response
@@ -85,13 +90,14 @@ export function withAuth<Args extends unknown[] = []>(
 
 /**
  * Serves test-cap's `/auth/*` routes from a `Request`, and answers `null` for any other path, leaving its body unread,
- * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default.
+ * so the app routes it itself. It protects nothing else: `withAuth` adds deny by default. A missing `clientAddress`
+ * where production needs one throws a `ConfigError` here.
  */
 export function fetchAuth<Args extends unknown[] = []>(
   auth: Auth<string>,
   options: FetchAuthOptions<Args> = {},
 ): (req: Request, ...args: Args) => Promise<Response | null> {
-  internalsOf(auth)
+  internalsOf(auth).requireAddressSource(options.clientAddress !== undefined)
   return async (req, ...args) => {
     try {
       return await serveAuth(auth, req, headOf(req, options.clientAddress?.(req, ...args)))

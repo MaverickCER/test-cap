@@ -12,14 +12,16 @@ import type {
   SessionKind,
   SessionState,
 } from "../assurance/policy.js"
+import { accountActive } from "../core/accounts.js"
 import { randomToken, type Clock, type RandomSource } from "../core/clock.js"
 import { hexEncode, sha256, utf8Encode } from "../core/encoding.js"
-import type {
-  AuthStore,
-  JsonValue,
-  StoredRecord,
-  StoreOperations,
-  TenantId,
+import {
+  atomically,
+  type AuthStore,
+  type JsonValue,
+  type StoredRecord,
+  type StoreOperations,
+  type TenantId,
 } from "../store/port.js"
 import { expireCookie, readCookie, serializeCookie } from "../transport/cookies.js"
 
@@ -168,7 +170,7 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
       ? policy.timeouts.aal2AbsoluteMs
       : policy.timeouts.restrictedAbsoluteMs
 
-  /** The record behind `token` while it stands: not revoked and not claimed by a rotation. */
+  /** The record behind `token` while it stands: not revoked, not claimed by a rotation, and of an active account. */
   const find = async (
     ops: StoreOperations,
     tenant: TenantId,
@@ -179,7 +181,9 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
     const record = await ops.get(tenant, SESSION_COLLECTION, key)
     if (record === null || record.revokedAt !== null) return null
     const data = record.data as unknown as SessionData
-    return data.rotatedAt === undefined ? { key, record, data } : null
+    if (data.rotatedAt !== undefined) return null
+    // A disabled (deprovisioned) account's sessions count for nothing, even before they are revoked (ADR 0012).
+    return (await accountActive(ops, tenant, data.subject)) ? { key, record, data } : null
   }
 
   const load = async (
@@ -227,12 +231,17 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
     now: number,
   ): Promise<IssuedSession> => (await create(store, tenant, state, now)).issued
 
-  /** Replaces the session behind `token` with `change(state)`, in one transaction when the store has them. */
+  /**
+   * Replaces the session behind `token` with `change(state)`, in one transaction when the store has them. `apply`
+   * writes a credential change in the same transaction, after the session is claimed and before the new one is
+   * written; when it writes nothing, nothing is issued.
+   */
   const replace = async (
     tenant: TenantId,
     token: string,
     change: (state: SessionState, now: number) => SessionState | null,
     revokeOthers = false,
+    apply?: (ops: StoreOperations) => Promise<boolean>,
   ): Promise<IssuedSession | null> => {
     const now = clock.now()
     const run = async (ops: StoreOperations): Promise<IssuedSession | null> => {
@@ -251,23 +260,24 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
           data: claim as unknown as JsonValue,
         },
       )
-      if (claimed !== "updated") return null
+      if (claimed !== "updated" || (apply !== undefined && !(await apply(ops)))) return null
       const { key, issued } = await create(ops, tenant, next, now)
       await ops.revoke(tenant, SESSION_COLLECTION, current.key, now)
       if (revokeOthers)
         await ops.revokeByOwner(tenant, SESSION_COLLECTION, next.subject, now, { except: key })
       return issued
     }
-    return store.transaction === undefined ? run(store) : store.transaction(run)
+    return atomically(store, run)
   }
 
   const revokePresented = async (
     tenant: TenantId,
     token: string | null,
     now: number,
+    ops: StoreOperations = store,
   ): Promise<void> => {
     if (!wellFormed(token)) return
-    await store.revoke(tenant, SESSION_COLLECTION, await hashToken(token), now)
+    await ops.revoke(tenant, SESSION_COLLECTION, await hashToken(token), now)
   }
 
   /**
@@ -319,7 +329,10 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
       )
     },
 
-    /** Starts a pre-auth or recovery-only session; a presented token is revoked, never adopted. */
+    /**
+     * Starts a pre-auth or recovery-only session; a presented token is revoked, never adopted. `ops` is the
+     * transaction to write in, the store by default.
+     */
     async begin(
       tenant: TenantId,
       presented: string | null,
@@ -328,10 +341,12 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
         readonly state: "pre-auth" | "recovery-only"
         readonly evidence?: readonly AuthenticationEvidence[]
       },
+      ops: StoreOperations = store,
     ): Promise<IssuedSession> {
       const now = clock.now()
-      await revokePresented(tenant, presented, now)
-      return issue(
+      await revokePresented(tenant, presented, now, ops)
+      const { issued } = await create(
+        ops,
         tenant,
         {
           subject: input.subject,
@@ -343,6 +358,7 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
         },
         now,
       )
+      return issued
     },
 
     read,
@@ -378,6 +394,22 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
     },
 
     /**
+     * True when `challenge` was opened by this same session and has not expired: what `stepUp` will take. It spends
+     * nothing, so a step-up checks it before the secret and a refused challenge costs no code. A used challenge always
+     * belongs to an earlier token, since the step-up that used it rotated the session; `stepUp`'s `consumeOnce` takes
+     * it atomically, and checks its format, use and expiry again.
+     */
+    async challengeOpen(tenant: TenantId, token: string, challenge: string): Promise<boolean> {
+      const bound = await store.get(tenant, STEP_UP, challenge)
+      // `beginStepUp` gives every challenge an expiry.
+      return (
+        bound !== null &&
+        bound.data === (await hashToken(token)) &&
+        clock.now() < (bound.expiresAt as number)
+      )
+    },
+
+    /**
      * Adds step-up evidence to the session and rotates it, only when `challenge` was opened by this same session and
      * is unused and unexpired (ADR 0005, ADR 0006 §5).
      */
@@ -401,22 +433,29 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
       }))
     },
 
-    /** Ends enrolment: the pre-auth session becomes a new authenticated one, holding its evidence and the new. */
+    /**
+     * Ends enrolment: the pre-auth session becomes a new authenticated one, holding its evidence and the new. A second
+     * factor is a credential change, so the account's other sessions, pre-auth ones included, are revoked (ADR 0006 §7).
+     */
     completeEnrolment(
       tenant: TenantId,
       token: string,
       evidence: readonly AuthenticationEvidence[],
     ): Promise<IssuedSession | null> {
-      return replace(tenant, token, (state, now) =>
-        state.state === "pre-auth"
-          ? {
-              ...state,
-              state: "authenticated",
-              evidence: [...state.evidence, ...evidence],
-              startedAt: now,
-              lastSeenAt: now,
-            }
-          : null,
+      return replace(
+        tenant,
+        token,
+        (state, now) =>
+          state.state === "pre-auth"
+            ? {
+                ...state,
+                state: "authenticated",
+                evidence: [...state.evidence, ...evidence],
+                startedAt: now,
+                lastSeenAt: now,
+              }
+            : null,
+        true,
       )
     },
 
@@ -428,9 +467,16 @@ export function createSessions<Id extends string>(options: SessionOptions<Id>) {
       return replace(tenant, token, (state, now) => ({ ...state, lastSeenAt: now }))
     },
 
-    /** A credential changed: rotates this session and revokes the account's others (ADR 0006 §7). */
-    credentialChanged(tenant: TenantId, token: string): Promise<IssuedSession | null> {
-      return replace(tenant, token, (state, now) => ({ ...state, lastSeenAt: now }), true)
+    /**
+     * A credential changed: rotates this session and revokes the account's others (ADR 0006 §7). `apply` writes the
+     * change itself in the same transaction (see `replace`).
+     */
+    credentialChanged(
+      tenant: TenantId,
+      token: string,
+      apply?: (ops: StoreOperations) => Promise<boolean>,
+    ): Promise<IssuedSession | null> {
+      return replace(tenant, token, (state, now) => ({ ...state, lastSeenAt: now }), true, apply)
     },
 
     /** Ends a recovery-only session once recovery finishes (ADR 0007 Open 5); returns the cookie clearing. */

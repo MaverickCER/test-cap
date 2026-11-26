@@ -9,7 +9,7 @@
  */
 
 import { randomToken, type RandomSource } from "./clock.js"
-import type { AuthStore, JsonValue, TenantId } from "../store/port.js"
+import type { AuthStore, StoreOperations, JsonValue, TenantId } from "../store/port.js"
 
 /** Accounts, keyed by account id. */
 export const ACCOUNT_COLLECTION = "account"
@@ -43,7 +43,7 @@ export async function createAccount(
 
 /** True when the account exists and is active; a disabled account produces no evidence (ADR 0012 §5). */
 export async function accountActive(
-  store: AuthStore,
+  store: Pick<StoreOperations, "get">,
   tenant: TenantId,
   accountId: string,
 ): Promise<boolean> {
@@ -104,4 +104,37 @@ export async function hasConfirmedIdentifier(
 ): Promise<boolean> {
   const records = await store.listByOwner(tenant, IDENTIFIER_COLLECTION, accountId)
   return records.some((record) => record.revokedAt === null)
+}
+
+/** Lost writes `deactivateAccount` retries before it gives up: a bound, so contention can never loop forever. */
+const DEACTIVATE_TRIES = 5
+
+/**
+ * Marks the account disabled (ADR 0012 Open 15: deprovision). Every ceremony and every session read checks the status,
+ * so nothing the account holds works afterwards; resolves to `false` when there is no such account. A write that loses
+ * a race to another change is retried against the newer version, at most `DEACTIVATE_TRIES` times.
+ */
+export async function deactivateAccount(
+  store: AuthStore,
+  tenant: TenantId,
+  accountId: string,
+  now: number,
+): Promise<boolean> {
+  /** One try: `true` when written, `false` when there is no such account, `null` when another change won the race. */
+  const once = async (): Promise<boolean | null> => {
+    const record = await store.get(tenant, ACCOUNT_COLLECTION, accountId)
+    if (record === null) return false
+    const data = record.data as Readonly<Record<string, JsonValue>>
+    const written = await store.update(tenant, ACCOUNT_COLLECTION, accountId, record.version, {
+      data: { ...data, status: "disabled", disabledAt: now },
+    })
+    return written === "updated" ? true : null
+  }
+  // A fixed number of tries, each after the last lost a race; no loop condition, so nothing can make it run forever.
+  const outcome = await Array.from({ length: DEACTIVATE_TRIES }).reduce<Promise<boolean | null>>(
+    async (previous) => (await previous) ?? once(),
+    Promise.resolve(null),
+  )
+  if (outcome !== null) return outcome
+  throw new Error(`The account could not be disabled after ${String(DEACTIVATE_TRIES)} tries.`)
 }

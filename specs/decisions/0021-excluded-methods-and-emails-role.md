@@ -22,6 +22,9 @@ sign-in). Pinned by:
 
 The recommendations under Open are provisional defaults until the owner decides.
 
+Amended 2026-11-24: each try at an email code counts against the account's newest code only, and a new code starts
+with all its tries (`test/core/email-confirmation.test.ts`).
+
 ## Context
 
 Owner requirement 5 asks for every secure, free authentication method from the start. Some common methods fail one of

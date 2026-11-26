@@ -48,8 +48,8 @@ const designDocuments = [
 ]
 
 describe("decision records", () => {
-  it("number 0001 to 0029 with no gap and no duplicate", () => {
-    const expected = Array.from({ length: 29 }, (_, index) => String(index + 1).padStart(4, "0"))
+  it("number 0001 to 0032 with no gap and no duplicate", () => {
+    const expected = Array.from({ length: 32 }, (_, index) => String(index + 1).padStart(4, "0"))
     expect(decisionFiles.map((file) => file.slice(0, 4))).toEqual(expected)
   })
 

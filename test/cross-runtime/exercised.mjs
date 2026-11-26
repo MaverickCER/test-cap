@@ -52,6 +52,34 @@ export const CHECKS = {
       "defineAuthPolicy refuses an empty version",
     )
   },
+  async createStoreLimiter(dist, check) {
+    // A store with only what the limiter counts with, so the check needs no other entry of dist/.
+    const counts = new Map()
+    const store = {
+      increment(tenant, counter, windowMs) {
+        const key = `${tenant}/${counter}`
+        const count = (counts.get(key) ?? 0) + 1
+        counts.set(key, count)
+        return Promise.resolve({ count, windowStart: 0, resetAt: windowMs })
+      },
+    }
+    const clock = { now: () => 4_000 }
+    const limiter = dist.createStoreLimiter({
+      store,
+      clock,
+      points: 1,
+      duration: 10,
+      keyPrefix: "rate",
+      blocks: false,
+    })
+    const first = await limiter.consume("sign-in|192.0.2.1")
+    const second = await limiter.consume("sign-in|192.0.2.1").catch((refusal) => refusal)
+    check(
+      first.remainingPoints === 0 && second.consumedPoints === 2 && second.msBeforeNext === 6_000,
+      "createStoreLimiter allows the rule's count, then refuses with the wait",
+    )
+    check(counts.has("default/rate:sign-in|192.0.2.1"), "createStoreLimiter counts in the store")
+  },
   createAuth(dist, check) {
     let refused
     try {
@@ -63,6 +91,30 @@ export const CHECKS = {
       refused instanceof dist.ConfigError &&
         refused.problems.includes("AUTH_ENCRYPTION_KEY is missing."),
       "createAuth runs the readiness check and names a missing key",
+    )
+  },
+  platform(dist, check) {
+    const preset = dist.platform("cloudflare", { peers: ["173.245.48.0/20"] })
+    check(
+      preset.kind === "platform" && preset.name === "cloudflare" && preset.peers.length === 1,
+      "platform builds a preset",
+    )
+    let refused
+    try {
+      dist.createAuth({
+        store: { kind: "sql", durable: true },
+        env: {},
+        trustedProxies: dist.platform("cloudflare", { peers: [] }),
+      })
+    } catch (error) {
+      refused = error
+    }
+    check(
+      refused instanceof dist.ConfigError &&
+        refused.problems.includes(
+          'platform("cloudflare") needs peers: the addresses or CIDR ranges its requests arrive from.',
+        ),
+      "createAuth refuses a preset without the peers it needs",
     )
   },
 }

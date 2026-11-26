@@ -87,7 +87,8 @@ describe("an HIBP outage", () => {
       identifier: "ada@example.com",
       password: PASSWORD,
     })
-    expect([reply.status, reply.text]).toEqual([200, '{"outcome":"step-up","returnTo":"/"}'])
+    // The account has no second factor yet, so the sign-in goes back to enrolment.
+    expect([reply.status, reply.text]).toEqual([200, '{"outcome":"enroll","returnTo":"/"}'])
     expect(calls).toBe(1)
   })
 })

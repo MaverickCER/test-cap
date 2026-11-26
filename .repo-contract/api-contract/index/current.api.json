@@ -178,7 +178,7 @@
   },
   "kind": "Package",
   "canonicalReference": "test-cap!",
-  "docComment": "/**\n * test-cap: the internal authentication package for MaverickCER apps.\n *\n * This entry holds `createAuth` and the policy that configures it (phase 3), and the foundation's public contract\n * (phase 2): the byte transport an adapter speaks, the store port an app implements, the injected clock and random\n * source, the deployment modes, and the two error types. Adapters live in their own entries, such as\n * `test-cap/express`.\n *\n * @packageDocumentation\n */\n",
+  "docComment": "/**\n * test-cap: the internal authentication package for MaverickCER apps.\n *\n * This entry holds `createAuth` and the policy that configures it (phase 3); the limits' public types,\n * `createStoreLimiter` and the `platform` proxy presets (phase 4); and the foundation's public contract (phase 2): the\n * byte transport an adapter speaks, the store port an app implements, the injected clock and random source, the\n * deployment modes, and the two error types. Adapters live in their own entries, such as `test-cap/express`.\n *\n * @packageDocumentation\n */\n",
   "name": "test-cap",
   "preserveMemberOrder": false,
   "members": [
@@ -282,6 +282,114 @@
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!Argon2Hasher:interface",
+          "docComment": "/**\n * The argon2id computation itself, which `createAuth`'s `argon2Hasher` replaces: by default hash-wasm, or\n * `@noble/hashes` where WebAssembly cannot compile (ADR 0031). test-cap keeps around it the fixed cost, the salt,\n * the semaphore and the dummy hash, and refuses what it can check: a hash that is not the argon2id PHC string of the\n * salt and cost it asked for, a stored hash in any other format, and any answer from `verify` but `true` as a match.\n *\n * What the app takes on by replacing it: a correct argon2id (RFC 9106, version 19) that writes the PHC string with\n * standard base64 and no padding, as hash-wasm does, so hashes stay verifiable when the hasher changes back; a\n * constant-time comparison in `verify`; and the time and memory each hash costs where the app runs.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface Argon2Hasher "
+            }
+          ],
+          "fileUrlPath": "src/methods/password/argon2.ts",
+          "releaseTag": "Public",
+          "name": "Argon2Hasher",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!Argon2Hasher#hash:member",
+              "docComment": "/**\n * Hashes `password` with `salt` at `cost`, to a 32-byte digest; resolves to the PHC string, such as\n * `$argon2id$v=19$m=19456,t=2,p=1$<salt>$<digest>`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly hash: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "(input: {\n        readonly password: string;\n        readonly salt: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Uint8Array",
+                  "canonicalReference": "!Uint8Array:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";\n        readonly cost: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Argon2Cost",
+                  "canonicalReference": "test-cap!Argon2Cost:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";\n    }) => "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<string>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "hash",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 8
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!Argon2Hasher#verify:member",
+              "docComment": "/**\n * Resolves to `true` when `password` matches the PHC string `encoded`, at the cost `encoded` records.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly verify: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "(password: string, encoded: string) => "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<boolean>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "verify",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 4
               }
             }
           ],
@@ -687,7 +795,7 @@
         {
           "kind": "Interface",
           "canonicalReference": "test-cap!AuthAdmin:interface",
-          "docComment": "/**\n * The server-side calls (ADR 0012, ADR 0014). Phase 3 has `revoke`.\n */\n",
+          "docComment": "/**\n * The server-side calls (ADR 0012, ADR 0014): `revoke` (phase 3) and `deprovision` (phase 4).\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -699,6 +807,56 @@
           "name": "AuthAdmin",
           "preserveMemberOrder": false,
           "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!AuthAdmin#deprovision:member(1)",
+              "docComment": "/**\n * Deprovisions the account (ADR 0012 Open 15, the SCIM hook): disables it, so no ceremony, recovery or session of it\n * works, and revokes every session. Resolves to `false` when there is no such account.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "deprovision(subject: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<boolean>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 5
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "subject",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "deprovision"
+            },
             {
               "kind": "MethodSignature",
               "canonicalReference": "test-cap!AuthAdmin#revoke:member(1)",
@@ -830,6 +988,70 @@
             },
             {
               "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#argon2Hasher:member",
+              "docComment": "/**\n * The app's own argon2id, in place of hash-wasm and its `@noble/hashes` fallback (ADR 0031), such as a native\n * binding on a server that has one. It is allowed in every mode, at the fixed cost test-cap passes it; see\n * `Argon2Hasher` for what test-cap still checks and what the app takes on.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly argon2Hasher?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Argon2Hasher",
+                  "canonicalReference": "test-cap!Argon2Hasher:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "argon2Hasher",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#challengeHook:member",
+              "docComment": "/**\n * The app's challenge for a client the stuffing detector flagged (ADR 0009 §4). Without one, every failure from a\n * flagged client blocks at once.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly challengeHook?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ChallengeHook",
+                  "canonicalReference": "test-cap!ChallengeHook:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "challengeHook",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
               "canonicalReference": "test-cap!AuthConfig#clock:member",
               "docComment": "/**\n * A clock for tests. Any mode but `test` refuses to start with one (ADR 0026 §4).\n */\n",
               "excerptTokens": [
@@ -855,6 +1077,65 @@
               "isOptional": true,
               "releaseTag": "Public",
               "name": "clock",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#emailCodeAttempts:member",
+              "docComment": "/**\n * Attempts an emailed confirmation code allows over its life (ADR 0009 Open 1): 5 by default, and never more; a\n * lower number is allowed.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly emailCodeAttempts?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "emailCodeAttempts",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#emailLimit:member",
+              "docComment": "/**\n * The confirmation-mail send limits (ADR 0009 §7, §8): changed rules per address and per client and the app's own\n * `RateLimiter`; or `false` for none, which production and staging refuse.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly emailLimit?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "EmailLimitConfig",
+                  "canonicalReference": "test-cap!EmailLimitConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | false | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "emailLimit",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 3
@@ -903,6 +1184,65 @@
             },
             {
               "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#failureCeiling:member",
+              "docComment": "/**\n * Consecutive failures an authenticator accepts before it stops (ADR 0009 §3): 100 by default, and never more, as\n * NIST SP 800-63B-4 allows. A lower number is allowed.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly failureCeiling?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "failureCeiling",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#forwardedHeader:member",
+              "docComment": "/**\n * The one forwarding header the app's own proxies set: `\"x-forwarded-for\"` (the default) or `\"forwarded\"` (RFC\n * 7239). The other is never read, because a proxy that sets one passes a client's forged copy of the other through.\n * A platform preset names its own header instead.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly forwardedHeader?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ForwardedHeader",
+                  "canonicalReference": "test-cap!ForwardedHeader:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "forwardedHeader",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
               "canonicalReference": "test-cap!AuthConfig#hibpFetch:member",
               "docComment": "/**\n * The fetch the HIBP breach check calls (ADR 0010), usually the global `fetch`. test-cap reaches no network on its\n * own, so the app hands it the capability.\n */\n",
               "excerptTokens": [
@@ -927,6 +1267,42 @@
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#onDiagnostic:member",
+              "docComment": "/**\n * Receives each operator diagnostic once per `Auth`: a deployment problem test-cap can see from requests, such as\n * forwarding headers arriving with no trusted proxy (ADR 0009 §5). Not a security event; nothing is stored.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly onDiagnostic?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "((diagnostic: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "AuthDiagnostic",
+                  "canonicalReference": "test-cap!AuthDiagnostic:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ") => void) | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "onDiagnostic",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 4
               }
             },
             {
@@ -995,6 +1371,33 @@
             },
             {
               "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#publicBasePath:member",
+              "docComment": "/**\n * The path a gateway in front of the app adds before every path, such as `/accounts` when the gateway serves the\n * app's `/auth/sign-in` as `/accounts/auth/sign-in` (ADR 0024 §6). Every link, redirect and email URL test-cap builds\n * starts with it; routes are still matched on the path the app receives. Empty by default.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly publicBasePath?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "publicBasePath",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
               "canonicalReference": "test-cap!AuthConfig#random:member",
               "docComment": "/**\n * A random source for tests. Any mode but `test` refuses to start with one (ADR 0026 §4).\n */\n",
               "excerptTokens": [
@@ -1023,6 +1426,101 @@
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#rateLimit:member",
+              "docComment": "/**\n * The request limits on every `/auth` route (ADR 0009 §8): changed values, rules per route id and the app's own\n * `RateLimiter`; or `false` for none, for an app that limits requests at its gateway. On by default in every mode.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly rateLimit?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateLimitConfig",
+                  "canonicalReference": "test-cap!RateLimitConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateLimiterLike",
+                  "canonicalReference": "rate-limiter-flexible!RateLimiterLike:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | false | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "rateLimit",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 5
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#refusalEvents:member",
+              "docComment": "/**\n * Which refusals of a limit emit their failure event (ADR 0009 §8): `\"first\"` (the default), one per key per window,\n * so a flood is one event; or `\"every\"` refusal.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly refusalEvents?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"first\" | \"every\" | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "refusalEvents",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#requireClientAddress:member",
+              "docComment": "/**\n * Whether production and staging refuse a request with no client address, which the per-client limits cannot count\n * (ADR 0009 §8): `true` by default. There, a Web-Request adapter with no `clientAddress` option refuses to start,\n * unless a platform preset reads its header from every request, and a request that still has none gets the fixed\n * 500. `false` serves such a request uncounted, for an app that limits requests at its gateway; the operator is told\n * once. Development and test always serve it uncounted.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly requireClientAddress?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "requireClientAddress",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
               }
             },
             {
@@ -1083,6 +1581,56 @@
             },
             {
               "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#stuffing:member",
+              "docComment": "/**\n * The credential-stuffing detector (ADR 0009 §4, §8): changed values, each one left out keeping its default; the\n * app's own `StuffingDetector`; or `false` for none, which production and staging refuse.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly stuffing?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Partial",
+                  "canonicalReference": "!Partial:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "StuffingConfig",
+                  "canonicalReference": "test-cap!StuffingConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "> | "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "StuffingDetector",
+                  "canonicalReference": "test-cap!StuffingDetector:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | false | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "stuffing",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 7
+              }
+            },
+            {
+              "kind": "PropertySignature",
               "canonicalReference": "test-cap!AuthConfig#tenant:member",
               "docComment": "/**\n * The tenant every operation is scoped to (ADR 0012); `default` when absent.\n */\n",
               "excerptTokens": [
@@ -1115,8 +1663,58 @@
             },
             {
               "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthConfig#throttle:member",
+              "docComment": "/**\n * The guessing throttle (ADR 0009 §1 to §3, §8): changed values, each one left out keeping its default\n * (`DEFAULT_THROTTLE`); the app's own `Throttle`; or `false` for none, which production and staging refuse.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly throttle?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Partial",
+                  "canonicalReference": "!Partial:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ThrottleConfig",
+                  "canonicalReference": "test-cap!ThrottleConfig:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "> | "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Throttle",
+                  "canonicalReference": "test-cap!Throttle:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | false | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "throttle",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 7
+              }
+            },
+            {
+              "kind": "PropertySignature",
               "canonicalReference": "test-cap!AuthConfig#trustedProxies:member",
-              "docComment": "/**\n * The app's own proxies (ADR 0009 §5); read by the throttles, which arrive in phase 4.\n */\n",
+              "docComment": "/**\n * Who stands in front of the app (ADR 0009 §5): its own proxies, as IP addresses or CIDR ranges, or a platform\n * preset from `platform`. Only from such a peer is a forwarding header read, for the client the throttle counts.\n * Empty by default: the socket is the client.\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",
@@ -1126,6 +1724,15 @@
                   "kind": "Reference",
                   "text": "TrustedProxies",
                   "canonicalReference": "test-cap!TrustedProxies:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "PlatformTrust",
+                  "canonicalReference": "test-cap!PlatformTrust:interface"
                 },
                 {
                   "kind": "Content",
@@ -1142,7 +1749,79 @@
               "name": "trustedProxies",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
-                "endIndex": 3
+                "endIndex": 5
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!AuthDiagnostic:interface",
+          "docComment": "/**\n * One operator diagnostic (ADR 0009 §5, ADR 0011): what was seen, and what to change.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface AuthDiagnostic "
+            }
+          ],
+          "fileUrlPath": "src/core/auth.ts",
+          "releaseTag": "Public",
+          "name": "AuthDiagnostic",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthDiagnostic#code:member",
+              "docComment": "/**\n * `forwarded-header-ignored`: a forwarding header arrived that test-cap did not read, because the peer is not a\n * trusted proxy or the header is not the one declared. `origin-unverifiable`: a state-changing request carried neither a usable `Origin` nor\n * `Sec-Fetch-Site`, so the CSRF check refused it. `client-address-missing`: a request had no client address, so the\n * per-client limits did not count it, or production and staging refused it. `client-address-optional`: the app set\n * `requireClientAddress: false`. `rate-limit-off`, `throttle-off`, `email-limit-off` and `stuffing-off`: the app\n * turned that limit off. `argon2-fallback`: the runtime cannot compile WebAssembly, so argon2id runs on\n * `@noble/hashes`, slower (ADR 0031).\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly code: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"forwarded-header-ignored\" | \"origin-unverifiable\" | \"client-address-missing\" | \"client-address-optional\" | \"rate-limit-off\" | \"throttle-off\" | \"email-limit-off\" | \"stuffing-off\" | \"argon2-fallback\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "code",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!AuthDiagnostic#message:member",
+              "docComment": "/**\n * A sentence for the operator, naming the setting to check.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly message: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "message",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
               }
             }
           ],
@@ -2007,7 +2686,7 @@
         {
           "kind": "TypeAlias",
           "canonicalReference": "test-cap!AuthenticationMethod:type",
-          "docComment": "/**\n * The methods that produce evidence. Email sign-in and recovery codes produce none (ADR 0005 §5, ADR 0007).\n */\n",
+          "docComment": "/**\n * The method ids evidence and events name. `recovery-code` is one that produces no evidence: redeeming a code yields a\n * recovery-only session (ADR 0007). Email sign-in produces none either (ADR 0005 §5).\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",
@@ -2786,6 +3465,50 @@
           ]
         },
         {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!ChallengeHook:type",
+          "docComment": "/**\n * The app's challenge (ADR 0009 §4): called for each sign-in from a flagged client, before any password is checked.\n * It answers `true` when the request carries a challenge the app accepts, such as a token its own widget issued.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ChallengeHook = "
+            },
+            {
+              "kind": "Content",
+              "text": "(input: {\n    readonly request: "
+            },
+            {
+              "kind": "Reference",
+              "text": "PlainRequest",
+              "canonicalReference": "test-cap!PlainRequest:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ";\n    readonly client: string;\n}) => boolean | "
+            },
+            {
+              "kind": "Reference",
+              "text": "Promise",
+              "canonicalReference": "!Promise:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "<boolean>"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/security/stuffing.ts",
+          "releaseTag": "Public",
+          "name": "ChallengeHook",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 6
+          }
+        },
+        {
           "kind": "Interface",
           "canonicalReference": "test-cap!Clock:interface",
           "docComment": "/**\n * The time source every flow reads.\n */\n",
@@ -2962,6 +3685,33 @@
               "isOptional": true,
               "releaseTag": "Public",
               "name": "concurrency",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ConformanceOptions#timeoutMs:member",
+              "docComment": "/**\n * How long one check may run, in milliseconds (default 30,000, at least 1). A check still running then fails with\n * that as its detail, so a store that deadlocks, such as a transaction that calls the outer store on a pool of one\n * connection, is reported instead of hanging the run.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly timeoutMs?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "timeoutMs",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
@@ -3389,6 +4139,53 @@
         },
         {
           "kind": "Function",
+          "canonicalReference": "test-cap!createStoreLimiter:function(1)",
+          "docComment": "/**\n * A rate-limiter-flexible limiter over the app's `AuthStore`: the default behind every limit test-cap keeps, and a\n * piece an app can combine with the library's own, such as in a `RateLimiterUnion`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function createStoreLimiter(options: "
+            },
+            {
+              "kind": "Reference",
+              "text": "StoreLimiterOptions",
+              "canonicalReference": "test-cap!StoreLimiterOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "StoreLimiter",
+              "canonicalReference": "rate-limiter-flexible!RateLimiterStoreAbstract:class"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/security/store-limiter.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 3,
+            "endIndex": 4
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isOptional": false
+            }
+          ],
+          "name": "createStoreLimiter"
+        },
+        {
+          "kind": "Function",
           "canonicalReference": "test-cap!defineAuthPolicy:function(1)",
           "docComment": "/**\n * Validates a policy and returns it. Throws a `ConfigError` listing every problem: an empty version, a malformed or\n * reserved requirement id, an unknown level, a bad time limit, or a trust config that maps anything to AAL3.\n */\n",
           "excerptTokens": [
@@ -3564,6 +4361,142 @@
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!EmailLimitConfig:interface",
+          "docComment": "/**\n * The `emailLimit` option of `createAuth` (ADR 0009 §7, §8). Each value left out keeps its default.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface EmailLimitConfig "
+            }
+          ],
+          "fileUrlPath": "src/core/email.ts",
+          "releaseTag": "Public",
+          "name": "EmailLimitConfig",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!EmailLimitConfig#limiter:member",
+              "docComment": "/**\n * Builds the limiter for each `{ windowMs, max }` rule, over the app's own backend; the `AuthStore` by default.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly limiter?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "LimiterFactory",
+                  "canonicalReference": "test-cap!LimiterFactory:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "limiter",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!EmailLimitConfig#perAddress:member",
+              "docComment": "/**\n * The limits per destination address, each counted on its own: 1 a minute and 5 an hour by default. Each is a\n * `{ windowMs, max }` or a rate-limiter-flexible limiter.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly perAddress?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly ("
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateRule",
+                  "canonicalReference": "test-cap!RateRule:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateLimiterLike",
+                  "canonicalReference": "rate-limiter-flexible!RateLimiterLike:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ")[] | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "perAddress",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 6
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!EmailLimitConfig#perClient:member",
+              "docComment": "/**\n * The limit per client (an IPv4 address or an IPv6 /64): 20 an hour by default; `false` for none.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly perClient?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateRule",
+                  "canonicalReference": "test-cap!RateRule:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateLimiterLike",
+                  "canonicalReference": "rate-limiter-flexible!RateLimiterLike:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | false | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "perClient",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 5
               }
             }
           ],
@@ -4751,7 +5684,7 @@
                 },
                 {
                   "kind": "Content",
-                  "text": "\"invalid-credentials\" | \"invalid-code\" | \"too-common\" | \"breached\" | \"rate-limited\" | \"unexpected\""
+                  "text": "\"invalid-credentials\" | \"invalid-code\" | \"too-common\" | \"breached\" | \"rate-limited\" | \"challenge-required\" | \"invalid-challenge\" | \"unexpected\""
                 },
                 {
                   "kind": "Content",
@@ -5094,6 +6027,32 @@
         },
         {
           "kind": "TypeAlias",
+          "canonicalReference": "test-cap!ForwardedHeader:type",
+          "docComment": "/**\n * The forwarding header an app's own proxies set (ADR 0009 §5); test-cap reads that one and no other.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ForwardedHeader = "
+            },
+            {
+              "kind": "Content",
+              "text": "\"x-forwarded-for\" | \"forwarded\""
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/core/proxy-trust.ts",
+          "releaseTag": "Public",
+          "name": "ForwardedHeader",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "TypeAlias",
           "canonicalReference": "test-cap!HibpFetch:type",
           "docComment": "/**\n * The fetch the check calls; the global `fetch` fits it.\n */\n",
           "excerptTokens": [
@@ -5339,6 +6298,145 @@
           }
         },
         {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!LimiterFactory:type",
+          "docComment": "/**\n * Builds the limiter for one rule, such as `(options) => new RateLimiterRedis({ storeClient, ...options })`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type LimiterFactory = "
+            },
+            {
+              "kind": "Content",
+              "text": "(options: "
+            },
+            {
+              "kind": "Reference",
+              "text": "LimiterOptions",
+              "canonicalReference": "test-cap!LimiterOptions:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ") => "
+            },
+            {
+              "kind": "Reference",
+              "text": "RateLimiterLike",
+              "canonicalReference": "rate-limiter-flexible!RateLimiterLike:type"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/security/rate-limit.ts",
+          "releaseTag": "Public",
+          "name": "LimiterFactory",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 5
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!LimiterOptions:interface",
+          "docComment": "/**\n * What a limiter factory is asked for: rate-limiter-flexible's own options for one rule.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface LimiterOptions "
+            }
+          ],
+          "fileUrlPath": "src/security/rate-limit.ts",
+          "releaseTag": "Public",
+          "name": "LimiterOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!LimiterOptions#duration:member",
+              "docComment": "/**\n * The window, in seconds: the rule's `windowMs` / 1000.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly duration: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "duration",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!LimiterOptions#keyPrefix:member",
+              "docComment": "/**\n * A prefix that keeps this rule's keys apart from every other's.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly keyPrefix: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "keyPrefix",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!LimiterOptions#points:member",
+              "docComment": "/**\n * Requests allowed per key in each window: the rule's `max`.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly points: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "points",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
           "kind": "Interface",
           "canonicalReference": "test-cap!Messages:interface",
           "docComment": "/**\n * Every string the forms show. Each one can be replaced; `{min}`, `{max}` and `{seconds}` are filled in.\n */\n",
@@ -5429,6 +6527,60 @@
               "isOptional": false,
               "releaseTag": "Public",
               "name": "badEmailCode",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!Messages#challengeExpired:member",
+              "docComment": "/**\n * The step-up form's challenge expired or was used: nothing was checked, so the person only needs to try again.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly challengeExpired: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "challengeExpired",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!Messages#challengeRequired:member",
+              "docComment": "/**\n * The app's credential-stuffing challenge is needed, and this page cannot show it.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly challengeRequired: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "challengeRequired",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
@@ -8917,6 +10069,329 @@
           "extendsTokenRanges": []
         },
         {
+          "kind": "Function",
+          "canonicalReference": "test-cap!platform:function(1)",
+          "docComment": "/**\n * The preset for a platform test-cap knows, for `trustedProxies`. Vendor headers are read only through one of these,\n * never named ad hoc (ADR 0009 §5).\n *\n * - `vercel`, `fly`, `netlify`: every request reaches the app through the platform, so the header is read from any\n *  peer. Do not use one where the app can also be reached another way.\n * - `aws-alb`, `cloudfront`, `cloudflare`: pass `peers`, the addresses or CIDR ranges requests arrive from: the load\n *  balancer's subnets, or the vendor's current published ranges. test-cap ships no ranges, so none go stale in it.\n * - `nginx`: pass `peers`, the nginx addresses, and `header` if it sets `X-Forwarded-For` rather than `X-Real-IP`.\n *\n * Each is tested in simulation only: none has been verified on the real platform.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function platform(name: "
+            },
+            {
+              "kind": "Content",
+              "text": "\"vercel\" | \"fly\" | \"netlify\""
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "PlatformTrust",
+              "canonicalReference": "test-cap!PlatformTrust:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/core/proxy-trust.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 3,
+            "endIndex": 4
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 1,
+          "parameters": [
+            {
+              "parameterName": "name",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isOptional": false
+            }
+          ],
+          "name": "platform"
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!platform:function(2)",
+          "docComment": "",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function platform(name: "
+            },
+            {
+              "kind": "Content",
+              "text": "\"aws-alb\" | \"cloudfront\" | \"cloudflare\""
+            },
+            {
+              "kind": "Content",
+              "text": ", options: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly peers: readonly string[];\n}"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "PlatformTrust",
+              "canonicalReference": "test-cap!PlatformTrust:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/core/proxy-trust.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 5,
+            "endIndex": 6
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 2,
+          "parameters": [
+            {
+              "parameterName": "name",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "isOptional": false
+            }
+          ],
+          "name": "platform"
+        },
+        {
+          "kind": "Function",
+          "canonicalReference": "test-cap!platform:function(3)",
+          "docComment": "",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export declare function platform(name: "
+            },
+            {
+              "kind": "Content",
+              "text": "\"nginx\""
+            },
+            {
+              "kind": "Content",
+              "text": ", options: "
+            },
+            {
+              "kind": "Content",
+              "text": "{\n    readonly peers: readonly string[];\n    readonly header?: \"x-real-ip\" | \"x-forwarded-for\" | undefined;\n}"
+            },
+            {
+              "kind": "Content",
+              "text": "): "
+            },
+            {
+              "kind": "Reference",
+              "text": "PlatformTrust",
+              "canonicalReference": "test-cap!PlatformTrust:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/core/proxy-trust.ts",
+          "returnTypeTokenRange": {
+            "startIndex": 5,
+            "endIndex": 6
+          },
+          "releaseTag": "Public",
+          "overloadIndex": 3,
+          "parameters": [
+            {
+              "parameterName": "name",
+              "parameterTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              },
+              "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 4
+              },
+              "isOptional": false
+            }
+          ],
+          "name": "platform"
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!PlatformName:type",
+          "docComment": "/**\n * The platforms test-cap has a preset for (ADR 0009 §5).\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type PlatformName = "
+            },
+            {
+              "kind": "Content",
+              "text": "\"aws-alb\" | \"cloudfront\" | \"cloudflare\" | \"vercel\" | \"fly\" | \"netlify\" | \"nginx\""
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/core/proxy-trust.ts",
+          "releaseTag": "Public",
+          "name": "PlatformName",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!PlatformTrust:interface",
+          "docComment": "/**\n * A platform preset, from `platform`: which header that platform sets with the client's address, how to read it, and\n * the peers it may come from. Built from the vendor's documentation and tested in simulation only, never on the\n * platform itself (ADR 0009 §5).\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface PlatformTrust "
+            }
+          ],
+          "fileUrlPath": "src/core/proxy-trust.ts",
+          "releaseTag": "Public",
+          "name": "PlatformTrust",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!PlatformTrust#header:member",
+              "docComment": "/**\n * For `nginx`: the header its configuration sets.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly header?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"x-real-ip\" | \"x-forwarded-for\" | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "header",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!PlatformTrust#kind:member",
+              "docComment": "/**\n * Marks a preset, so `createAuth` tells it apart from a list of addresses.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly kind: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "\"platform\""
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "kind",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!PlatformTrust#name:member",
+              "docComment": "/**\n * The platform the preset is for.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly name: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "PlatformName",
+                  "canonicalReference": "test-cap!PlatformName:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "name",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!PlatformTrust#peers:member",
+              "docComment": "/**\n * The addresses and CIDR ranges the platform's requests arrive from; empty for a platform every request comes through.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly peers: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "readonly string[]"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "peers",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
           "kind": "Interface",
           "canonicalReference": "test-cap!RandomSource:interface",
           "docComment": "/**\n * The random source every token, code and challenge draws from. It must be cryptographically secure in production;\n * a predictable source makes every token guessable.\n */\n",
@@ -8980,6 +10455,334 @@
             }
           ],
           "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!RateLimitConfig:interface",
+          "docComment": "/**\n * The `rateLimit` option of `createAuth`. Each value left out keeps its default.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface RateLimitConfig "
+            }
+          ],
+          "fileUrlPath": "src/security/rate-limit.ts",
+          "releaseTag": "Public",
+          "name": "RateLimitConfig",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!RateLimitConfig#limiter:member",
+              "docComment": "/**\n * Builds the limiter for each `{ windowMs, max }` rule, over the app's own backend; the `AuthStore` by default.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly limiter?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "LimiterFactory",
+                  "canonicalReference": "test-cap!LimiterFactory:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "limiter",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!RateLimitConfig#max:member",
+              "docComment": "/**\n * The default rule's count: 100 by default.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly max?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "max",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!RateLimitConfig#rules:member",
+              "docComment": "/**\n * A rule per route id, in place of that route's default.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly rules?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Readonly",
+                  "canonicalReference": "!Readonly:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Partial",
+                  "canonicalReference": "!Partial:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Record",
+                  "canonicalReference": "!Record:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<"
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateLimitRouteId",
+                  "canonicalReference": "test-cap!RateLimitRouteId:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "RateRuleSetting",
+                  "canonicalReference": "test-cap!RateRuleSetting:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ">>> | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "rules",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 11
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!RateLimitConfig#windowMs:member",
+              "docComment": "/**\n * The default rule's window, in milliseconds: 10 seconds by default.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly windowMs?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "windowMs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!RateLimitRouteId:type",
+          "docComment": "/**\n * A route id a rule can be keyed by. A route's id is its path after `/auth/`, such as `sign-in`. `pages` is every\n * default page shown by `GET`, `assets` the hashed page assets, and `unmatched` every request no route answers (a 404\n * or a 405).\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type RateLimitRouteId = "
+            },
+            {
+              "kind": "Content",
+              "text": "\"session\" | \"sign-up\" | \"email/confirm\" | \"email/resend\" | \"password\" | \"totp/enrol\" | \"totp/confirm\" | \"sign-in\" | \"totp/verify\" | \"step-up/start\" | \"step-up\" | \"recovery-codes\" | \"recovery\" | \"recovery/finish\" | \"sign-out\" | \"sessions\" | \"sessions/revoke\" | \"pages\" | \"assets\" | \"unmatched\""
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/security/rate-limit.ts",
+          "releaseTag": "Public",
+          "name": "RateLimitRouteId",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!RateRule:interface",
+          "docComment": "/**\n * One limit: at most `max` requests from a client in each window of `windowMs`.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface RateRule "
+            }
+          ],
+          "fileUrlPath": "src/security/rate-limit.ts",
+          "releaseTag": "Public",
+          "name": "RateRule",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!RateRule#max:member",
+              "docComment": "/**\n * The requests a client may make in one window.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly max: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "max",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!RateRule#windowMs:member",
+              "docComment": "/**\n * The window requests are counted in, in milliseconds.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly windowMs: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "windowMs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!RateRuleSetting:type",
+          "docComment": "/**\n * A route's rule: a `RateRule`, `false` for no limit, a rate-limiter-flexible limiter of its own, or a function that\n * decides per request.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type RateRuleSetting = "
+            },
+            {
+              "kind": "Reference",
+              "text": "RateRule",
+              "canonicalReference": "test-cap!RateRule:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " | false | "
+            },
+            {
+              "kind": "Reference",
+              "text": "RateLimiterLike",
+              "canonicalReference": "rate-limiter-flexible!RateLimiterLike:type"
+            },
+            {
+              "kind": "Content",
+              "text": " | ((request: "
+            },
+            {
+              "kind": "Reference",
+              "text": "PlainRequest",
+              "canonicalReference": "test-cap!PlainRequest:interface"
+            },
+            {
+              "kind": "Content",
+              "text": ") => "
+            },
+            {
+              "kind": "Reference",
+              "text": "RateRule",
+              "canonicalReference": "test-cap!RateRule:interface"
+            },
+            {
+              "kind": "Content",
+              "text": " | false)"
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/security/rate-limit.ts",
+          "releaseTag": "Public",
+          "name": "RateRuleSetting",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 9
+          }
         },
         {
           "kind": "Interface",
@@ -11009,6 +12812,251 @@
         },
         {
           "kind": "Interface",
+          "canonicalReference": "test-cap!StoreLimiterOptions:interface",
+          "docComment": "/**\n * What `createStoreLimiter` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface StoreLimiterOptions "
+            }
+          ],
+          "fileUrlPath": "src/security/store-limiter.ts",
+          "releaseTag": "Public",
+          "name": "StoreLimiterOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#blockDuration:member",
+              "docComment": "/**\n * Seconds to block a key once it goes past `points`; 0 (the default) for no block.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly blockDuration?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "blockDuration",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#blocks:member",
+              "docComment": "/**\n * Whether counting reads the key's block too, so a blocked key's `consume` is refused. `false` saves that read for a\n * limiter whose blocks are read with `get` instead, or that never blocks.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly blocks?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "blocks",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#clock:member",
+              "docComment": "/**\n * The clock; the system clock when absent.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly clock?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Clock",
+                  "canonicalReference": "test-cap!Clock:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "clock",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#duration:member",
+              "docComment": "/**\n * The window, in seconds; 0 for one that never ends.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly duration: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "duration",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#keyPrefix:member",
+              "docComment": "/**\n * Put before every key, so limiters sharing a store keep apart; `test-cap` when absent.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly keyPrefix?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "keyPrefix",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#points:member",
+              "docComment": "/**\n * Requests allowed per key in each window.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly points: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "points",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#store:member",
+              "docComment": "/**\n * The store the counts and blocks live in.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly store: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "AuthStore",
+                  "canonicalReference": "test-cap!AuthStore:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "store",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StoreLimiterOptions#tenant:member",
+              "docComment": "/**\n * The tenant they are kept under; `default` when absent.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly tenant?: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "TenantId",
+                  "canonicalReference": "test-cap!TenantId:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": " | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "tenant",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 3
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
           "canonicalReference": "test-cap!StoreOperations:interface",
           "docComment": "/**\n * The operations a transaction's steps run with.\n */\n",
           "excerptTokens": [
@@ -12281,6 +14329,212 @@
           }
         },
         {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!StuffingConfig:interface",
+          "docComment": "/**\n * When the detector fires (ADR 0009 Open 3).\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface StuffingConfig "
+            }
+          ],
+          "fileUrlPath": "src/security/stuffing.ts",
+          "releaseTag": "Public",
+          "name": "StuffingConfig",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StuffingConfig#distinctAccounts:member",
+              "docComment": "/**\n * Distinct accounts failing from one client in the window that flag it.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly distinctAccounts: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "distinctAccounts",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!StuffingConfig#windowMs:member",
+              "docComment": "/**\n * The window, in milliseconds.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly windowMs: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "windowMs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!StuffingDetector:interface",
+          "docComment": "/**\n * The detector over one store and tenant; an app can pass its own in place of the default (ADR 0009 §8).\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface StuffingDetector "
+            }
+          ],
+          "fileUrlPath": "src/security/stuffing.ts",
+          "releaseTag": "Public",
+          "name": "StuffingDetector",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!StuffingDetector#failed:member(1)",
+              "docComment": "/**\n * Counts a failure of `account` from the client; resolves to `true` when this failure flags the client.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "failed(account: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", clientAddress: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<boolean>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "account",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "clientAddress",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "failed"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!StuffingDetector#flagged:member(1)",
+              "docComment": "/**\n * The flagged client key of an address, or `null` when it is not flagged (or the adapter supplied no address).\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "flagged(clientAddress: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<string | null>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 5
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "clientAddress",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "flagged"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
           "kind": "TypeAlias",
           "canonicalReference": "test-cap!TenantId:type",
           "docComment": "/**\n * A tenant id. Single-tenant apps use one constant tenant.\n */\n",
@@ -12542,6 +14796,461 @@
               "isOptional": false,
               "releaseTag": "Public",
               "name": "system",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!Throttle:interface",
+          "docComment": "/**\n * A throttle over one store and tenant.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface Throttle "
+            }
+          ],
+          "fileUrlPath": "src/security/throttle.ts",
+          "releaseTag": "Public",
+          "name": "Throttle",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!Throttle#attempt:member(1)",
+              "docComment": "/**\n * Asks to make an attempt. Resolves to 0 when it may go ahead (the attempt is then counted on the account's keys),\n * or to how long to wait, in milliseconds, when a key is blocked or a parallel attempt took the slot. `strict` counts\n * nothing as free, for a client the stuffing detector flagged with no challenge hook to send it to.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "attempt(subject: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ThrottleSubject",
+                  "canonicalReference": "test-cap!ThrottleSubject:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", strict?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<number>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "subject",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "strict",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "attempt"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!Throttle#failed:member(1)",
+              "docComment": "/**\n * Counts a failure on the client's key and blocks it past its free failures; resolves to that block's length.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "failed(subject: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ThrottleSubject",
+                  "canonicalReference": "test-cap!ThrottleSubject:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ", strict?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "boolean"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<number>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 5,
+                "endIndex": 7
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "subject",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                },
+                {
+                  "parameterName": "strict",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 3,
+                    "endIndex": 4
+                  },
+                  "isOptional": true
+                }
+              ],
+              "name": "failed"
+            },
+            {
+              "kind": "MethodSignature",
+              "canonicalReference": "test-cap!Throttle#succeeded:member(1)",
+              "docComment": "/**\n * Clears the account's keys for the subject's kind of secret after a success. The client's key keeps counting.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "succeeded(subject: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ThrottleSubject",
+                  "canonicalReference": "test-cap!ThrottleSubject:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "): "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Promise",
+                  "canonicalReference": "!Promise:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": "<void>"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isOptional": false,
+              "returnTypeTokenRange": {
+                "startIndex": 3,
+                "endIndex": 5
+              },
+              "releaseTag": "Public",
+              "overloadIndex": 1,
+              "parameters": [
+                {
+                  "parameterName": "subject",
+                  "parameterTypeTokenRange": {
+                    "startIndex": 1,
+                    "endIndex": 2
+                  },
+                  "isOptional": false
+                }
+              ],
+              "name": "succeeded"
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!ThrottleConfig:interface",
+          "docComment": "/**\n * The throttle's values (ADR 0009 Open 1).\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ThrottleConfig "
+            }
+          ],
+          "fileUrlPath": "src/security/throttle.ts",
+          "releaseTag": "Public",
+          "name": "ThrottleConfig",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleConfig#firstDelayMs:member",
+              "docComment": "/**\n * The block after the first failure past the free ones, in milliseconds; each further failure doubles it.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly firstDelayMs: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "firstDelayMs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleConfig#freeFailures:member",
+              "docComment": "/**\n * Failures on one key in a window that cost nothing.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly freeFailures: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "freeFailures",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleConfig#maxDelayMs:member",
+              "docComment": "/**\n * The longest block, in milliseconds.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly maxDelayMs: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "maxDelayMs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleConfig#windowMs:member",
+              "docComment": "/**\n * The window failures are counted in, in milliseconds.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly windowMs: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "number"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "windowMs",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            }
+          ],
+          "extendsTokenRanges": []
+        },
+        {
+          "kind": "TypeAlias",
+          "canonicalReference": "test-cap!ThrottleSecret:type",
+          "docComment": "/**\n * The kinds of secret the throttle counts apart: each has its own account keys.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export type ThrottleSecret = "
+            },
+            {
+              "kind": "Content",
+              "text": "\"password\" | \"totp\" | \"recovery-code\""
+            },
+            {
+              "kind": "Content",
+              "text": ";"
+            }
+          ],
+          "fileUrlPath": "src/security/throttle.ts",
+          "releaseTag": "Public",
+          "name": "ThrottleSecret",
+          "typeTokenRange": {
+            "startIndex": 1,
+            "endIndex": 2
+          }
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!ThrottleSubject:interface",
+          "docComment": "/**\n * What one attempt is throttled by.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface ThrottleSubject "
+            }
+          ],
+          "fileUrlPath": "src/security/throttle.ts",
+          "releaseTag": "Public",
+          "name": "ThrottleSubject",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleSubject#account:member",
+              "docComment": "/**\n * The identifier as typed, normalised when it is an address. A signed-in session's TOTP check or step-up passes its\n * account's address, or the account id when the account has none.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly account: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "account",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleSubject#clientAddress:member",
+              "docComment": "/**\n * The socket address, already resolved through any trusted proxy; `undefined` when the adapter had none.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly clientAddress: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "string | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "clientAddress",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 2
+              }
+            },
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!ThrottleSubject#secret:member",
+              "docComment": "/**\n * The kind of secret checked; a success clears only this kind's account keys.\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly secret: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "ThrottleSecret",
+                  "canonicalReference": "test-cap!ThrottleSecret:type"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": false,
+              "releaseTag": "Public",
+              "name": "secret",
               "propertyTypeTokenRange": {
                 "startIndex": 1,
                 "endIndex": 2
@@ -12928,7 +15637,7 @@
         {
           "kind": "TypeAlias",
           "canonicalReference": "test-cap!TrustedProxies:type",
-          "docComment": "/**\n * The addresses of the app's own proxies, whose `X-Forwarded-For` may be read (ADR 0009 §5).\n */\n",
+          "docComment": "/**\n * The app's own proxies, as IP addresses or CIDR ranges, whose forwarding header may be read (ADR 0009 §5).\n */\n",
           "excerptTokens": [
             {
               "kind": "Content",

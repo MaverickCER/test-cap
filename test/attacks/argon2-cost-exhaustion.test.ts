@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { fixedClock, sequenceRandom } from "../../src/core/clock.js"
 import {
   ARGON2_PARAMETERS,
-  type Argon2Engine,
+  type Argon2Hasher,
   createHasher,
   HASH_CONCURRENCY,
   HASH_QUEUE_LIMIT,
@@ -36,9 +36,18 @@ function slowEngine() {
     inFlight -= 1
     return value
   }
-  const engine: Argon2Engine = {
-    hash: ({ password }) => slow(`${PREFIX}${password}`),
-    verify: (password, encoded) => slow(encoded === `${PREFIX}${password}`),
+  // A PHC string test-cap accepts: the real salt, and a digest that stands for the password without computing one.
+  const digestOf = (password: string) =>
+    password
+      .replaceAll(/[^A-Za-z0-9+/]/g, "A")
+      .slice(0, 43)
+      .padEnd(43, "A")
+  const engine: Argon2Hasher = {
+    hash: ({ password, salt }) =>
+      slow(
+        `${PREFIX}${Buffer.from(salt).toString("base64").replace(/=+$/, "")}$${digestOf(password)}`,
+      ),
+    verify: (password, encoded) => slow(encoded.endsWith(`$${digestOf(password)}`)),
   }
   return {
     engine,

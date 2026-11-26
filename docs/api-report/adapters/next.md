@@ -13,10 +13,39 @@ surfaces, and only the second protects anything:
 
 Next.js has no global check that covers every route, so a route handler or server function that never calls a
 server helper is unprotected (ADR 0024, Limits). Next.js is typed structurally: this entry has no dependency on it.
-Next.js gives a route handler no socket address, so the core sees none here; the address is never read from a
-header (ADR 0009).
+Next.js gives a route handler no socket address. The core sees one only from `nextAuthHandler`'s `clientAddress`
+option, or reads a platform preset's header (ADR 0009 §5); no other header is ever read.
 
 ## Interfaces
+
+### NextAuthHandlerOptions
+
+What `nextAuthHandler` takes.
+
+#### Properties
+
+##### clientAddress?
+
+```ts
+readonly optional clientAddress?: (request) => string | undefined;
+```
+
+The client's address for the throttle, read from what the app's own server knows, such as a custom server's
+socket. Next.js gives a route handler none. Behind a platform preset whose header every request carries, such as
+`platform("vercel")`, leave it out: the core reads the preset's header (ADR 0009 §5). Otherwise production and
+staging refuse to start without it, unless the app set `requireClientAddress: false` (ADR 0009 §8).
+
+###### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `request` | `Request` |
+
+###### Returns
+
+`string` \| `undefined`
+
+***
 
 ### NextAuthHandlers
 
@@ -62,8 +91,8 @@ The paths a visitor without a session cookie may reach; the same form as `withAu
 readonly optional signIn?: string;
 ```
 
-The path on `APP_ORIGIN` a visitor without a session cookie is sent to, with `returnTo`; `/auth/sign-in` when
-absent.
+The path a visitor without a session cookie is sent to, with `returnTo`, as the app receives it; `/auth/sign-in`
+when absent. Any `publicBasePath` is added before it in the redirect.
 
 ***
 
@@ -186,7 +215,7 @@ A route handler for one HTTP method, as a `route.ts` file exports it.
 ### nextAuthHandler()
 
 ```ts
-function nextAuthHandler(auth): NextAuthHandlers;
+function nextAuthHandler(auth, options?): NextAuthHandlers;
 ```
 
 The route handler for `app/auth/[...path]/route.ts`. Mounted anywhere else, every request is a 404, because the
@@ -197,6 +226,7 @@ core serves only paths under `/auth/`.
 | Parameter | Type |
 | ------ | ------ |
 | `auth` | [`Auth`](../index.md#auth)\<`string`\> |
+| `options` | [`NextAuthHandlerOptions`](#nextauthhandleroptions) |
 
 #### Returns
 

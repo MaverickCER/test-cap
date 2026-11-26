@@ -8,7 +8,8 @@ import {
 
 describe("the bundled blocklist (ADR 0010 §1)", () => {
   it("holds lowercase entries no shorter than the shortest accepted password", () => {
-    expect(BUNDLED_BLOCKLIST.size).toBeGreaterThanOrEqual(100)
+    // specs/requirements.md 6.2.4 states this count; ADR 0010 Open 1 aims at 3,000.
+    expect(BUNDLED_BLOCKLIST.size).toBe(141)
     for (const entry of BUNDLED_BLOCKLIST) {
       expect([...entry].length, entry).toBeGreaterThanOrEqual(PASSWORD_MIN_WITH_MFA)
       expect(entry, entry).toBe(entry.toLowerCase())

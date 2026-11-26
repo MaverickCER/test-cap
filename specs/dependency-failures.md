@@ -1,11 +1,14 @@
 # Dependency failure policies
 
 test-cap relies on things it does not control: the app's store, its mail sender, the HIBP breach API, the clock, the
-random source, the key material and the app's event sink. A failure policy says what happens when one of them
-fails: what fails, whether test-cap fails closed or runs in a narrow degraded mode, what stops working, what a reply
-may reveal, how service comes back, what an operator sees, and what the events record. [ADR 0029](decisions/0029-security-invariants-failure-policies-and-evidence-traceability.md)
-makes this file a governing spec; [security-invariants.md](security-invariants.md) holds the invariants these
-policies protect, chiefly `INV-FAIL-CLOSED`. Terms follow the [glossary](../GLOSSARY.md).
+random source, the key material, the app's event sink, a proxy in front of the app, and the counter of each limit. A
+failure policy says what happens when one of them fails: what fails, whether test-cap fails closed or runs in a narrow
+degraded mode, what stops working, what a reply may reveal, how service comes back, what an operator sees, and what the
+events record. [ADR 0029](decisions/0029-security-invariants-failure-policies-and-evidence-traceability.md) makes this
+file a governing spec; [security-invariants.md](security-invariants.md) holds the invariants these policies protect,
+chiefly `INV-FAIL-CLOSED`. Terms follow the [glossary](../GLOSSARY.md). This file does not yet cover the app's
+`challengeHook`, a `Throttle` or `StuffingDetector` the app supplies, or the argon2id fallback. Its store flows leave
+out recovery-code redemption and deprovisioning.
 
 The rule under every policy: **a failing dependency never produces an authentication, a higher level or a silent
 downgrade.** Fail closed is the default. A degraded mode is allowed only where the dependency cannot change an
@@ -13,7 +16,7 @@ outcome (mail and events), or where the degradation is recorded on the result (H
 
 The failure-injection tests under `test/failure/` prove each policy with the memory store and injected faults. They
 cover phase 3's flows: password sign-in, sign-up, email confirmation, TOTP enrolment and verification, step-up, the
-session read, sign-out and revocation. Persistence under real SQL concurrency, transaction failure and restarts is
+session read, sign-out and revocation, and phase 4's request limiter (`test/failure/rate-limit.test.ts`). Persistence under real SQL concurrency, transaction failure and restarts is
 phase 6's work (success metric 15): it runs these guarantees against the supported SQL stores on real databases, and
 until then the SQL store is held to the conformance kit (`test/store/conformance.test.ts`) and the PGlite runs in
 `test/store/sql/sql-store.test.ts`.
@@ -33,15 +36,17 @@ an availability promise.
 
 ## Summary
 
-| Dependency                 | Policy                                  | Unavailable while it fails                                                   |
-| -------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
-| The store (SQL and memory) | Fail closed                             | Everything that reads or writes a session, an account or a credential        |
-| Email delivery             | Degraded: the reply never waits on mail | Receiving a confirmation code, so confirming an address                      |
-| HIBP                       | Degraded and recorded `indeterminate`   | Breach screening of new passwords; the bundled blocklist still runs          |
-| The clock                  | Fail closed                             | Sessions, codes, tokens and challenges, early, when the clock jumps forwards |
-| The random source          | Fail closed                             | Every flow that issues a token, code, secret or id                           |
-| Key material               | Fail closed                             | TOTP seeds, email codes and CSRF tokens made under a key no longer held      |
-| The event sink             | Degraded: outcomes never wait on events | The app's copy of the events while the sink fails                            |
+| Dependency                    | Policy                                  | Unavailable while it fails                                                   |
+| ----------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| The store (SQL and memory)    | Fail closed                             | Everything that reads or writes a session, an account or a credential        |
+| Email delivery                | Degraded: the reply never waits on mail | Receiving a confirmation code, so confirming an address                      |
+| HIBP                          | Degraded and recorded `indeterminate`   | Breach screening of new passwords; the bundled blocklist still runs          |
+| The clock                     | Fail closed                             | Sessions, codes, tokens and challenges, early, when the clock jumps forwards |
+| The random source             | Fail closed                             | Every flow that issues a token, code, secret or id                           |
+| Key material                  | Fail closed                             | TOTP seeds, email codes and CSRF tokens made under a key no longer held      |
+| The event sink                | Degraded: outcomes never wait on events | The app's copy of the events while the sink fails                            |
+| A proxy in front of the app   | Fail closed                             | State-changing requests whose `Origin` and `Sec-Fetch-Site` were stripped    |
+| The request limiter's counter | Fail closed                             | Every request to `/auth`, pages and assets included                          |
 
 ## The store (SQL and memory)
 
@@ -54,8 +59,10 @@ an availability promise.
   read as a refusal. Multi-step session changes run in the store's transaction when it has one; without one, the old
   session is claimed before the new one is written, so a failure between steps never leaves the old token and a new
   one both working. A credential change whose rotation fails revokes every session of the account (finding F-1, fixed).
-  One write is allowed to fail without ending the request: the revoke of a session a read found past its limit. That
-  read answers `unauthenticated` either way, and the next read that finds the session tries the revoke again (L-1).
+  Two writes are allowed to fail without ending the request. One is the revoke of a session a read found past its
+  limit: that read answers `unauthenticated` either way, and the next read that finds the session tries the revoke
+  again (L-1). The other marks a refusal's event as emitted (ADR 0009 §8): the refusal stands, and the event is
+  emitted, so a store failure can only repeat an event.
 - **Unavailable while it fails:** sign-up, email confirmation, password setting, sign-in, TOTP enrolment and
   verification, step-up, the session read, the session list, sign-out, remote revoke and `auth.admin.revoke`, and every
   route behind deny by default. Public paths still pass.
@@ -86,26 +93,30 @@ an availability promise.
   - `test/failure/store.test.ts`: "leaves no session of the account standing once the authenticator is confirmed and $op (call $call) fails, transactions: $transactional"
   - `test/failure/store.test.ts`: "refuses the right code for the rest of the code's life, even though the kill write failed"
   - `test/failure/store.test.ts`: "gives the old code no fresh guesses when a resend fails to revoke it, and a resend that works starts a new count"
+  - `test/abuse/refusal-events.test.ts`: "still emit, and the refusal still stands, when the store cannot record that one was sent"
 
 ### Store calls per flow
 
 The failure tests inject a fault into every call below, one at a time: a rejection at every call, with and without
 store transactions for the three flows whose session change takes several steps, and a synchronous throw, a timeout
 and a call that never settles at the first call of each operation. A flow that starts calling something else fails
-its test until this table and its failure cases grow. Phase 3's sign-in calls no `increment` or `consumeOnce`: its
-throttles arrive in phase 4.
+its test until this table and its failure cases grow. Since phase 4 every session lookup also reads the account's
+status (a `get`), and every guessed secret goes through the throttle: its blocks are read (`get`), each attempt is
+counted on the account's keys (`increment`), and a success clears them (`resetCounter`, `delete`), as does the
+authenticator's failure ceiling. Every request to `/auth` starts with the request limiter's `increment`, so a flow of
+two requests, such as step-up's start and its ceremony, has two.
 
-| Flow                                  | Store calls, in order                                                                                                                                           |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| password sign-in                      | `get`, `get`, `get`, `revoke`, `createUnique`                                                                                                                   |
-| email confirmation                    | `get`, `update`, `listByOwner`, `increment`, `consumeOnce`, `resetCounter`, `createUnique`                                                                      |
-| TOTP verification                     | `get`, `update`, `get`, `listByOwner`, `update`, `get`, `createUnique`, `get`, `get`, `consumeOnce`, `get`, `update`, `createUnique`, `revoke`                  |
-| step-up                               | `get`, `update`, `get`, `createUnique`, `get`, `update`, `get`, `listByOwner`, `update`, `get`, `get`, `consumeOnce`, `get`, `update`, `createUnique`, `revoke` |
-| session read                          | `get`, `update`                                                                                                                                                 |
-| password sign-in with rehash          | `get`, `get`, `get`, `update`, `createUnique`                                                                                                                   |
-| sign-up                               | `createUnique`, `createUnique`, `increment`, `increment`, `increment`, `revokeByOwner`, `resetCounter`, `delete`, `createUnique`, `createUnique`                |
-| TOTP enrolment by a signed-in account | `get`, `update`, `get`, `get`, `update`, `get`, `update`, `createUnique`, `revoke`, `revokeByOwner`                                                             |
-| sign-out                              | `get`, `update`, `revoke`                                                                                                                                       |
+| Flow                                  | Store calls, in order                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| password sign-in                      | `increment`, `get`, `get`, `get`, `get`, `get`, `get`, `increment`, `increment`, `get`, `get`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `listByOwner`, `revoke`, `createUnique`, `get`                                                                                                                                                            |
+| email confirmation                    | `increment`, `get`, `get`, `update`, `listByOwner`, `listByOwner`, `increment`, `consumeOnce`, `createUnique`                                                                                                                                                                                                                                                                                                                              |
+| TOTP verification                     | `increment`, `get`, `get`, `update`, `get`, `listByOwner`, `get`, `get`, `get`, `increment`, `increment`, `listByOwner`, `get`, `update`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `get`, `get`, `createUnique`, `get`, `get`, `get`, `consumeOnce`, `get`, `get`, `update`, `createUnique`, `revoke`                                             |
+| step-up                               | `increment`, `get`, `get`, `update`, `get`, `get`, `createUnique`, `increment`, `get`, `get`, `update`, `get`, `get`, `listByOwner`, `get`, `get`, `get`, `increment`, `increment`, `listByOwner`, `get`, `update`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `get`, `get`, `get`, `consumeOnce`, `get`, `get`, `update`, `createUnique`, `revoke` |
+| session read                          | `increment`, `get`, `get`, `update`                                                                                                                                                                                                                                                                                                                                                                                                        |
+| password sign-in with rehash          | `increment`, `get`, `get`, `get`, `get`, `get`, `get`, `increment`, `increment`, `get`, `get`, `resetCounter`, `delete`, `update`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `resetCounter`, `delete`, `listByOwner`, `createUnique`, `get`                                                                                                                                                            |
+| sign-up                               | `increment`, `createUnique`, `createUnique`, `increment`, `increment`, `increment`, `revokeByOwner`, `resetCounter`, `delete`, `createUnique`, `createUnique`                                                                                                                                                                                                                                                                              |
+| TOTP enrolment by a signed-in account | `increment`, `get`, `get`, `update`, `get`, `get`, `update`, `get`, `get`, `update`, `createUnique`, `revoke`, `revokeByOwner`                                                                                                                                                                                                                                                                                                             |
+| sign-out                              | `increment`, `get`, `get`, `update`, `revoke`                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ## Email delivery
 
@@ -251,6 +262,64 @@ throttles arrive in phase 4.
   - `test/failure/events.test.ts`: "that %s: the second factor still answers at once with the level it proved"
   - `test/failure/events.test.ts`: "that %s: a wrong code is still refused"
   - `test/core/create-auth.test.ts`: "keeps the outcome when the event sink throws"
+
+## A proxy in front of the app
+
+- **Expected failures:** a load balancer, CDN or gateway the app did not declare sends every request from its own
+  address; a declared one stops setting its forwarding header, or sets one the app did not name; a proxy strips
+  `Origin` and `Sec-Fetch-Site`, or rewrites `Origin` to `null`, so a browser's state-changing request carries
+  neither; a gateway strips a path prefix the app did not set as `publicBasePath`.
+- **Policy:** Fail closed. The client address is the socket's peer unless the app declared the peer a proxy (ADR
+  0009 §5), so an undeclared proxy makes every client behind it one client to the throttle: guessing is slowed more,
+  never less. A state-changing request with no site `Origin` and no `Sec-Fetch-Site: same-origin` is refused with
+  `403 csrf`; `Origin: null` passes only with `Sec-Fetch-Site: same-origin`. Links, redirects and email URLs are built
+  from `APP_ORIGIN` and `publicBasePath`, never from the request, so a missing prefix sends people to pages the gateway
+  does not serve, and no header can redirect them elsewhere.
+- **Unavailable while it fails:** with an undeclared proxy, clients behind it share one throttle key, so one client's
+  failures slow the others. With stripped origin headers, sign-in, sign-up, sign-out and every other `POST` under
+  `/auth/`. With a missing `publicBasePath`, the default pages' links and redirects.
+- **Safe to expose:** the refusal is the fixed `403 {"error":"csrf"}`; the throttle's reply is the usual `429` with
+  `Retry-After`. Neither names the proxy, the header or the address test-cap used.
+- **Recovery:** the operator declares the proxy (`trustedProxies`: addresses, CIDR ranges or a `platform()` preset),
+  makes the proxy pass `Origin` and `Sec-Fetch-Site` through unchanged, or sets `publicBasePath`. `createAuth` reads
+  these once, so the change takes effect when the app starts again.
+- **Operator diagnostics:** the `onDiagnostic` hook is told once per `Auth`: `forwarded-header-ignored` names the
+  header and the peer when a forwarding header arrives from a peer that is not a declared proxy, and
+  `origin-unverifiable` says a state-changing request carried neither header. The app decides whether to log them.
+- **Audit and events:** a refused request emits the route's failure event with the detail `csrf`. A throttled attempt
+  emits the usual failed event with the detail `rate-limited`.
+- **Tests:**
+  - `test/topology/urls-and-csrf.test.ts`: "refuses Origin null with no Sec-Fetch-Site, and tells the operator once"
+  - `test/topology/urls-and-csrf.test.ts`: "passes Origin null when Sec-Fetch-Site says same-origin, as a no-referrer page sends it"
+  - `test/topology/client-address.test.ts`: "an untrusted peer's header is ignored"
+  - `test/topology/configuration.test.ts`: "name the header and the peer"
+  - `test/topology/configuration.test.ts`: "follow the proxy list createAuth read, so a later change to the list waits for a restart"
+  - `test/topology/urls-and-csrf.test.ts`: "redirects a form post, and links its email, under the prefix and APP_ORIGIN"
+
+## The request limiter's counter
+
+- **Expected failures:** the store's `increment` throws, rejects, times out or never settles when the default
+  limiter counts a request; a rate-limiter-flexible limiter of the app's rejects with an error, times out or never
+  settles; a rule function the app wrote throws or
+  returns something that is not a rule.
+- **Policy:** Fail closed. The count is the first store call of every request to `/auth`, and it is awaited, so a
+  count that throws or rejects ends the request with the fixed `500 {"error":"internal"}` before its route runs: no
+  account, session, mail or event comes of it. A count that never settles leaves the request pending, with nothing done,
+  until the store's driver or the app's limiter times it out; test-cap sets no timeout of its own. Failing open would let a client flood sign-up for as long as the store, or the app's limiter,
+  stayed down.
+- **Unavailable while it fails:** every request to `/auth`, the default pages and their assets included, even those
+  that touch no other store call. With the store down, those routes could not sign anyone in anyway.
+- **Safe to expose:** the fixed 500 body, the same for every cause; nothing names the limiter, the key or the rule.
+- **Recovery:** none needed inside test-cap: the next request after the counter works again is counted and answered.
+- **Operator diagnostics:** the app's store wrapper or its own limiter sees the error; the app's monitoring sees
+  the rate of 500s on `/auth/*`.
+- **Audit and events:** a request that fails at its count emits no event, as it never reached its route.
+- **Tests:**
+  - `test/failure/rate-limit.test.ts`: "ends sign-up with the fixed 500 before an account exists when the store's increment fails"
+  - `test/failure/rate-limit.test.ts`: "ends a request, and a page, with the fixed 500 when the app's limiter fails"
+  - `test/failure/rate-limit.test.ts`: "leaves a request pending, with nothing created, when the counter never answers"
+  - `test/failure/rate-limit.test.ts`: "lets requests through again once the counter works"
+  - `test/security/rate-limit.test.ts`: "refuses a rule function's answer that is not a rule, so a broken rule fails closed"
 
 ## Findings
 

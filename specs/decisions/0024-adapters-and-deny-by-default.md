@@ -4,8 +4,9 @@
 
 Accepted (2026-11-15). Supersedes the handoff's "no framework or runtime adapters" rule. Implemented in phase 3 (the
 Express, `fetch`, Next.js and TanStack Start adapters with deny by default and the adapter differential test; the
-owner brought the last three forward on 2026-11-16) and phase 4 (Nest); the quick-start count runs from phase 3. Flow: F22 (adapter transport and deny by
-default). Pinned by:
+owner brought the last three forward on 2026-11-16) and phase 4 (section 6, the public base path and the adapters'
+client address). Nest follows phase 4 in its own pull request; the quick-start count runs from phase 3. Flow: F22
+(adapter transport and deny by default). Pinned by:
 
 - `test/adapters/conformance/*.test.ts`
 - `test/adapters/deny-by-default.test.ts`
@@ -20,6 +21,13 @@ default). Pinned by:
 - `test/docs/quick-start-lines.test.ts`
 
 The recommendations under Open are provisional defaults until the owner decides.
+
+Amended 2026-11-24: `test/adapters/conformance/*.test.ts` and `test/adapters/deny-by-default.test.ts` do not exist,
+and there is no conformance suite for the adapters. Four adapters are built, not five: Nest follows phase 4. What
+pins this today is `test/attacks/adapter-core-parsing-differential.test.ts`, which runs each scenario through the four,
+`test/attacks/deny-by-default-bypass.test.ts`, `test/adapters/{express,fetch,tanstack-start,entry}.test.ts` and, for
+section 6, `test/topology/urls-and-csrf.test.ts`. The Nest suites that section 6 and the Consequences name do not exist
+yet; they come with the Nest adapter.
 
 ## Context
 
@@ -111,6 +119,30 @@ The README quick start, an Express app with a SQL store and deny by default, run
 fails at 20 or more.
 
 Why: requirement 10 names the number; a test keeps it.
+
+### 6. Behind a gateway: a public base path, and the client address the adapter knows
+
+**`publicBasePath`.** A gateway may serve the app under a prefix it strips before forwarding, so the browser asks for
+`/accounts/auth/sign-in` while the app receives `/auth/sign-in`. `createAuth({ publicBasePath: "/accounts" })` makes
+every path test-cap puts in front of the browser start with the prefix: the default pages' form actions, links and
+asset URLs, the redirects after a form post, the default `returnTo`, the link in each email (built on `APP_ORIGIN`, ADR
+0026 §5), and `nextProxy`'s redirect and its `returnTo`. Routes are still matched on the path the app receives, so the
+core, the public-path list and deny by default are unchanged. The prefix is empty or clean `/`-separated segments with
+no trailing slash and no `.` or `..` segment; anything else refuses to start.
+
+**The client address.** Express reads the socket. A Web `Request` carries no socket, so the `fetch`, Next.js and
+TanStack Start adapters take a `clientAddress` option that reads what the app's server knows (Deno's `remoteAddr`,
+srvx's remote address, a custom Next.js server's socket). Behind a platform preset every request carries (ADR 0009
+§5), the option is not needed: the core reads the preset's header.
+
+The topology suite (`test/topology/`) runs the deployment shapes through the Express, `fetch`, Next.js and TanStack
+Start adapters and checks the client key, the CSRF decision, every link, redirect and email URL, and the cookie
+attributes for each. The Nest adapter runs the same scenarios in its own suite.
+
+Why: an auth library that builds links for the path it receives sends people to pages the gateway does not serve, and
+one that guesses the prefix from a header lets the client choose it. The prefix is configuration, like `APP_ORIGIN`.
+
+Override: the app sets `publicBasePath`, and passes `clientAddress` where its server knows the peer.
 
 ## Consequences
 

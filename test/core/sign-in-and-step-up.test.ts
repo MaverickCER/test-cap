@@ -25,6 +25,7 @@ import {
   LOGON,
 } from "../support/auth.js"
 import { codeAt } from "../support/totp.js"
+import { within } from "../support/within.js"
 
 /** Fills every argon2 slot and the whole queue, runs `work`, then frees them. */
 async function whileBusy<T>(work: () => Promise<T>): Promise<T> {
@@ -61,7 +62,7 @@ async function disable(setup: ReturnType<typeof testAuth>, subject: string) {
 describe("password sign-in", () => {
   it("issues an AAL1 session that the default requirement still steps up", async () => {
     const setup = testAuth()
-    const { subject } = await seedAccount(setup, { password: true })
+    const { subject } = await seedAccount(setup, { password: true, totp: true })
     const browser = await signedOut(setup)
     const reply = await browser.post("/auth/sign-in", {
       identifier: "ADA@example.com",
@@ -121,7 +122,7 @@ describe("password sign-in", () => {
     ).post("/auth/sign-in", { identifier: "ada@example.com", password: PASSWORD })
     expect(json.text).toBe('{"outcome":"allow","returnTo":"/"}')
     const strict = testAuth()
-    await seedAccount(strict, { password: true })
+    await seedAccount(strict, { password: true, totp: true })
     const stepUp = await (
       await signedOut(strict)
     ).postForm("/auth/sign-in", {
@@ -275,7 +276,8 @@ describe("TOTP verification", () => {
     const right = await browser.post("/auth/totp/verify", {
       code: await codeAt(secret ?? "", setup.clock.now()),
     })
-    expect([right.status, right.text]).toEqual([401, '{"error":"invalid-code"}'])
+    // A disabled account's session counts for nothing any more (ADR 0012), so the secret is never even checked.
+    expect([right.status, right.text]).toEqual([401, '{"error":"unauthenticated"}'])
   })
 
   it("needs a signed-in session", async () => {
@@ -399,7 +401,8 @@ describe("step-up", () => {
     expect(brief(setup.events.at(-1))).toMatchObject({ factors: ["OTP"] })
     await disable(setup, subject)
     const right = await browser.post("/auth/step-up", { challenge, password: PASSWORD })
-    expect([right.status, right.text]).toEqual([401, '{"error":"invalid-credentials"}'])
+    // A disabled account's session counts for nothing any more (ADR 0012), so the secret is never even checked.
+    expect([right.status, right.text]).toEqual([401, '{"error":"unauthenticated"}'])
   })
 
   it("refuses a challenge this session did not open", async () => {
@@ -451,10 +454,100 @@ describe("step-up", () => {
     const setup = testAuth()
     const { subject } = await seedAccount(setup, { password: true })
     const { browser } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
+    const { challenge } = body(await browser.post("/auth/step-up/start")) as { challenge: string }
     const reply = await whileBusy(() =>
-      browser.post("/auth/step-up", { challenge: "A".repeat(22), password: PASSWORD }),
+      browser.post("/auth/step-up", { challenge, password: PASSWORD }),
     )
     expect([reply.status, reply.text]).toEqual([503, '{"error":"busy"}'])
+  })
+
+  it("refuses the loser of two parallel step-ups on one challenge, after its secret was checked", async () => {
+    const setup = testAuth()
+    const { subject } = await seedAccount(setup, { password: true })
+    const { browser } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
+    const { challenge } = body(await browser.post("/auth/step-up/start")) as { challenge: string }
+    setup.events.length = 0
+    // Both pass the early check; only one can take the challenge once its password is checked.
+    const replies = await Promise.all([
+      browser.post("/auth/step-up", { challenge, password: PASSWORD }),
+      browser.post("/auth/step-up", { challenge, password: PASSWORD }),
+    ])
+    expect(replies.map((reply) => reply.status).sort()).toEqual([200, 403])
+    expect(replies.find((reply) => reply.status === 403)?.text).toBe(
+      '{"error":"invalid-challenge"}',
+    )
+    expect(setup.events.map(brief).filter((event) => event["status"] === "Failure")).toEqual([
+      {
+        type: LOGON,
+        status: "Failure",
+        user: subject,
+        factors: ["Password"],
+        stepUp: true,
+        detail: "invalid-challenge",
+      },
+    ])
+  })
+
+  it("checks the challenge before the secret, so a refused challenge spends no TOTP code and counts nothing", async () => {
+    const setup = testAuth()
+    const { subject, secret } = await seedAccount(setup, { password: true, totp: true })
+    const { browser } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
+    // The password step-up rotates the session, so a challenge opened before it belongs to an earlier token.
+    const used = body(await browser.post("/auth/step-up/start")) as { challenge: string }
+    expect(
+      (await browser.post("/auth/step-up", { challenge: used.challenge, password: PASSWORD }))
+        .status,
+    ).toBe(200)
+    // Opened by this session after the rotation, so only its expiry refuses it: at its 10 minutes exactly, it is over.
+    const stale = body(await browser.post("/auth/step-up/start")) as { challenge: string }
+    setup.clock.advance(10 * 60_000)
+    const other = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
+    const foreign = body(await other.browser.post("/auth/step-up/start")) as { challenge: string }
+    const code = await codeAt(secret ?? "", setup.clock.now())
+    setup.events.length = 0
+    const refusedChallenges = [
+      stale.challenge,
+      "not a challenge",
+      "Y2hhbGxlbmdlY2hhbGxlbmdl",
+      used.challenge,
+      foreign.challenge,
+    ]
+    for (const challenge of refusedChallenges) {
+      const refused = await browser.post("/auth/step-up", { challenge, code })
+      expect([refused.status, refused.text], challenge).toEqual([
+        403,
+        '{"error":"invalid-challenge"}',
+      ])
+    }
+    expect(setup.events.map(brief)).toEqual(
+      refusedChallenges.map(() => ({
+        type: LOGON,
+        status: "Failure",
+        user: subject,
+        factors: ["OTP"],
+        stepUp: true,
+        detail: "invalid-challenge",
+      })),
+    )
+    setup.events.length = 0
+    const withPassword = await browser.post("/auth/step-up", {
+      challenge: stale.challenge,
+      password: PASSWORD,
+    })
+    expect(withPassword.status).toBe(403)
+    expect(setup.events.map(brief)).toEqual([
+      {
+        type: LOGON,
+        status: "Failure",
+        user: subject,
+        factors: ["Password"],
+        stepUp: true,
+        detail: "invalid-challenge",
+      },
+    ])
+    const fresh = body(await browser.post("/auth/step-up/start")) as { challenge: string }
+    const accepted = await browser.post("/auth/step-up", { challenge: fresh.challenge, code })
+    expect(accepted.status).toBe(200)
   })
 
   it("stops before rotating once the client has gone away", async () => {
@@ -507,6 +600,116 @@ describe("step-up", () => {
     )
     controller.abort()
     expect(replyOf((await pending) ?? (null as never)).text).toBe('{"error":"aborted"}')
+    expect(body(await browser.get("/auth/session"))["session"]).toMatchObject({ level: "AAL1" })
+  })
+})
+
+describe("a client that goes away while its credential is being checked", () => {
+  /**
+   * A store that aborts `controller` the first time a request reads `collection` once armed, so the abort lands after
+   * the body is parsed and the credential is checked: only the dispatcher's late check can stop the write.
+   */
+  function abortOnRead(controller: AbortController, collection: string) {
+    const state = { armed: false }
+    const store = hookedStore(memoryStore(), (_operation, args) => {
+      if (state.armed && args[1] === collection) {
+        state.armed = false
+        controller.abort()
+      }
+      return Promise.resolve()
+    })
+    return { store, arm: () => (state.armed = true) }
+  }
+
+  function post(path: string, cookie: string, csrf: string, json: object, signal: AbortSignal) {
+    return plainRequest(
+      {
+        method: "POST",
+        path,
+        headers: [
+          ["Origin", ORIGIN],
+          ["Content-Type", "application/json"],
+          ["X-CSRF-Token", csrf],
+          ["Cookie", cookie],
+        ],
+        body: JSON.stringify(json),
+      },
+      signal,
+    )
+  }
+
+  it("writes no session when the client leaves during the password check", async () => {
+    const controller = new AbortController()
+    const hooked = abortOnRead(controller, "password")
+    const setup = testAuth({ store: hooked.store })
+    await seedAccount(setup, { password: true })
+    const browser = await signedOut(setup)
+    const cookie = [...browser.cookies].map(([name, value]) => `${name}=${value}`).join("; ")
+    hooked.arm()
+    const reply = replyOf(
+      (await within(
+        setup.auth.handle(
+          post(
+            "/auth/sign-in",
+            cookie,
+            browser.csrf ?? "",
+            { identifier: "ada@example.com", password: PASSWORD },
+            controller.signal,
+          ),
+        ),
+      )) ?? (null as never),
+    )
+    expect([reply.status, reply.text]).toEqual([400, '{"error":"aborted"}'])
+    const owner = (await setup.store.get(TENANT, "identifier", "ada@example.com"))?.owner ?? ""
+    expect(await setup.store.listByOwner(TENANT, "session", owner)).toEqual([])
+  })
+
+  it("keeps the session at AAL1 when the client leaves during the TOTP check", async () => {
+    const controller = new AbortController()
+    const hooked = abortOnRead(controller, "totp")
+    const setup = testAuth({ store: hooked.store })
+    const { subject, secret } = await seedAccount(setup, { totp: true })
+    const { browser, token } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
+    hooked.arm()
+    const reply = replyOf(
+      (await within(
+        setup.auth.handle(
+          post(
+            "/auth/totp/verify",
+            `__Host-test-cap=${token}`,
+            browser.csrf ?? "",
+            { code: await codeAt(secret ?? "", setup.clock.now()) },
+            controller.signal,
+          ),
+        ),
+      )) ?? (null as never),
+    )
+    expect(reply.text).toBe('{"error":"aborted"}')
+    expect(body(await browser.get("/auth/session"))["session"]).toMatchObject({ level: "AAL1" })
+  })
+
+  it("keeps the session at AAL1 when the client leaves during a step-up's password check", async () => {
+    const controller = new AbortController()
+    const hooked = abortOnRead(controller, "password")
+    const setup = testAuth({ store: hooked.store })
+    const { subject } = await seedAccount(setup, { password: true })
+    const { browser, token } = await seedSession(setup, { subject, evidence: aal1(setup.clock) })
+    const { challenge } = body(await browser.post("/auth/step-up/start")) as { challenge: string }
+    hooked.arm()
+    const reply = replyOf(
+      (await within(
+        setup.auth.handle(
+          post(
+            "/auth/step-up",
+            `__Host-test-cap=${token}`,
+            browser.csrf ?? "",
+            { challenge, password: PASSWORD },
+            controller.signal,
+          ),
+        ),
+      )) ?? (null as never),
+    )
+    expect(reply.text).toBe('{"error":"aborted"}')
     expect(body(await browser.get("/auth/session"))["session"]).toMatchObject({ level: "AAL1" })
   })
 })

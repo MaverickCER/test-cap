@@ -52,6 +52,22 @@ function page(browser: Browser, path: string): Promise<Reply> {
   return browser.send({ method: "GET", path, headers: [["Accept", "text/html"]] })
 }
 
+/** The redirect a refused /account request gets: home, naming the outcome and the page to come back to. */
+function expectHome(reply: Reply, outcome: string): void {
+  expect([reply.status >= 300 && reply.status < 400, reply.headers.get("location")]).toEqual([
+    true,
+    `/?need=${outcome}&returnTo=%2Faccount`,
+  ])
+}
+
+/** Opens /account and checks it names the session's subject at `level`. */
+async function expectAccount(browser: Browser, subject: string, level: string): Promise<void> {
+  const account = await page(browser, "/account")
+  expect(account.status).toBe(200)
+  expect(account.text).toContain(`data-subject="${subject}"`)
+  expect(account.text).toContain(`data-level="${level}"`)
+}
+
 /** A server function call as TanStack Start's client sends it. */
 function serverFn(browser: Browser, url: string, method: "GET" | "POST"): Promise<Reply> {
   return browser.send({
@@ -111,6 +127,8 @@ describe.skipIf(!isInstalled(EXAMPLE))("example: tanstack-start", () => {
     expect([billing.status, billing.text]).toEqual([401, '{"error":"unauthenticated"}'])
     const exported = await serverFn(browser, urls["exportInvoices"] as string, "GET")
     expect([exported.status, exported.text]).toEqual([401, '{"error":"unauthenticated"}'])
+    // /account is on the middleware's public list, so its own server function does the refusing, with a redirect home.
+    expectHome(await page(browser, "/account"), "unauthenticated")
   })
 
   it("runs the whole journey over HTTP", async () => {
@@ -124,6 +142,8 @@ describe.skipIf(!isInstalled(EXAMPLE))("example: tanstack-start", () => {
       authenticatorId: string
       secret: string
     }
+    // Mid-enrolment the session is pre-auth: /account asks for AAL1 and still refuses it, `enroll`, as /billing does.
+    expectHome(await page(browser, "/account"), "enroll")
     const confirm = await nextCode(secret, -1)
     await expectOk(browser.post("/auth/totp/confirm", { authenticatorId, code: confirm.code }))
     const session = await browser.get("/auth/session")
@@ -134,9 +154,13 @@ describe.skipIf(!isInstalled(EXAMPLE))("example: tanstack-start", () => {
     expect(enrolled.status).toBe(200)
     expect(enrolled.text).toContain(`data-subject="${subject}"`)
 
+    // Password and TOTP are AAL2, which also satisfies /account's AAL1 requirement.
+    await expectAccount(browser, subject, "AAL2")
+
     // Sign out: the page and the server functions are refused again.
     await expectOk(browser.post("/auth/sign-out"))
     expect((await page(browser, "/billing")).status).toBe(401)
+    expectHome(await page(browser, "/account"), "unauthenticated")
 
     // Sign in with the password alone: AAL1, below the default requirement, so the answer is step-up.
     await browser.start()
@@ -145,6 +169,9 @@ describe.skipIf(!isInstalled(EXAMPLE))("example: tanstack-start", () => {
     expect([below.status, below.text]).toEqual([403, '{"error":"step-up"}'])
     const belowFn = await serverFn(browser, urls["exportInvoices"] as string, "GET")
     expect([belowFn.status, belowFn.text]).toEqual([403, '{"error":"step-up"}'])
+
+    // The same session opens /account: it asks for AAL1, and a password alone is AAL1.
+    await expectAccount(browser, subject, "AAL1")
 
     // Step up with a TOTP code from a later time step than enrolment used.
     const started = await expectOk(browser.post("/auth/step-up/start"))
@@ -165,13 +192,18 @@ describe.skipIf(!isInstalled(EXAMPLE))("example: tanstack-start", () => {
     expect(closed.status).toBe(200)
     expect(closed.text).toContain('"step-up"')
     expect(closed.text).not.toContain("inv-2026")
+    await expectAccount(browser, subject, "AAL2")
 
-    // Sign out: refused once more, page and server function alike.
+    // Sign out: refused once more, page and server function alike. The old cookie opens nothing either.
+    const stale = browser.cookies.get("__Host-test-cap")
     await expectOk(browser.post("/auth/sign-out"))
     const after = await page(browser, "/billing")
     expect([after.status, after.text]).toEqual([401, '{"error":"unauthenticated"}'])
     const afterFn = await serverFn(browser, urls["exportInvoices"] as string, "GET")
     expect([afterFn.status, afterFn.text]).toEqual([401, '{"error":"unauthenticated"}'])
+    expectHome(await page(browser, "/account"), "unauthenticated")
+    browser.cookies.set("__Host-test-cap", stale as string)
+    expectHome(await page(browser, "/account"), "unauthenticated")
   })
 
   it("asked the local HIBP stand-in, never the real service, for the password's range", () => {

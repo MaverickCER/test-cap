@@ -3,10 +3,11 @@
  * same order, in one place:
  *
  * 1. the raw path, refused with a 400 when two parsers could read it differently (ADR 0003 §2);
- * 2. the route and its method;
- * 3. for a state-changing route, the origin check, the body parsed under its declared fields, and the synchronizer
+ * 2. the request limit of the route that path names, counted per client before anything else runs (ADR 0009 §8);
+ * 3. the route and its method;
+ * 4. for a state-changing route, the origin check, the body parsed under its declared fields, and the synchronizer
  *    token (ADR 0011 §2);
- * 4. the route itself.
+ * 5. the route itself.
  *
  * Every response carries the security headers and `Cache-Control: no-store` (ADR 0011 §3, §4); only the hashed page
  * assets are cached, as immutable. An error a flow throws becomes a fixed 500 body, and a transport refusal its fixed
@@ -19,6 +20,7 @@
  * gives one reply after the same argon2id work.
  */
 
+import { generateRecoveryCodes, redeemRecoveryCode } from "../methods/recovery/codes.js"
 import type { AuthenticationEvidence, AuthenticationMethod } from "../assurance/evidence.js"
 import type { AuthPolicy, RequireResult, SessionAssurance } from "../assurance/policy.js"
 import { hexEncode, sha256, utf8Decode, utf8Encode } from "./encoding.js"
@@ -41,7 +43,16 @@ import {
   identifierValues,
   resolveConfirmed,
 } from "./accounts.js"
-import { type EmailDeps, redeemConfirmation, type SendEmail, sendConfirmation } from "./email.js"
+import { clientKey } from "./client-address.js"
+import { resolveClient, unreadForwarding, type ProxyTrust } from "./proxy-trust.js"
+import type { AuthDiagnostic } from "./auth.js"
+import {
+  type EmailDeps,
+  type EmailSendLimits,
+  redeemConfirmation,
+  type SendEmail,
+  sendConfirmation,
+} from "./email.js"
 import { normaliseEmail } from "./identifier.js"
 import {
   PASSWORD_COLLECTION,
@@ -49,8 +60,10 @@ import {
   setPassword,
   signInWithPassword,
 } from "../methods/password/method.js"
+import { QueueFullError } from "../methods/password/semaphore.js"
 import {
   beginTotpEnrolment,
+  confirmedTotpCount,
   confirmTotpEnrolment,
   totpEnrolmentAllowed,
   type TotpDeps,
@@ -78,6 +91,10 @@ import {
   type ResponseExtras,
 } from "../security/headers.js"
 import { safeReturnTo } from "../security/redirect.js"
+import { createStoreLimiter } from "../security/store-limiter.js"
+import type { RateLimitRouteId, RequestLimits } from "../security/rate-limit.js"
+import type { ChallengeHook, StuffingDetector } from "../security/stuffing.js"
+import type { Throttle, ThrottleSubject } from "../security/throttle.js"
 import {
   clearSessionCookie,
   type createSessions,
@@ -86,11 +103,17 @@ import {
   readSessionToken,
   SESSION_COLLECTION,
 } from "../sessions/sessions.js"
-import type { AuthStore, JsonValue, TenantId } from "../store/port.js"
+import type { AuthStore, JsonValue, StoreOperations, TenantId } from "../store/port.js"
 import { type Fields, parseBody, throwIfAborted } from "../transport/body.js"
 import { singleHeader } from "../transport/headers.js"
 import { matchAuthPath } from "../transport/path.js"
 import type { PlainRequest, PlainResponse } from "../transport/types.js"
+
+/**
+ * How recent a multi-factor ceremony must be for a signed-in session to change a credential: enrol TOTP or make
+ * recovery codes (ADR 0005 §8). Fifteen minutes, as for the policy's own fresh-MFA requirements in the examples.
+ */
+export const CREDENTIAL_CHANGE_WITHIN_MS = 15 * 60_000
 
 /** The path every test-cap route lives under. */
 export const BASE_PATH = "/auth"
@@ -98,6 +121,8 @@ export const BASE_PATH = "/auth"
 /** Everything the routes run on, built once by `createAuth`. */
 export interface Runtime<Id extends string> {
   readonly store: AuthStore
+  /** The store the limits count in: `store`, with each counter and block named by an HMAC of its key (ADR 0032). */
+  readonly limitStore: AuthStore
   readonly tenant: TenantId
   readonly clock: Clock
   readonly random: RandomSource
@@ -111,6 +136,28 @@ export interface Runtime<Id extends string> {
   readonly totp: TotpDeps
   /** The app's mail sender, for confirmation codes (ADR 0021). */
   readonly sendEmail: SendEmail
+  /** The throttle every guessable secret goes through (ADR 0009 §1 to §3). */
+  readonly throttle: Throttle
+  /** Which forwarding header names the client, from which peers (ADR 0009 §5); `null` when the socket is the client. */
+  readonly proxyTrust: ProxyTrust | null
+  /** True when a request with no client address is refused with the fixed 500 (ADR 0009 §8). */
+  readonly requireClientAddress: boolean
+  /** The gateway's path prefix, `""` for none: every link, redirect and email URL starts with it (ADR 0024 §6). */
+  readonly publicBasePath: string
+  /** Hands an operator diagnostic on, once per code (ADR 0009 §5). */
+  readonly diagnose: (diagnostic: AuthDiagnostic) => void
+  /** The credential-stuffing detector (ADR 0009 §4). */
+  readonly stuffing: StuffingDetector
+  /** The app's challenge for a flagged client, if it has one (ADR 0009 §4). */
+  readonly challengeHook: ChallengeHook | undefined
+  /** The request limits every request is counted against (ADR 0009 §8); `null` when the app turned them off. */
+  readonly requestLimits: RequestLimits | null
+  /** The confirmation-mail send limits (ADR 0009 §7, §8); `false` when the app turned them off. */
+  readonly emailLimits: EmailSendLimits | false
+  /** Attempts an emailed code allows over its life, from 1 to 5; 5 when absent (ADR 0009 Open 1). */
+  readonly emailCodeAttempts: number | undefined
+  /** Which refusals of a limit emit their failure event: the first per key and window, or every one (ADR 0009 §8). */
+  readonly refusalEvents: "first" | "every"
 }
 
 /** A session as the session endpoint reports it (ADR 0006): what it is, never its token. */
@@ -170,10 +217,14 @@ type Route = GetRoute | PostRoute
 /** What a page's context holds besides the token and the assets, which the dispatcher adds. */
 type PagePart = Omit<PageContext, "csrfToken" | "assets">
 
-/** A default page (ADR 0025 §4): the form it shows (`null` for sign-out), and its context or a redirect. */
+/**
+ * A default page (ADR 0025 §4): the form it shows (`null` for sign-out), and its context or a redirect. `still` is
+ * true when opening it touches no store, so a refused request may be answered with it.
+ */
 interface Page {
   readonly form: FormId | null
   readonly open: (token: string | null) => Promise<PagePart | PlainResponse>
+  readonly still: boolean
 }
 
 /**
@@ -184,16 +235,22 @@ interface FormPost {
   readonly page: string
   readonly next: string
   readonly own?: false
+  /** Where a success whose outcome is `enroll` goes instead of `next`. */
+  readonly enroll?: string
 }
 
+/**
+ * Each route a default page posts to, with its page and next step. A finished `totp/confirm` ceremony at `allow` is
+ * already a 303 to `returnTo`; any other success still needs a step-up.
+ */
 const FORM_POSTS: ReadonlyMap<string, FormPost> = new Map<string, FormPost>([
   ["sign-up", { page: "sign-up", next: "/auth/email/confirm" }],
   ["email/confirm", { page: "email/confirm", next: "/auth/password" }],
   ["email/resend", { page: "email/confirm", next: "/auth/email/confirm", own: false }],
   ["password", { page: "password", next: "/auth/totp/enrol" }],
-  // A finished ceremony at `allow` is already a 303 to `returnTo`; any other success still needs a step-up.
   ["totp/confirm", { page: "totp/enrol", next: "/auth/step-up" }],
-  ["sign-in", { page: "sign-in", next: "/auth/step-up" }],
+  // A password sign-in to an account with no second factor yet goes back to enrolment.
+  ["sign-in", { page: "sign-in", next: "/auth/step-up", enroll: "/auth/totp/enrol" }],
   ["step-up", { page: "step-up", next: "/auth/step-up" }],
   ["sign-out", { page: "sign-out", next: "/auth/sign-in" }],
 ])
@@ -205,6 +262,8 @@ const OUTCOMES: Readonly<Record<string, FlowOutcome["error"]>> = {
   "too-common": "too-common",
   breached: "breached",
   "rate-limited": "rate-limited",
+  "challenge-required": "challenge-required",
+  "invalid-challenge": "invalid-challenge",
 }
 
 /** The media type of the forms the default pages post. */
@@ -221,10 +280,12 @@ function redirect(location: string, cookies: readonly string[] = []): PlainRespo
   return emptyResponse(303, { cookies, headers: { Location: location } })
 }
 
-/** True for a form post from a browser that wants a page back, not JSON. */
+/**
+ * True for a form post from a browser that wants a page back, not JSON. An absent header reads as the four letters
+ * "null", which matches neither.
+ */
 function wantsHtml(req: PlainRequest): boolean {
   return (
-    // An absent header reads as the four letters "null", which matches neither.
     String(req.headers.get("accept")).includes("text/html") &&
     String(req.headers.get("content-type")).toLowerCase().startsWith(FORM_MEDIA_TYPE)
   )
@@ -277,7 +338,19 @@ const SET_PASSWORD_STATUS = {
 /** Builds `auth.handle` and the session reads it shares with `auth.session`. */
 export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
   const { store, tenant, clock, policy, sessions, csrf } = rt
+  /** Counts refusals per key, so `refuse` reports only the first of each wait (ADR 0009 §8). */
+  const refusals = createStoreLimiter({
+    store: rt.limitStore,
+    tenant,
+    clock,
+    points: 1,
+    duration: 1,
+    keyPrefix: "refusal-event",
+    blocks: false,
+  })
   const assets = pageAssets(`${BASE_PATH}/assets/`)
+  /** `/auth` as the browser sees it, behind any gateway prefix: the base of every link and redirect test-cap builds. */
+  const AUTH = `${rt.publicBasePath}${BASE_PATH}`
   /** A deviation that lets a password alone pass the default requirement raises its minimum (ADR 0010). */
   const passwordAlone = policy.deviations.some((item) => item.kind === "default-below-aal2")
   const email: EmailDeps = {
@@ -285,9 +358,11 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
     tenant,
     clock,
     random: rt.random,
-    origin: rt.origin,
+    linkBase: `${rt.origin}${AUTH}`,
     sendEmail: rt.sendEmail,
     keyRing: rt.totp.keyRing,
+    sendLimits: rt.emailLimits,
+    attemptLimit: rt.emailCodeAttempts,
   }
 
   /**
@@ -390,11 +465,21 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           absoluteExpiresAt: read.assurance.absoluteExpiresAt,
         }
 
-  /** The validated `returnTo`, `/` when absent, or `null` when it is not a same-origin relative path. */
+  /** The validated `returnTo`, the app's root when absent, or `null` when it is not a same-origin relative path. */
   const returnToOf = (fields: Fields): string | null =>
-    fields["returnTo"] === undefined ? "/" : safeReturnTo(fields["returnTo"] as string, rt.origin)
+    fields["returnTo"] === undefined
+      ? `${rt.publicBasePath}/`
+      : safeReturnTo(fields["returnTo"] as string, rt.origin)
 
   /** The reply to a ceremony that issued a session: its cookie, a token bound to it, and what to do next. */
+  /** The cookie of a session just issued, and the CSRF token bound to it for the next post. */
+  const issuedExtras = async (issued: IssuedSession, now: number): Promise<ResponseExtras> => ({
+    cookies: [issued.cookie],
+    headers: {
+      "X-CSRF-Token": await csrf.issue(`session:${await tokenHash(issued.token)}`, now),
+    },
+  })
+
   const issuedResponse = async (
     ctx: Context,
     issued: IssuedSession,
@@ -402,12 +487,7 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
   ): Promise<PlainResponse> => {
     const now = clock.now()
     const outcome = policy.require(issued.state, "default", now).outcome
-    const extras: ResponseExtras = {
-      cookies: [issued.cookie],
-      headers: {
-        "X-CSRF-Token": await csrf.issue(`session:${await tokenHash(issued.token)}`, now),
-      },
-    }
+    const extras = await issuedExtras(issued, now)
     if (ctx.form && outcome === "allow") {
       return emptyResponse(303, { ...extras, headers: { ...extras.headers, Location: returnTo } })
     }
@@ -428,16 +508,50 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
     return result.outcome === "allow" ? { subject: result.subject } : denied(result.outcome)
   }
 
-  /** A session that may add an authenticator: one still enrolling, or one meeting the default requirement. */
+  /**
+   * True when a signed-in session may change a credential now: it proved multiple factors within
+   * `CREDENTIAL_CHANGE_WITHIN_MS` (ADR 0005 §8; the `sensitive-change-without-reauth` attack). A pre-auth or
+   * recovery-only session follows its own rules instead.
+   */
+  const recentlyVerified = (current: ReadSession): boolean => {
+    if (current.state.state !== "authenticated") return true
+    const at = current.assurance.lastMultiFactorAt
+    return at !== null && clock.now() - at <= CREDENTIAL_CHANGE_WITHIN_MS
+  }
+
+  /** The refusal for a credential change without a recent step-up: what the step-up must add. */
+  const staleForChange = (): PlainResponse =>
+    jsonResponse(403, {
+      error: "step-up",
+      missing: [{ kind: "fresh-multi-factor", withinMs: CREDENTIAL_CHANGE_WITHIN_MS }],
+    })
+
+  /**
+   * A session that may add an authenticator: one still enrolling, one recovering (ADR 0007 §3: it may only replace
+   * authenticators, and doing so adds no evidence), or one meeting the default requirement.
+   */
   const enrolling = (
     current: ReadSession | null,
   ): { readonly subject: string; readonly preAuth: boolean } | PlainResponse => {
     if (current?.state.state === "pre-auth")
       return { subject: current.state.subject, preAuth: true }
+    if (current?.state.state === "recovery-only")
+      return { subject: current.state.subject, preAuth: false }
     const result = policy.require(current?.state ?? null, "default", clock.now())
     return result.outcome === "allow"
       ? { subject: result.subject, preAuth: false }
       : denied(result.outcome)
+  }
+
+  /**
+   * True while the account of a pre-auth session has no confirmed second factor. Once it has one, the session cannot
+   * prove it, so it is signed out: whoever knew only the password while enrolment was unfinished must not add a TOTP
+   * of their own afterwards and reach AAL2.
+   */
+  const stillEnrolling = async (subject: string, token: string): Promise<boolean> => {
+    if ((await confirmedTotpCount(rt.totp, { tenant, accountId: subject })) === 0) return true
+    await sessions.signOut(tenant, token)
+    return false
   }
 
   /** The account of a session still enrolling (pre-auth); else the refusal. */
@@ -469,23 +583,96 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
     return typeof id === "string" ? id : null
   }
 
+  /** The request's client: the socket, or through the app's declared proxies their forwarded client (ADR 0009 §5). */
+  const clientOf = (req: PlainRequest): string | undefined =>
+    resolveClient(req.clientAddress, req.headers, rt.proxyTrust)
+
+  /** The 429 a throttled attempt gets, with the wait in seconds the page shows (ADR 0009, ADR 0025). */
+  const rateLimited = (retryAfterMs: number): PlainResponse =>
+    errorResponse(429, "rate-limited", {
+      headers: { "Retry-After": String(Math.ceil(retryAfterMs / 1000)) },
+    })
+
+  /**
+   * Refuses a request a limit stopped, as every limit refuses (ADR 0009 §8): the 429 with `Retry-After`, and the
+   * route's failure event for the first refusal of `key` until its wait ends, or for every refusal with
+   * `refusalEvents: "every"`. Refusals are counted in the store; one the store cannot count is reported, as the
+   * refusal stands either way.
+   */
+  const refuse = async (
+    key: string,
+    retryAfterMs: number,
+    kind: EventKind,
+    subject: string | null,
+    extra: Parameters<typeof event>[3] = {},
+  ): Promise<PlainResponse> => {
+    let first = true
+    if (rt.refusalEvents === "first") {
+      // One point per key in a window as long as the wait: the first refusal takes it, the rest are refused.
+      first = await refusals.consume(key, 1, { customDuration: retryAfterMs / 1000 }).then(
+        () => true,
+        (refusal: unknown) => refusal instanceof Error,
+      )
+    }
+    if (first) event(kind, false, subject, { detail: "rate-limited", ...extra })
+    return rateLimited(retryAfterMs)
+  }
+
+  /**
+   * Checks a guessable secret under the throttle (ADR 0009): refused before any check while the subject is blocked;
+   * a failure counts against every key, a success clears the account's. `busy` is the server's refusal, not a guess,
+   * so it counts for nothing.
+   */
+  const throttled = async <R extends { readonly ok: boolean; readonly reason?: string }>(
+    subject: ThrottleSubject,
+    check: () => Promise<R>,
+    strict = false,
+  ): Promise<
+    | R
+    | {
+        readonly ok: false
+        readonly reason: "rate-limited"
+        readonly retryAfterMs: number
+        /** The key the refusal is reported under: the subject's identifier and client. */
+        readonly key: string
+      }
+  > => {
+    const wait = await rt.throttle.attempt(subject, strict)
+    if (wait > 0) {
+      const key = `guess|${subject.account}|${String(clientKey(subject.clientAddress))}`
+      return { ok: false, reason: "rate-limited", retryAfterMs: wait, key }
+    }
+    const result = await check()
+    if (result.ok) await rt.throttle.succeeded(subject)
+    else if (result.reason !== "busy") await rt.throttle.failed(subject, strict)
+    return result
+  }
+
   /** Runs a password or TOTP ceremony for the account; a disabled account fails as a wrong secret does. */
   const ceremony = async (
     subject: string,
     secret: { readonly password: string } | { readonly code: string },
+    req: PlainRequest,
   ) => {
     const active = await accountActive(store, tenant, subject)
+    // Keyed on the account's address, as sign-in and recovery are, so the flows that check one secret of an account
+    // share its budget.
+    const who = { account: (await addressOf(subject)) ?? subject, clientAddress: clientOf(req) }
     if ("password" in secret) {
-      const result = await signInWithPassword(rt.password, {
-        tenant,
-        accountId: active ? subject : null,
-        password: secret.password,
-      })
+      const result = await throttled({ ...who, secret: "password" }, () =>
+        signInWithPassword(rt.password, {
+          tenant,
+          accountId: active ? subject : null,
+          password: secret.password,
+        }),
+      )
       return { method: "password" as const, result }
     }
-    const result = active
-      ? await verifyTotp(rt.totp, { tenant, accountId: subject, code: secret.code })
-      : ({ ok: false, reason: "invalid" } as const)
+    const result = await throttled({ ...who, secret: "totp" }, async () =>
+      active
+        ? verifyTotp(rt.totp, { tenant, accountId: subject, code: secret.code })
+        : ({ ok: false, reason: "invalid" } as const),
+    )
     return { method: "totp" as const, result }
   }
 
@@ -499,22 +686,76 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
   }
 
   /**
-   * Rotates the session after a credential change that is already stored, and revokes the account's other sessions
-   * (ADR 0006 §7). When the rotation fails or finds the session gone, every session of the account is revoked
-   * instead, so no session outlives the change (ADR 0029, finding F-1).
+   * Rotates the session on a credential change and revokes the account's other sessions (ADR 0006 §7); `apply`, when
+   * given, writes the change in the same transaction. When the rotation fails or finds the session gone, every
+   * session of the account is revoked instead, so no session outlives the change (ADR 0029, finding F-1).
    */
   const afterCredentialChange = async (
     token: string,
     subject: string,
+    apply?: (ops: StoreOperations) => Promise<boolean>,
   ): Promise<IssuedSession | null> => {
     let issued: IssuedSession | null = null
     try {
-      issued = await sessions.credentialChanged(tenant, token)
+      issued = await sessions.credentialChanged(tenant, token, apply)
     } finally {
       if (issued === null)
         await store.revokeByOwner(tenant, SESSION_COLLECTION, subject, clock.now())
     }
     return issued
+  }
+
+  const recovery = {
+    store,
+    clock,
+    random: rt.random,
+    hasher: rt.password.hasher,
+  }
+
+  /**
+   * Sets a new password from a recovery-only session (ADR 0007 §3): the password, the session's rotation and the
+   * revocation of the account's others commit together, and the session stays recovery-only, with no level. A session
+   * gone by the time the hash is ready writes no password.
+   */
+  const replacePassword = async (
+    ctx: Context,
+    current: ReadSession & { readonly state: { readonly subject: string } },
+  ): Promise<PlainResponse> => {
+    const subject = current.state.subject
+    let issued: IssuedSession | null = null
+    const result = await setPassword(rt.password, {
+      tenant,
+      accountId: subject,
+      password: ctx.fields["password"] as string,
+      alone: passwordAlone,
+      contextWords: [rt.systemId, ...(await identifierValues(store, tenant, subject))],
+      commit: async (write) =>
+        (issued = await afterCredentialChange(ctx.token as string, subject, write)) !== null,
+    })
+    if (!result.ok) {
+      event("update", false, subject, { method: "password", detail: result.reason })
+      // A change that wrote nothing revoked every session of the account, this one included.
+      return result.reason === "conflict"
+        ? denied("unauthenticated")
+        : errorResponse(SET_PASSWORD_STATUS[result.reason], result.reason)
+    }
+    event("update", true, subject, { method: "password", detail: "recovery" })
+    // No returnTo is asked for here: the reply names the app's root, behind any gateway prefix.
+    return issuedResponse(ctx, issued as unknown as IssuedSession, returnToOf({}) as string)
+  }
+
+  /** The active account a normalised identifier confirms, or `null`, as for text that is no address. */
+  const confirmedAccount = async (identifier: string | null): Promise<string | null> =>
+    identifier === null ? null : resolveConfirmed(store, tenant, identifier)
+
+  /** Tells the account's confirmed address that a recovery started, without waiting on the mailer. */
+  const notifyRecovered = (address: string): void => {
+    void (async () =>
+      rt.sendEmail({
+        to: address,
+        subject: "A recovery of your account started",
+        text: "A saved recovery code was just used on your account, and its other sessions were signed out. If this was not you, recover the account at once with another of your codes and replace every sign-in method.",
+      }))().catch(() => undefined)
   }
 
   const routes = new Map<string, Route>([
@@ -548,7 +789,7 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           await sendConfirmation(email, {
             accountId,
             address: identifier,
-            clientAddress: ctx.req.clientAddress,
+            clientAddress: clientOf(ctx.req),
           })
           const issued = await sessions.begin(tenant, ctx.token, {
             subject: accountId,
@@ -575,12 +816,11 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
             code: ctx.fields["code"] as string,
           })
           if (!result.ok) {
+            if (result.reason === "rate-limited") {
+              return refuse(`email-code|${who.subject}`, result.retryAfterMs, "update", who.subject)
+            }
             event("update", false, who.subject, { detail: result.reason })
-            return result.reason === "rate-limited"
-              ? errorResponse(429, "rate-limited", {
-                  headers: { "Retry-After": String(Math.ceil(result.retryAfterMs / 1000)) },
-                })
-              : errorResponse(400, "invalid-code")
+            return errorResponse(400, "invalid-code")
           }
           const claimed = await claimIdentifier(store, tenant, {
             accountId: who.subject,
@@ -612,7 +852,7 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           const { retryAfterMs } = await sendConfirmation(email, {
             accountId: who.subject,
             address,
-            clientAddress: ctx.req.clientAddress,
+            clientAddress: clientOf(ctx.req),
           })
           return jsonResponse(200, { outcome: "enroll", retryAfterMs })
         },
@@ -625,12 +865,18 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
         fields: { password: true },
         refused: "enable-mfa-factors",
         async run(ctx) {
-          const who = enrollingOnly(await sessions.read(tenant, ctx.token))
+          const current = await sessions.read(tenant, ctx.token)
+          if (current?.state.state === "recovery-only") return replacePassword(ctx, current)
+          const who = enrollingOnly(current)
           if (!("subject" in who)) return who
           const subject = who.subject
           if (!(await hasConfirmedIdentifier(store, tenant, subject))) {
             return errorResponse(409, "confirm-email-first")
           }
+          // A password, once set, changes only through recovery, which signs the account's other sessions out
+          // (ADR 0007 §3). A session sent back to enrolment by a password sign-in may not replace it.
+          if ((await passwordAuthenticator(subject)) !== null)
+            return errorResponse(409, "password-set")
           const result = await setPassword(rt.password, {
             tenant,
             accountId: subject,
@@ -657,8 +903,14 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
         fields: {},
         refused: "enable-mfa-factors",
         async run(ctx) {
-          const who = enrolling(await sessions.read(tenant, ctx.token))
+          const current = await sessions.read(tenant, ctx.token)
+          const who = enrolling(current)
           if (!("subject" in who)) return who
+          if (who.preAuth && !(await stillEnrolling(who.subject, ctx.token as string))) {
+            return denied("unauthenticated")
+          }
+          // `who` holds a subject, so a session was read.
+          if (!recentlyVerified(current as ReadSession)) return staleForChange()
           if (who.preAuth && (await passwordAuthenticator(who.subject)) === null) {
             return errorResponse(409, "password-first")
           }
@@ -678,8 +930,14 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
         async run(ctx) {
           const returnTo = returnToOf(ctx.fields)
           if (returnTo === null) return errorResponse(400, "invalid-return-to")
-          const who = enrolling(await sessions.read(tenant, ctx.token))
+          const current = await sessions.read(tenant, ctx.token)
+          const who = enrolling(current)
           if (!("subject" in who)) return who
+          if (who.preAuth && !(await stillEnrolling(who.subject, ctx.token as string))) {
+            return denied("unauthenticated")
+          }
+          // `who` holds a subject, so a session was read.
+          if (!recentlyVerified(current as ReadSession)) return staleForChange()
           const passwordId = await passwordAuthenticator(who.subject)
           if (who.preAuth && passwordId === null) return errorResponse(409, "password-first")
           const result = await confirmTotpEnrolment(rt.totp, {
@@ -697,9 +955,9 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           }
           event("enable-mfa-factors", true, who.subject, { method: "totp" })
           const token = ctx.token as string
+          // Choosing the password in this session proved it; the evidence is dated at the end of enrolment.
           const issued = who.preAuth
             ? await sessions.completeEnrolment(tenant, token, [
-                // Choosing the password in this session proved it; the evidence is dated at the end of enrolment.
                 {
                   method: "password",
                   authenticatorId: passwordId as string,
@@ -728,18 +986,43 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
         async run(ctx) {
           const returnTo = returnToOf(ctx.fields)
           if (returnTo === null) return errorResponse(400, "invalid-return-to")
-          const identifier = normaliseEmail(ctx.fields["identifier"] as string)
-          const accountId =
-            identifier === null ? null : await resolveConfirmed(store, tenant, identifier)
-          const result = await signInWithPassword(rt.password, {
-            tenant,
-            accountId,
-            password: ctx.fields["password"] as string,
-          })
+          const typed = ctx.fields["identifier"] as string
+          const identifier = normaliseEmail(typed)
+          const client = clientOf(ctx.req)
+          // A client the stuffing detector flagged answers the app's challenge first, before any password is checked.
+          const flagged = await rt.stuffing.flagged(client)
+          if (flagged !== null && rt.challengeHook !== undefined) {
+            if (!(await rt.challengeHook({ request: ctx.req, client: flagged }))) {
+              event("logon", false, null, { method: "password", detail: "challenge-required" })
+              return errorResponse(403, "challenge-required")
+            }
+          }
+          const accountId = await confirmedAccount(identifier)
+          // The throttle keys on what was typed, so an address no account holds is throttled exactly like one that is.
+          const account = identifier ?? typed
+          const result = await throttled(
+            { account, clientAddress: client, secret: "password" },
+            () =>
+              signInWithPassword(rt.password, {
+                tenant,
+                accountId,
+                password: ctx.fields["password"] as string,
+              }),
+            flagged !== null && rt.challengeHook === undefined,
+          )
           if (!result.ok) {
+            if (result.reason === "rate-limited") {
+              // A refused attempt still names an identifier this client tried. Counting it lets the detector see a
+              // spray the client's own throttle slows first (ADR 0009 §4): about 15 checked failures fit in a window.
+              await rt.stuffing.failed(account, client)
+              return refuse(result.key, result.retryAfterMs, "logon", accountId, {
+                method: "password",
+              })
+            }
+            const stuffing = result.reason !== "busy" && (await rt.stuffing.failed(account, client))
             event("logon", false, accountId, {
               method: "password",
-              detail: result.reason,
+              detail: stuffing ? "credential-stuffing" : result.reason,
             })
             return result.reason === "busy"
               ? errorResponse(503, "busy")
@@ -748,11 +1031,29 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           throwIfAborted(ctx.req.signal)
           // A verified password exists only for a resolved account.
           const subject = accountId as string
-          const issued = await sessions.signIn(tenant, ctx.token, {
-            subject,
-            evidence: [result.evidence],
-          })
-          await loggedOn(subject, "password", issued)
+          // An account that set its password but never confirmed a second factor goes back to enrolment, as after
+          // sign-up, unless a deviation lets a password alone meet the default requirement. Signed in, it could
+          // reach nothing and enrol nothing, since enrolling needs a recent multi-factor proof.
+          const enrolled =
+            passwordAlone || (await confirmedTotpCount(rt.totp, { tenant, accountId: subject })) > 0
+          const issued = enrolled
+            ? await sessions.signIn(tenant, ctx.token, { subject, evidence: [result.evidence] })
+            : await sessions.begin(tenant, ctx.token, { subject, state: "pre-auth" })
+          // A password change that finished while this password was checked revoked the account's sessions before
+          // this one was written (ADR 0006 §7). Every change gives the password a new id, so a changed id, or no
+          // password at all, revokes the session just written. Read after the write, it misses no change.
+          const current = await store.get(tenant, PASSWORD_COLLECTION, subject)
+          const currentId =
+            current === null
+              ? null
+              : (current.data as { readonly authenticatorId?: unknown }).authenticatorId
+          if (currentId !== result.evidence.authenticatorId) {
+            await sessions.signOut(tenant, issued.token)
+            event("logon", false, subject, { method: "password", detail: "invalid" })
+            return errorResponse(401, "invalid-credentials")
+          }
+          if (enrolled) await loggedOn(subject, "password", issued)
+          else event("logon", true, subject, { method: "password", detail: "enroll" })
           return issuedResponse(ctx, issued, returnTo)
         },
       },
@@ -768,12 +1069,18 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           if (returnTo === null) return errorResponse(400, "invalid-return-to")
           const who = signedIn(await sessions.read(tenant, ctx.token))
           if (!("subject" in who)) return who
-          const { result } = await ceremony(who.subject, { code: ctx.fields["code"] as string })
+          const { result } = await ceremony(
+            who.subject,
+            { code: ctx.fields["code"] as string },
+            ctx.req,
+          )
           if (!result.ok) {
-            event("logon", false, who.subject, {
-              method: "totp",
-              detail: result.reason,
-            })
+            if (result.reason === "rate-limited") {
+              return refuse(result.key, result.retryAfterMs, "logon", who.subject, {
+                method: "totp",
+              })
+            }
+            event("logon", false, who.subject, { method: "totp", detail: result.reason })
             return errorResponse(401, "invalid-code")
           }
           throwIfAborted(ctx.req.signal)
@@ -815,28 +1122,37 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           }
           const who = signedIn(await sessions.read(tenant, ctx.token))
           if (!("subject" in who)) return who
+          const challenge = ctx.fields["challenge"] as string
+          // The challenge is checked before the secret, so an expired or foreign one spends no TOTP time step and
+          // touches no throttle key. `stepUp` still takes it atomically below.
+          if (!(await sessions.challengeOpen(tenant, ctx.token as string, challenge))) {
+            event("logon", false, who.subject, {
+              method: password === undefined ? "totp" : "password",
+              stepUp: true,
+              detail: "invalid-challenge",
+            })
+            return errorResponse(403, "invalid-challenge")
+          }
           const { method, result } = await ceremony(
             who.subject,
             password === undefined ? { code: code as string } : { password },
+            ctx.req,
           )
           if (!result.ok) {
-            event("logon", false, who.subject, {
-              method,
-              stepUp: true,
-              detail: result.reason,
-            })
+            if (result.reason === "rate-limited") {
+              return refuse(result.key, result.retryAfterMs, "logon", who.subject, {
+                method,
+                stepUp: true,
+              })
+            }
+            event("logon", false, who.subject, { method, stepUp: true, detail: result.reason })
             return result.reason === "busy"
               ? errorResponse(503, "busy")
               : errorResponse(401, "invalid-credentials")
           }
           throwIfAborted(ctx.req.signal)
           const token = ctx.token as string
-          const issued = await sessions.stepUp(
-            tenant,
-            token,
-            ctx.fields["challenge"] as string,
-            result.evidence,
-          )
+          const issued = await sessions.stepUp(tenant, token, challenge, result.evidence)
           if (issued === null) {
             event("logon", false, who.subject, {
               method,
@@ -847,6 +1163,142 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
           }
           await loggedOn(who.subject, method, issued, true)
           return issuedResponse(ctx, issued, returnTo)
+        },
+      },
+    ],
+    [
+      "recovery-codes",
+      {
+        method: "POST",
+        fields: {},
+        refused: "enable-mfa-factors",
+        async run(ctx) {
+          // A signed-in person at the default requirement makes a set; so does one recovering, to replace a lost set.
+          const current = await sessions.read(tenant, ctx.token)
+          const who =
+            current?.state.state === "recovery-only"
+              ? { subject: current.state.subject }
+              : allowed(current)
+          if (!("subject" in who)) return who
+          // `who` holds a subject, so a session was read.
+          if (!recentlyVerified(current as ReadSession)) return staleForChange()
+          // A new set is a credential change: the switch, this session's rotation and the revocation of the account's
+          // other sessions commit together (ADR 0006 §7).
+          let issued: IssuedSession | null = null
+          let codes: readonly string[] | null
+          try {
+            codes = await generateRecoveryCodes(
+              recovery,
+              { tenant, accountId: who.subject },
+              async (apply) =>
+                (issued = await afterCredentialChange(ctx.token as string, who.subject, apply)) !==
+                null,
+            )
+          } catch (error) {
+            if (!(error instanceof QueueFullError)) throw error
+            // A full hashing queue stops the set before anything is written, so the old set still redeems and every
+            // session stays as it was (ADR 0018 §2).
+            event("enable-mfa-factors", false, who.subject, {
+              method: "recovery-code",
+              detail: "busy",
+            })
+            return errorResponse(503, "busy")
+          }
+          // A parallel request made its set current first, or the session went: this set never redeems, and every
+          // session of the account was revoked (ADR 0007 §1).
+          if (codes === null) {
+            event("enable-mfa-factors", false, who.subject, {
+              method: "recovery-code",
+              detail: "conflict",
+            })
+            return denied("unauthenticated")
+          }
+          event("enable-mfa-factors", true, who.subject, { method: "recovery-code" })
+          return jsonResponse(
+            200,
+            { codes },
+            await issuedExtras(issued as unknown as IssuedSession, clock.now()),
+          )
+        },
+      },
+    ],
+    [
+      "recovery",
+      {
+        method: "POST",
+        fields: { identifier: true, code: true },
+        refused: "logon",
+        async run(ctx) {
+          const typed = ctx.fields["identifier"] as string
+          const identifier = normaliseEmail(typed)
+          const accountId = await confirmedAccount(identifier)
+          const result = await throttled(
+            {
+              account: identifier ?? typed,
+              clientAddress: clientOf(ctx.req),
+              secret: "recovery-code",
+            },
+            () =>
+              // The code is spent, and the session it starts written, in one transaction (ADR 0007 §4).
+              redeemRecoveryCode(
+                recovery,
+                { tenant, accountId, code: ctx.fields["code"] as string },
+                async (ops) => {
+                  throwIfAborted(ctx.req.signal)
+                  // Recovery is a credential change: every session of the account is revoked, and the new one is
+                  // recovery-only, with no level. A redeemed code exists only for a resolved account.
+                  await ops.revokeByOwner(
+                    tenant,
+                    SESSION_COLLECTION,
+                    accountId as string,
+                    clock.now(),
+                  )
+                  return sessions.begin(
+                    tenant,
+                    ctx.token,
+                    { subject: accountId as string, state: "recovery-only" },
+                    ops,
+                  )
+                },
+              ),
+          )
+          if (!result.ok) {
+            if (result.reason === "rate-limited") {
+              return refuse(result.key, result.retryAfterMs, "logon", accountId, {
+                method: "recovery-code",
+              })
+            }
+            event("logon", false, accountId, { method: "recovery-code", detail: result.reason })
+            return result.reason === "busy"
+              ? errorResponse(503, "busy")
+              : errorResponse(401, "invalid-credentials")
+          }
+          event("logon", true, accountId, { method: "recovery-code", detail: "recovery" })
+          // ADR 0007 Open 6: the account hears of a recovery as it starts, before anything is replaced, so one the
+          // owner did not start is visible even if that session never finishes. A redeemed code means the identifier
+          // resolved, so it is the account's confirmed address.
+          notifyRecovered(identifier as string)
+          return issuedResponse(ctx, result.value as IssuedSession, returnToOf({}) as string)
+        },
+      },
+    ],
+    [
+      "recovery/finish",
+      {
+        method: "POST",
+        fields: {},
+        refused: "update",
+        async run(ctx) {
+          const current = await sessions.read(tenant, ctx.token)
+          if (current?.state.state !== "recovery-only") {
+            return current === null
+              ? denied("unauthenticated")
+              : errorResponse(403, "not-recovering")
+          }
+          const subject = current.state.subject
+          const cleared = await sessions.endRecovery(tenant, ctx.token as string)
+          event("update", true, subject, { detail: "recovery-complete" })
+          return jsonResponse(200, { outcome: "unauthenticated" }, { cookies: [cleared] })
         },
       },
     ],
@@ -907,42 +1359,45 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
   const page = (
     form: FormId | null,
     open: (token: string | null) => Promise<PagePart | PlainResponse>,
-  ): Page => ({ form, open })
-  const fixed = (part: PagePart) => () => Promise.resolve(part)
-  const signInPage = (): PlainResponse => redirect(`${BASE_PATH}/sign-in`)
+  ): Page => ({ form, open, still: false })
+  /** A page whose context is the same for every request, so opening it touches no store. */
+  const fixed = (form: FormId | null, part: PagePart): Page => ({
+    form,
+    open: () => Promise.resolve(part),
+    still: true,
+  })
+  const signInPage = (): PlainResponse => redirect(`${AUTH}/sign-in`)
 
   const pages = new Map<string, Page>([
     [
       "sign-up",
-      page(
-        "sign-up",
-        fixed({
-          action: `${BASE_PATH}/sign-up`,
-          links: [{ href: `${BASE_PATH}/sign-in`, text: DEFAULT_MESSAGES.signInLink }],
-        }),
-      ),
+      fixed("sign-up", {
+        action: `${AUTH}/sign-up`,
+        links: [{ href: `${AUTH}/sign-in`, text: DEFAULT_MESSAGES.signInLink }],
+      }),
     ],
     [
       "email/confirm",
-      page(
-        "email-confirm",
-        fixed({ action: `${BASE_PATH}/email/confirm`, resend: `${BASE_PATH}/email/resend` }),
-      ),
+      fixed("email-confirm", { action: `${AUTH}/email/confirm`, resend: `${AUTH}/email/resend` }),
     ],
-    ["password", page("password", fixed({ action: `${BASE_PATH}/password` }))],
+    ["password", fixed("password", { action: `${AUTH}/password` })],
     [
       "totp/enrol",
       page("totp-enrol", async (token) => {
-        const who = enrolling(await sessions.read(tenant, token))
+        const current = await sessions.read(tenant, token)
+        const who = enrolling(current)
         if (!("subject" in who)) return signInPage()
+        // As the POST does: without fresh proof of both factors the confirmation would be refused, so the page starts no
+        // enrolment and sends the person to sign in again, which proves both (ADR 0005).
+        if (!recentlyVerified(current as ReadSession)) return signInPage()
         if (who.preAuth && (await passwordAuthenticator(who.subject)) === null) {
-          return redirect(`${BASE_PATH}/password`)
+          return redirect(`${AUTH}/password`)
         }
         // A setup key is shown once (ADR 0027): after a wrong code the page begins a new enrolment.
         const begun = await startTotp(who.subject)
         if ("status" in begun) return begun
         return {
-          action: `${BASE_PATH}/totp/confirm`,
+          action: `${AUTH}/totp/confirm`,
           totpSecret: begun.secret,
           hidden: { authenticatorId: begun.authenticatorId },
         }
@@ -950,13 +1405,10 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
     ],
     [
       "sign-in",
-      page(
-        "sign-in",
-        fixed({
-          action: `${BASE_PATH}/sign-in`,
-          links: [{ href: `${BASE_PATH}/sign-up`, text: DEFAULT_MESSAGES.signUpLink }],
-        }),
-      ),
+      fixed("sign-in", {
+        action: `${AUTH}/sign-in`,
+        links: [{ href: `${AUTH}/sign-up`, text: DEFAULT_MESSAGES.signUpLink }],
+      }),
     ],
     [
       "step-up",
@@ -965,10 +1417,10 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
         if (!("subject" in who)) return signInPage()
         // The session was just read; one revoked since then gets a challenge no step-up accepts.
         const challenge = String(await sessions.beginStepUp(tenant, token as string))
-        return { action: `${BASE_PATH}/step-up`, hidden: { challenge } }
+        return { action: `${AUTH}/step-up`, hidden: { challenge } }
       }),
     ],
-    ["sign-out", page(null, fixed({ action: `${BASE_PATH}/sign-out` }))],
+    ["sign-out", fixed(null, { action: `${AUTH}/sign-out` })],
   ])
 
   /** The empty form of a page. */
@@ -990,7 +1442,10 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
     const context: PageContext = {
       ...part,
       csrfToken,
-      assets: { script: script.path, style: style.path },
+      assets: {
+        script: `${rt.publicBasePath}${script.path}`,
+        style: `${rt.publicBasePath}${style.path}`,
+      },
     }
     const html =
       form === null
@@ -1012,7 +1467,12 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
   ): Promise<PlainResponse> => {
     if (response.status === 303) return response
     // Every success a route answers with JSON is a 200.
-    if (response.status === 200) return redirect(post.next, response.headers.getSetCookie())
+    if (response.status === 200) {
+      const outcome = (JSON.parse(utf8Decode(response.body as Uint8Array)) as { outcome?: unknown })
+        .outcome
+      const next = outcome === "enroll" ? (post.enroll ?? post.next) : post.next
+      return redirect(`${rt.publicBasePath}${next}`, response.headers.getSetCookie())
+    }
     const code = refusalCode(response)
     if (code === "unauthenticated") return signInPage()
     const { form } = pages.get(post.page) as Page
@@ -1035,7 +1495,10 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
               })
             : checked
     }
-    return servePage(req, token, post.page, response.status, model)
+    const page = await servePage(req, token, post.page, response.status, model)
+    const wait = response.headers.get("retry-after")
+    if (wait !== null) page.headers.set("Retry-After", wait)
+    return page
   }
 
   /** Serves a hashed asset: immutable, with its content type, and a 404 for any other name. */
@@ -1061,7 +1524,17 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
       event(route.refused, false, null, { detail: "csrf" })
       return errorResponse(403, "csrf")
     }
-    if (!sameOrigin(req.headers, rt.origin)) return refuse()
+    if (!sameOrigin(req.headers, rt.origin)) {
+      const origin = req.headers.get("origin")
+      if ((origin === null || origin === "null") && !req.headers.has("sec-fetch-site")) {
+        rt.diagnose({
+          code: "origin-unverifiable",
+          message:
+            "A state-changing request carried neither an Origin header naming a site nor Sec-Fetch-Site, so the CSRF check refused it. Browsers send both; a proxy or CDN in front of the app may be removing them. See specs/dependency-failures.md.",
+        })
+      }
+      return refuse()
+    }
     const parsed = await parseBody(req)
     for (const [name, value] of Object.entries(parsed.fields)) {
       if (name !== "csrfToken" && !Object.hasOwn(route.fields, name)) {
@@ -1086,14 +1559,81 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
     return { fields: parsed.fields, form: parsed.kind === "form" }
   }
 
+  /**
+   * The id a request is counted under (ADR 0009 §8): the route the steps below run for it, `pages` or `assets`, or
+   * `unmatched` for every request they refuse with a 404 or 405, so no spelling of a path mints a counter of its own.
+   */
+  const limitIdOf = (req: PlainRequest, segments: readonly string[]): RateLimitRouteId => {
+    const key = segments.join("/")
+    if (segments[0] === "assets") return "assets"
+    if (req.method === "GET" && pages.has(key)) return "pages"
+    return routes.get(key)?.method === req.method ? (key as RateLimitRouteId) : "unmatched"
+  }
+
+  /**
+   * Counts the request against its route's limit; the wait in milliseconds when it is over, else `null`. A request
+   * with no client address is not counted, as the throttle keeps no client key for it, or where `requireClientAddress`
+   * holds, fails closed with the fixed 500 (ADR 0009 §8).
+   */
+  const overLimit = async (
+    req: PlainRequest,
+    id: RateLimitRouteId,
+  ): Promise<{ readonly client: string; readonly retryAfterMs: number } | null> => {
+    const client = clientKey(clientOf(req))
+    if (client === null) {
+      const required = rt.requireClientAddress
+      rt.diagnose({
+        code: "client-address-missing",
+        message: `A request reached test-cap with no client address, so ${required ? "it was refused with a 500: production and staging need one for the per-client limits" : "the per-client limits did not count it"}. Give the adapter the socket address (its clientAddress option), or ${required ? "set requireClientAddress: false and " : ""}limit requests at the gateway (ADR 0009 §8).`,
+      })
+      // Stryker disable next-line StringLiteral: equivalent -- the error becomes the fixed 500 body, which never carries its message
+      if (required) throw new Error("No client address.")
+      return null
+    }
+    if (rt.requestLimits === null) return null
+    const decision = await rt.requestLimits.check(id, req, client)
+    return decision.allowed ? null : { client, retryAfterMs: decision.retryAfterMs }
+  }
+
+  /**
+   * The reply to a request over its limit: the 429 every rate-limited reply gives. A state-changing route also emits
+   * its failure event, and a form post that wants a page gets the page with the wait, unless opening that page would
+   * touch the store.
+   */
+  const limited = async (
+    req: PlainRequest,
+    id: RateLimitRouteId,
+    over: { readonly client: string; readonly retryAfterMs: number },
+  ): Promise<PlainResponse> => {
+    const route = routes.get(id)
+    if (route?.method !== "POST") return rateLimited(over.retryAfterMs)
+    const response = await refuse(
+      `request|${id}|${over.client}`,
+      over.retryAfterMs,
+      route.refused,
+      null,
+      {
+        detail: "request-limit",
+      },
+    )
+    const post = FORM_POSTS.get(id)
+    if (post === undefined || !wantsHtml(req) || !(pages.get(post.page) as Page).still) {
+      return response
+    }
+    return htmlAnswer(req, readSessionToken(req.headers), post, response, null)
+  }
+
   const dispatch = async (req: PlainRequest): Promise<PlainResponse | null> => {
     const match = matchAuthPath(req.url, BASE_PATH)
     if (match.kind === "outside") return null
+    const id = limitIdOf(req, match.segments)
+    const over = await overLimit(req, id)
+    if (over !== null) return limited(req, id, over)
     const key = match.segments.join("/")
-    if (match.segments[0] === "assets") return serveAsset(req, `${BASE_PATH}/${key}`)
+    if (id === "assets") return serveAsset(req, `${BASE_PATH}/${key}`)
     const token = readSessionToken(req.headers)
     const hasPage = pages.has(key)
-    if (hasPage && req.method === "GET") return servePage(req, token, key)
+    if (id === "pages") return servePage(req, token, key)
     const route = routes.get(key)
     if (route === undefined) return errorResponse(404, "not-found")
     if (req.method !== route.method) {
@@ -1130,6 +1670,13 @@ export function createDispatcher<Id extends string>(rt: Runtime<Id>) {
 
     /** Serves one request: `null` outside the base path, else a response, never a thrown error. */
     async handle(req: PlainRequest): Promise<PlainResponse | null> {
+      const unread = unreadForwarding(req.clientAddress, req.headers, rt.proxyTrust)
+      if (unread !== null) {
+        rt.diagnose({
+          code: "forwarded-header-ignored",
+          message: `${req.clientAddress === undefined ? "A request with no socket address" : `A request from ${req.clientAddress}`} carried ${unread}, which test-cap did not read: it reads only the declared header, from a trusted proxy. Behind an undeclared proxy, every client shares its address in the throttle: declare it in trustedProxies, or use the platform preset (ADR 0009 §5).`,
+        })
+      }
       try {
         return await dispatch(req)
       } catch (error) {

@@ -68,6 +68,8 @@ export function faultyStore(options: { readonly transactional?: boolean } = {}) 
   let fault: Fault | null = null
   let fired = false
   const calls: StoreOperation[] = []
+  /** The collection (or counter, or stream) each recorded call names, beside `calls`. */
+  const targets: string[] = []
 
   const wrap = (ops: StoreOperations): StoreOperations => {
     const wrapped: Partial<Record<StoreOperation, unknown>> = {}
@@ -75,6 +77,10 @@ export function faultyStore(options: { readonly transactional?: boolean } = {}) 
       wrapped[name] = (...args: unknown[]) => {
         if (armed) {
           calls.push(name)
+          const target = args[1]
+          targets.push(
+            typeof target === "string" ? target : (target as { collection: string }).collection,
+          )
           const count = calls.filter((call) => call === name).length
           if (fault?.op === name && fault.call === count) {
             fired = true
@@ -106,6 +112,7 @@ export function faultyStore(options: { readonly transactional?: boolean } = {}) 
     /** Starts recording, and fails the operation `next` names, if any. */
     arm(next: Fault | null = null): void {
       calls.length = 0
+      targets.length = 0
       fault = next
       fired = false
       armed = true
@@ -118,6 +125,10 @@ export function faultyStore(options: { readonly transactional?: boolean } = {}) 
     /** The operations called since `arm`, in order. */
     calls(): readonly StoreOperation[] {
       return [...calls]
+    },
+    /** The calls since `arm`, each with the collection, counter or stream it names. */
+    trace(): readonly { readonly op: StoreOperation; readonly target: string }[] {
+      return calls.map((op, index) => ({ op, target: targets[index] as string }))
     },
     /** True once the armed fault was injected. */
     fired(): boolean {

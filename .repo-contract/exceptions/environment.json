@@ -69,6 +69,76 @@
       "residualRisk": "If the first deploy fails, these links stay broken; the first DocsLinks run on main after the deploy reports it, and the follow-up pull request that re-adds the site links deletes these records.",
       "revisitWhen": "The first GitHub Pages deploy from main succeeds; the follow-up pull request deletes this record.",
       "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/core/proxy-trust.ts",
+      "version": 2,
+      "justification": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/core/proxy-trust.ts is a \"Defined in\" source link in docs/api, which typedoc builds locally from the current HEAD (main, 4805d21). src/core/proxy-trust.ts is added by this change, so the file is not at that revision; CI builds docs/api from the pushed commit, where it is.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/core/proxy-trust.ts",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "docs/api is generated and ignored by git, so the link cannot be edited by hand; typedoc names the revision it builds from.",
+      "constraint": "Before the commit exists, no revision on GitHub holds the file the link names.",
+      "whyPreferable": "A short-lived record matches how phase 3 handled links that resolve only after the change lands, without changing how the API docs are built.",
+      "residualRisk": "None for readers: docs/api is not committed. The record could hide a real broken link to this file at this revision only.",
+      "revisitWhen": "This change merges; the next pull request built from the new main deletes this record.",
+      "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/rate-limit.ts",
+      "version": 2,
+      "justification": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/rate-limit.ts is a \"Defined in\" source link in docs/api, which typedoc builds locally from the current HEAD (main, 4805d21). src/security/rate-limit.ts is added by this change, so the file is not at that revision; CI builds docs/api from the pushed commit, where it is.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/rate-limit.ts",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "docs/api is generated and ignored by git, so the link cannot be edited by hand; typedoc names the revision it builds from.",
+      "constraint": "Before the commit exists, no revision on GitHub holds the file the link names.",
+      "whyPreferable": "A short-lived record matches how phase 3 handled links that resolve only after the change lands, without changing how the API docs are built.",
+      "residualRisk": "None for readers: docs/api is not committed. The record could hide a real broken link to this file at this revision only.",
+      "revisitWhen": "This change merges; the next pull request built from the new main deletes this record.",
+      "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/store-limiter.ts",
+      "version": 2,
+      "justification": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/store-limiter.ts is a \"Defined in\" source link in docs/api, which typedoc builds locally from the current HEAD (main, 4805d21). src/security/store-limiter.ts is added by this change, so the file is not at that revision; CI builds docs/api from the pushed commit, where it is.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/store-limiter.ts",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "docs/api is generated and ignored by git, so the link cannot be edited by hand; typedoc names the revision it builds from.",
+      "constraint": "Before the commit exists, no revision on GitHub holds the file the link names.",
+      "whyPreferable": "A short-lived record matches how phase 3 handled links that resolve only after the change lands, without changing how the API docs are built.",
+      "residualRisk": "None for readers: docs/api is not committed. The record could hide a real broken link to this file at this revision only.",
+      "revisitWhen": "This change merges; the next pull request built from the new main deletes this record.",
+      "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/stuffing.ts",
+      "version": 2,
+      "justification": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/stuffing.ts is a \"Defined in\" source link in docs/api, which typedoc builds locally from the current HEAD (main, 4805d21). src/security/stuffing.ts is added by this change, so the file is not at that revision; CI builds docs/api from the pushed commit, where it is.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/stuffing.ts",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "docs/api is generated and ignored by git, so the link cannot be edited by hand; typedoc names the revision it builds from.",
+      "constraint": "Before the commit exists, no revision on GitHub holds the file the link names.",
+      "whyPreferable": "A short-lived record matches how phase 3 handled links that resolve only after the change lands, without changing how the API docs are built.",
+      "residualRisk": "None for readers: docs/api is not committed. The record could hide a real broken link to this file at this revision only.",
+      "revisitWhen": "This change merges; the next pull request built from the new main deletes this record.",
+      "expires": "2026-12-01"
+    },
+    {
+      "id": "environment:DocsLinks:https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/throttle.ts",
+      "version": 2,
+      "justification": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/throttle.ts is a \"Defined in\" source link in docs/api, which typedoc builds locally from the current HEAD (main, 4805d21). src/security/throttle.ts is added by this change, so the file is not at that revision; CI builds docs/api from the pushed commit, where it is.",
+      "check": "DocsLinks",
+      "code": "https://github.com/MaverickCER/test-cap/blob/4805d2101ff00dc9706bbcef78997b4430d76c3c/src/security/throttle.ts",
+      "ruleBroken": "Documentation links must resolve.",
+      "attempted": "docs/api is generated and ignored by git, so the link cannot be edited by hand; typedoc names the revision it builds from.",
+      "constraint": "Before the commit exists, no revision on GitHub holds the file the link names.",
+      "whyPreferable": "A short-lived record matches how phase 3 handled links that resolve only after the change lands, without changing how the API docs are built.",
+      "residualRisk": "None for readers: docs/api is not committed. The record could hide a real broken link to this file at this revision only.",
+      "revisitWhen": "This change merges; the next pull request built from the new main deletes this record.",
+      "expires": "2026-12-01"
     }
   ]
 }

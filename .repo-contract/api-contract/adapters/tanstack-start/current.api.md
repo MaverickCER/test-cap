@@ -12,12 +12,17 @@ export interface TanstackStartAuth<Id extends string> {
 }
 
 // @public
-export function tanstackStartAuth<Id extends string>(auth: Auth<Id>): TanstackStartAuth<Id>;
+export function tanstackStartAuth<Id extends string>(auth: Auth<Id>, options?: TanstackStartAuthOptions): TanstackStartAuth<Id>;
 
 // @public
 export type TanstackStartAuthInfo = {
     readonly subject: string;
 } | null;
+
+// @public
+export interface TanstackStartAuthOptions {
+    readonly clientAddress?: ((request: Request) => string | undefined) | undefined;
+}
 
 // @public
 export interface TanstackStartContext {

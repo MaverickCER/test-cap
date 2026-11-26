@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { runAuthStoreConformance } from "../../src/conformance/index.js"
 import { memoryStore } from "../../src/store/memory.js"
 import type { AuthStore, StoredRecord } from "../../src/store/port.js"
@@ -33,6 +33,12 @@ function bind(store: AuthStore): AuthStore {
   }
 }
 
+/** What one check reported for the store: the detail of its failure, or undefined when it passed. */
+async function detailOf(createStore: () => AuthStore, id: string): Promise<string | undefined> {
+  const report = await runAuthStoreConformance(createStore)
+  return report.results.find((result) => result.id === id)?.detail
+}
+
 async function failedChecks(createStore: () => AuthStore): Promise<string[]> {
   const report = await runAuthStoreConformance(createStore)
   return report.results.filter((result) => !result.passed).map((result) => result.id)
@@ -50,12 +56,76 @@ describe("runAuthStoreConformance", () => {
     const report = await runAuthStoreConformance(brokenStore(() => ({})))
     expect(report.passed).toBe(true)
     const skipped = report.results.filter((r) => r.skipped === true).map((r) => r.id)
-    expect(skipped).toEqual(["transaction-rolls-back", "transaction-commits"])
+    expect(skipped).toEqual([
+      "transaction-rolls-back",
+      "transaction-commits",
+      "transaction-rolls-back-single-use",
+      "transaction-rolls-back-operations",
+      "transaction-consume-once-concurrent",
+    ])
   })
 
   it("accepts an async factory and a custom concurrency", async () => {
     const report = await runAuthStoreConformance(async () => memoryStore(), { concurrency: 3 })
     expect(report.passed).toBe(true)
+  })
+
+  it("fails a check that never finishes, naming the timeout, and still runs every other check", async () => {
+    const never = brokenStore(() => ({
+      get: () => new Promise<StoredRecord | null>(() => undefined),
+    }))
+    const report = await runAuthStoreConformance(never, { timeoutMs: 20 })
+    const hung = report.results.filter((result) => result.detail?.includes("did not finish"))
+    expect(hung.length).toBeGreaterThan(0)
+    expect(hung[0]?.detail).toBe("The check threw: the check did not finish within 20 ms")
+    expect(report.results.length).toBe(
+      (await runAuthStoreConformance(() => memoryStore())).results.length,
+    )
+    expect(report.results.some((result) => result.passed && result.skipped !== true)).toBe(true)
+  })
+
+  it("clears each check's timer when the check finishes, so a run leaves no timer behind", async () => {
+    const timeoutMs = 123_457
+    const started: unknown[] = []
+    const cleared = new Set<unknown>()
+    const realSet = globalThis.setTimeout
+    const realClear = globalThis.clearTimeout
+    const setSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      handler: () => void,
+      delay?: number,
+    ) => {
+      const handle = realSet(handler, delay)
+      if (delay === timeoutMs) started.push(handle)
+      return handle
+    }) as typeof setTimeout)
+    const clearSpy = vi.spyOn(globalThis, "clearTimeout").mockImplementation(((
+      handle?: Parameters<typeof clearTimeout>[0],
+    ) => {
+      cleared.add(handle)
+      realClear(handle)
+    }) as typeof clearTimeout)
+    try {
+      const report = await runAuthStoreConformance(() => memoryStore(), { timeoutMs })
+      expect(report.passed).toBe(true)
+    } finally {
+      setSpy.mockRestore()
+      clearSpy.mockRestore()
+    }
+    expect(started.length).toBeGreaterThan(0)
+    expect(started.filter((handle) => !cleared.has(handle))).toEqual([])
+  })
+
+  it("refuses a timeout that is not a whole number of milliseconds, at least 1, and runs at exactly 1", async () => {
+    for (const timeoutMs of [0, 1.5, Number.NaN]) {
+      await expect(
+        runAuthStoreConformance(() => memoryStore(), { timeoutMs }),
+        String(timeoutMs),
+      ).rejects.toThrow(
+        new RangeError("The timeout must be a whole number of milliseconds, at least 1."),
+      )
+    }
+    const report = await runAuthStoreConformance(() => memoryStore(), { timeoutMs: 1 })
+    expect(report.results.length).toBeGreaterThan(0)
   })
 
   it("refuses a concurrency below 2, which could not show a race, and runs at exactly 2", async () => {
@@ -97,7 +167,10 @@ describe("runAuthStoreConformance", () => {
         return inner.consumeOnce(tenant, collection, key, now)
       },
     }))
-    expect(await failedChecks(ignoresExpiry)).toEqual(["consume-once-expiry"])
+    expect(await failedChecks(ignoresExpiry)).toEqual([
+      "create-unique-existing",
+      "consume-once-expiry",
+    ])
     const ignoresRevocation = brokenStore((inner) => ({
       async consumeOnce(tenant, collection, key, now) {
         const record = await inner.get(tenant, collection, key)
@@ -306,14 +379,107 @@ describe("runAuthStoreConformance", () => {
     const noRollback = brokenStore((inner) => ({
       transaction: async (fn) => fn(bind(inner)),
     }))
-    expect(await failedChecks(noRollback)).toEqual(["transaction-rolls-back"])
+    expect(await failedChecks(noRollback)).toEqual([
+      "transaction-rolls-back",
+      "transaction-rolls-back-single-use",
+      "transaction-rolls-back-operations",
+    ])
+  })
+
+  it("shows what a store that keeps a failed step's writes gave: the code taken, the set changed", async () => {
+    const noRollback = brokenStore((inner) => ({
+      transaction: async (fn) => fn(bind(inner)),
+    }))
+    expect(await detailOf(noRollback, "transaction-rolls-back-single-use")).toBe(
+      'Required {"consumedAt":null,"outcome":"Error: rolled back","set":["old",1],"takenAgain":true}; ' +
+        'the store gave {"consumedAt":0,"outcome":"Error: rolled back","set":["new",2],"takenAgain":false}.',
+    )
+  })
+
+  it("shows a store that swallows the error of a step that threw", async () => {
+    const swallows = brokenStore((inner) => ({
+      transaction: async (fn) =>
+        (inner as ReturnType<typeof memoryStore>).transaction(fn).catch(() => undefined as never),
+    }))
+    expect(await detailOf(swallows, "transaction-rolls-back-single-use")).toContain(
+      '"outcome":"resolved"',
+    )
+  })
+
+  it("reports, rather than throws on, a store that loses the records a failed step touched", async () => {
+    const loses = brokenStore((inner) => ({
+      transaction: async (fn) => {
+        try {
+          return await fn(bind(inner))
+        } catch (error) {
+          await inner.delete("conformance-tenant-a", "secret", "k")
+          await inner.delete("conformance-tenant-a", "set", "acct")
+          throw error
+        }
+      },
+    }))
+    const detail = await detailOf(loses, "transaction-rolls-back-single-use")
+    expect(detail).toMatch(/^Required /)
+    expect(detail).toContain('"set":["[undefined]","[undefined]"]')
+  })
+
+  it("fails a transaction that rolls back its writes but leaves the single use it took taken", async () => {
+    const leaksSingleUse = brokenStore((inner) => {
+      const taken = new Set<string>()
+      const id = (...parts: string[]) => parts.join("/")
+      return {
+        async get(tenant, collection, key) {
+          const record = await inner.get(tenant, collection, key)
+          return record !== null && taken.has(id(tenant, collection, key))
+            ? { ...record, consumedAt: record.consumedAt ?? 0 }
+            : record
+        },
+        async consumeOnce(tenant, collection, key, now) {
+          if (taken.has(id(tenant, collection, key))) return null
+          return inner.consumeOnce(tenant, collection, key, now)
+        },
+        // The inner store is a memory store, which always has transactions.
+        transaction: (fn) =>
+          (inner as ReturnType<typeof memoryStore>).transaction((tx) =>
+            fn({
+              ...tx,
+              async consumeOnce(tenant, collection, key, now) {
+                const record = await tx.consumeOnce(tenant, collection, key, now)
+                if (record !== null) taken.add(id(tenant, collection, key))
+                return record
+              },
+            }),
+          ),
+      }
+    })
+    expect(await failedChecks(leaksSingleUse)).toEqual(["transaction-rolls-back-single-use"])
+  })
+
+  it("fails transactions that run side by side, each taking the same single-use record", async () => {
+    const unisolated = brokenStore((inner) => ({
+      transaction: async (fn) =>
+        fn({
+          ...bind(inner),
+          async consumeOnce(tenant, collection, key, now) {
+            const record = await inner.get(tenant, collection, key)
+            if (record === null || record.consumedAt !== null) return null
+            await tick()
+            await inner.consumeOnce(tenant, collection, key, now)
+            return record
+          },
+        }),
+    }))
+    expect(await failedChecks(unisolated)).toContain("transaction-consume-once-concurrent")
   })
 
   it("fails a transaction that drops the writes of a step that succeeded", async () => {
     const neverCommits = brokenStore(() => ({
       transaction: async (fn) => fn(bind(memoryStore())),
     }))
-    expect(await failedChecks(neverCommits)).toEqual(["transaction-commits"])
+    expect(await failedChecks(neverCommits)).toEqual([
+      "transaction-commits",
+      "transaction-consume-once-concurrent",
+    ])
   })
 
   it("passes a store that returns fields in another order", async () => {
@@ -446,7 +612,12 @@ describe("runAuthStoreConformance", () => {
         },
       }
     })
-    expect(await failedChecks(aliasingReads)).toEqual(["returns-copies"])
+    // It also serves its first read of a record forever, so later reads of changed records are stale too.
+    expect(await failedChecks(aliasingReads)).toEqual([
+      "update-fields",
+      "returns-copies",
+      "data-round-trip",
+    ])
   })
 
   it("shows required and given values as sorted JSON, arrays included", async () => {
@@ -497,5 +668,321 @@ describe("runAuthStoreConformance", () => {
     expect(failed?.passed).toBe(false)
     expect(failed?.detail).toContain("disk on fire")
     expect(report.passed).toBe(false)
+  })
+  it("passes a memory store wrapped without changing anything, on every new check", async () => {
+    expect(await failedChecks(brokenStore(() => ({})))).toEqual([])
+  })
+
+  it("fails a listByOwner that returns the newest record first", async () => {
+    const newestFirst = brokenStore((inner) => ({
+      listByOwner: async (...args) => [...(await inner.listByOwner(...args))].reverse(),
+    }))
+    expect(await failedChecks(newestFirst)).toEqual(["list-by-owner"])
+    expect(await detailOf(newestFirst, "list-by-owner")).toBe(
+      'Required {"consumedAt":[null,null,6,null],"keys":["s3","s1","s2","s4"],"none":[],"other":["o1"],"revokedAt":[null,5,null,null]}; ' +
+        'the store gave {"consumedAt":[null,6,null,null],"keys":["s4","s2","s1","s3"],"none":[],"other":["o1"],"revokedAt":[null,null,5,null]}.',
+    )
+  })
+
+  it("fails a listByOwner that sorts by key", async () => {
+    const byKey = brokenStore((inner) => ({
+      listByOwner: async (...args) =>
+        [...(await inner.listByOwner(...args))].sort((x, y) => x.key.localeCompare(y.key)),
+    }))
+    expect(await failedChecks(byKey)).toEqual(["list-by-owner"])
+  })
+
+  it("fails a listByOwner that hides consumed or revoked records", async () => {
+    const hidesConsumed = brokenStore((inner) => ({
+      listByOwner: async (...args) =>
+        (await inner.listByOwner(...args)).filter((r) => r.consumedAt === null),
+    }))
+    expect(await failedChecks(hidesConsumed)).toEqual(["list-by-owner"])
+    expect(await detailOf(hidesConsumed, "list-by-owner")).toContain('"keys":["s3","s1","s4"]')
+    const hidesRevoked = brokenStore((inner) => ({
+      listByOwner: async (...args) =>
+        (await inner.listByOwner(...args)).filter((r) => r.revokedAt === null),
+    }))
+    expect(await failedChecks(hidesRevoked)).toContain("list-by-owner")
+    expect(await detailOf(hidesRevoked, "list-by-owner")).toContain('"keys":["s3","s2","s4"]')
+  })
+
+  it("fails a listByOwner that ignores the collection or the owner", async () => {
+    const anyCollection = brokenStore((inner) => ({
+      listByOwner: (tenant, _collection, owner) => inner.listByOwner(tenant, "session", owner),
+    }))
+    const all = brokenStore((inner) => ({
+      listByOwner: async (tenant, collection) => [
+        ...(await inner.listByOwner(tenant, collection, "a")),
+        ...(await inner.listByOwner(tenant, collection, "b")),
+      ],
+    }))
+    expect(await failedChecks(all)).toContain("list-by-owner")
+    expect(await failedChecks(anyCollection)).toEqual(["list-by-owner"])
+    expect(await detailOf(anyCollection, "list-by-owner")).toContain(
+      '"other":["s3","s1","s2","s4"]',
+    )
+  })
+
+  it("fails an update that ignores a changed or removed expiresAt", async () => {
+    const ignoresExpiry = brokenStore((inner) => ({
+      update: (tenant, collection, key, version, change) =>
+        inner.update(
+          tenant,
+          collection,
+          key,
+          version,
+          change.data === undefined ? {} : { data: change.data },
+        ),
+    }))
+    expect(await failedChecks(ignoresExpiry)).toEqual(["update-fields"])
+    expect(await detailOf(ignoresExpiry, "update-fields")).toBe(
+      'Required ["updated",[2,5000,{"a":1,"b":2},"o"],"updated",[3,5000,{"c":3},"o"],"updated",[4,null,{"c":3},"o"],"updated",[5,7000,"both","o"]]; ' +
+        'the store gave ["updated",[2,1000,{"a":1,"b":2},"o"],"updated",[3,1000,{"c":3},"o"],"updated",[4,1000,{"c":3},"o"],"updated",[5,1000,"both","o"]].',
+    )
+  })
+
+  it("fails an update that merges data instead of replacing it, or drops fields it was not given", async () => {
+    const merges = brokenStore((inner) => ({
+      async update(tenant, collection, key, version, change) {
+        const old = await inner.get(tenant, collection, key)
+        const data =
+          change.data !== undefined &&
+          typeof change.data === "object" &&
+          change.data !== null &&
+          !Array.isArray(change.data) &&
+          typeof old?.data === "object"
+            ? { ...(old.data as object), ...change.data }
+            : change.data
+        return inner.update(
+          tenant,
+          collection,
+          key,
+          version,
+          data === undefined ? change : { ...change, data },
+        )
+      },
+    }))
+    expect(await failedChecks(merges)).toContain("update-fields")
+    const clearsExpiry = brokenStore((inner) => ({
+      update: (tenant, collection, key, version, change) =>
+        inner.update(tenant, collection, key, version, { expiresAt: null, ...change }),
+    }))
+    expect(await failedChecks(clearsExpiry)).toEqual(["update-fields"])
+  })
+
+  it("fails a createUnique that overwrites a consumed, revoked or expired record", async () => {
+    const overwrites = (hit: (record: StoredRecord) => boolean) =>
+      brokenStore((inner) => ({
+        async createUnique(tenant, record) {
+          const existing = await inner.get(tenant, record.collection, record.key)
+          if (existing !== null && hit(existing)) {
+            await inner.delete(tenant, record.collection, record.key)
+          }
+          return inner.createUnique(tenant, record)
+        },
+      }))
+    const consumed = overwrites((r) => r.consumedAt !== null)
+    const revoked = overwrites((r) => r.revokedAt !== null)
+    const expired = overwrites((r) => r.expiresAt !== null && r.expiresAt < 10)
+    for (const store of [consumed, revoked, expired]) {
+      expect(await failedChecks(store)).toEqual(["create-unique-existing"])
+    }
+    expect(await detailOf(consumed, "create-unique-existing")).toBe(
+      'Required {"again":["exists","exists","exists","exists"],"kept":[["first","live",1,null,null],["first","consumed",2,10,null],["first","revoked",2,null,20],["first","expired",1,null,null]]}; ' +
+        'the store gave {"again":["exists","created","exists","exists"],"kept":[["first","live",1,null,null],["second","second",1,null,null],["first","revoked",2,null,20],["first","expired",1,null,null]]}.',
+    )
+    expect(await detailOf(expired, "create-unique-existing")).toContain(
+      '"again":["exists","exists","exists","created"]',
+    )
+  })
+
+  it("fails a createUnique that answers exists but replaces the stored record", async () => {
+    const replaces = brokenStore((inner) => ({
+      async createUnique(tenant, record) {
+        const answer = await inner.createUnique(tenant, record)
+        if (answer === "exists") {
+          await inner.delete(tenant, record.collection, record.key)
+          await inner.createUnique(tenant, record)
+        }
+        return answer
+      },
+    }))
+    expect(await failedChecks(replaces)).toContain("create-unique-existing")
+  })
+
+  it("fails a store whose data does not come back exactly as written", async () => {
+    const normalizes = brokenStore((inner) => ({
+      createUnique: (tenant, record) =>
+        inner.createUnique(tenant, {
+          ...record,
+          data: JSON.parse(
+            JSON.stringify(record.data, (_k, v: unknown) =>
+              typeof v === "string" ? v.normalize("NFKC") : v,
+            ),
+          ) as never,
+        }),
+    }))
+    expect(await failedChecks(normalizes)).toEqual(["data-round-trip"])
+    expect(await detailOf(normalizes, "data-round-trip")).toContain("the store gave")
+    const truncates = brokenStore((inner) => ({
+      createUnique: (tenant, record) =>
+        inner.createUnique(tenant, {
+          ...record,
+          data: JSON.parse(
+            JSON.stringify(record.data, (_k, v: unknown) =>
+              typeof v === "string" ? v.slice(0, 50) : v,
+            ),
+          ) as never,
+        }),
+    }))
+    expect(await failedChecks(truncates)).toEqual(["data-round-trip"])
+    const singlePrecision = brokenStore((inner) => ({
+      createUnique: (tenant, record) =>
+        inner.createUnique(tenant, {
+          ...record,
+          data: JSON.parse(
+            JSON.stringify(record.data, (_k, v: unknown) =>
+              typeof v === "number" ? Math.fround(v) : v,
+            ),
+          ) as never,
+        }),
+    }))
+    expect(await failedChecks(singlePrecision)).toEqual(["data-round-trip"])
+  })
+
+  it("fails a store whose update loses data on the way back", async () => {
+    const lossyUpdate = brokenStore((inner) => ({
+      update: (tenant, collection, key, version, change) =>
+        inner.update(tenant, collection, key, version, {
+          ...change,
+          ...(change.data === undefined ? {} : { data: { stripped: true } }),
+        }),
+    }))
+    const failed = await failedChecks(lossyUpdate)
+    expect(failed).toContain("data-round-trip")
+    expect(failed).toContain("update-fields")
+  })
+
+  it("fails a transaction that does not roll back increment, resetCounter, appendAudit, delete or revoke", async () => {
+    // The memory store's transaction holds its lock, so a step cannot call the store itself. The mutant instead
+    // replays the named operation on the store once the transaction has rolled back, which is what a store that
+    // never rolled that operation back looks like afterwards.
+    const outside = (
+      name: "increment" | "resetCounter" | "appendAudit" | "delete" | "revoke",
+    ): (() => AuthStore) =>
+      brokenStore((inner) => ({
+        async transaction(fn) {
+          const replay: (() => Promise<unknown>)[] = []
+          try {
+            return await (inner as ReturnType<typeof memoryStore>).transaction((tx) =>
+              fn({
+                ...tx,
+                [name]: (...args: unknown[]) => {
+                  replay.push(() => (inner[name] as (...a: unknown[]) => Promise<unknown>)(...args))
+                  return (tx[name] as (...a: unknown[]) => Promise<unknown>)(...args)
+                },
+              } as typeof tx),
+            )
+          } catch (error) {
+            for (const step of replay) await step()
+            throw error
+          }
+        },
+      }))
+    const expected = {
+      increment: '"up":3',
+      resetCounter: '"down":1',
+      appendAudit:
+        '"audit":[{"record":"first","seq":1,"stream":"log"},{"record":"second","seq":2,"stream":"log"}]',
+      delete: '"gone":"[undefined]"',
+      revoke: '"revokedAt":9',
+    }
+    for (const name of Object.keys(expected) as (keyof typeof expected)[]) {
+      expect(await failedChecks(outside(name)), name).toEqual(["transaction-rolls-back-operations"])
+      expect(await detailOf(outside(name), "transaction-rolls-back-operations"), name).toContain(
+        expected[name],
+      )
+    }
+  })
+  /** Only the round-trip check writes a document with a `unicode` member. */
+  const isRoundTripData = (value: unknown): boolean =>
+    typeof value === "object" && value !== null && ("unicode" in value || "again" in value)
+
+  it("pins the data the round-trip check writes, value by value", async () => {
+    const written: unknown[] = []
+    const spy = brokenStore((inner) => ({
+      createUnique(tenant, record) {
+        if (isRoundTripData(record.data)) written.push(record.data)
+        return inner.createUnique(tenant, record)
+      },
+      update(tenant, collection, key, version, change) {
+        if (isRoundTripData(change.data)) written.push(change.data)
+        return inner.update(tenant, collection, key, version, change)
+      },
+    }))
+    expect(await detailOf(spy, "data-round-trip")).toBeUndefined()
+    const data = {
+      unicode: ["\u{1F600}", "e\u0301", "\uFB01", "\u2028", "\u00e9", "   ", ""],
+      floats: [0.1, -1.5e-7, 1e21, 123456789.12345679, Number.MAX_SAFE_INTEGER, -0.000001],
+      long: "x".repeat(5_000),
+      empty: { list: [], map: {} },
+      flags: [null, true, false],
+      nested: { a: { b: { c: [1, [2, [3]]] } } },
+    }
+    // Both the first write and the update's write: the update wraps the same document.
+    expect(written.slice(0, 2)).toEqual([data, { again: data }])
+    expect(JSON.stringify(written[0])).toBe(JSON.stringify(data))
+    expect(Object.is((written[0] as typeof data).floats[1], -1.5e-7)).toBe(true)
+  })
+
+  it("reports, rather than throws on, a store that returns no record where the new checks read one", async () => {
+    const empty = brokenStore((inner) => ({
+      get: async () => null,
+      transaction: (fn) =>
+        (inner as ReturnType<typeof memoryStore>).transaction((tx) =>
+          fn({ ...tx, get: async () => null }),
+        ),
+    }))
+    const report = await runAuthStoreConformance(empty)
+    const detail = (id: string): string | undefined =>
+      report.results.find((r) => r.id === id)?.detail
+    expect(detail("create-unique-existing")).toBe(
+      'Required {"again":["exists","exists","exists","exists"],"kept":[["first","live",1,null,null],["first","consumed",2,10,null],["first","revoked",2,null,20],["first","expired",1,null,null]]}; ' +
+        'the store gave {"again":["exists","exists","exists","exists"],"kept":[["[undefined]","[undefined]","[undefined]","[undefined]","[undefined]"],["[undefined]","[undefined]","[undefined]","[undefined]","[undefined]"],["[undefined]","[undefined]","[undefined]","[undefined]","[undefined]"],["[undefined]","[undefined]","[undefined]","[undefined]","[undefined]"]]}.',
+    )
+    expect(detail("update-fields")).toMatch(
+      /the store gave \["updated",\["\[undefined\]","\[undefined\]","\[undefined\]","\[undefined\]"\],"updated",/,
+    )
+    expect(detail("data-round-trip")).toMatch(
+      /the store gave \{"created":"\[undefined\]","updated":"\[undefined\]"\}\.$/,
+    )
+    expect(detail("transaction-rolls-back-operations")).toMatch(
+      /^Required .*the store gave \{.*"gone":"\[undefined\]".*"revokedAt":"\[undefined\]"/,
+    )
+  })
+
+  it("shows a store that swallows the error of a transaction that undid five operations", async () => {
+    const swallows = brokenStore((inner) => ({
+      transaction: async (fn) =>
+        (inner as ReturnType<typeof memoryStore>).transaction(fn).catch(() => undefined as never),
+    }))
+    const detail = await detailOf(swallows, "transaction-rolls-back-operations")
+    expect(detail).toBe(
+      'Required {"audit":[{"record":"first","seq":1,"stream":"log"}],"down":3,"gone":"kept","outcome":"Error: rolled back","revokedAt":null,"up":2}; ' +
+        'the store gave {"audit":[{"record":"first","seq":1,"stream":"log"}],"down":3,"gone":"kept","outcome":"resolved","revokedAt":null,"up":2}.',
+    )
+  })
+
+  it("shows a store whose transaction resolves with nothing as an outcome that is not text", async () => {
+    const vanishes = brokenStore((inner) => ({
+      transaction: async (fn) => {
+        await (inner as ReturnType<typeof memoryStore>).transaction(fn).catch(() => undefined)
+        return undefined as never
+      },
+    }))
+    expect(await detailOf(vanishes, "transaction-rolls-back-operations")).toContain(
+      '"outcome":"resolved"',
+    )
   })
 })

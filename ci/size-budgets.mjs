@@ -8,7 +8,13 @@
 // name (hash-wasm) are dependencies, not part of the entry, and are left out, as ADR 0018 says.
 //
 // Budgets (ADR 0018 Open 4):
-// - Server entries: the first measurement plus 10 percent, rounded up. Measured on 2026-11-16 from the phase 3 build.
+// - Server entries: the measurement plus 10 percent, rounded up. Measured on 2026-11-16 from the phase 3 build, and
+//   again on 2026-11-17 from the phase 4 build, which adds the throttle, the failure ceiling, the stuffing detector,
+//   saved recovery codes and proxy trust with its platform presets (about 6.9 KB gzip on every server entry), and on
+//   2026-11-24 from the same pull request once phase 4 grew the request limits, the client-address requirement, the
+//   replaceable argon2id hasher with its fallback, single transactions for recovery, and limit keys named by HMAC (about
+//   7.3 KB more on every server entry). A phase that adds a capability re-measures here, in its own pull request, and
+//   says so; nothing else raises a budget.
 // - The default pages' hashed assets (the script and the stylesheet a browser downloads): 15 KiB in total, ADR 0018's
 //   fixed budget for client-facing code. They are read from a running `auth.handle` built from dist/, exactly as a
 //   browser gets them, and gzipped as one stream, which can come out up to a few hundred bytes smaller than the two
@@ -22,17 +28,17 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 /** Generated, never committed and never linted: next to the other tool caches under node_modules. */
 const out = path.join(root, "node_modules", ".cache", "size-budgets")
 
-/** The first measured gzip size of each server entry with its chunks, in bytes. */
+/** The measured gzip size of each server entry with its chunks, in bytes (phase 4 build, 2026-11-24). */
 export const MEASURED = {
-  core: 35_898,
-  "express adapter": 36_689,
-  "fetch adapter": 36_774,
-  "next adapter": 37_261,
-  "tanstack-start adapter": 36_855,
-  "memory store": 2_222,
+  core: 50_092,
+  "express adapter": 50_866,
+  "fetch adapter": 50_988,
+  "next adapter": 51_520,
+  "tanstack-start adapter": 51_085,
+  "memory store": 2_336,
 }
 
-/** The first measurement plus 10 percent, rounded up to a whole byte. */
+/** The measurement plus 10 percent, rounded up to a whole byte. */
 export const plusTenPercent = (bytes) => Math.ceil(bytes * 1.1)
 
 /** Each relative import of a built ES module: `from "./x.js"`, `import "./x.js"`, `import("./x.js")`. */

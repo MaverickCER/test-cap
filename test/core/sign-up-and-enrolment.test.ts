@@ -28,6 +28,7 @@ import {
   confirmEmail,
   CREATE,
   ENABLE_MFA,
+  LOGON,
 } from "../support/auth.js"
 import { codeAt } from "../support/totp.js"
 
@@ -187,12 +188,12 @@ describe("password enrolment", () => {
   it("takes the context word from APP_SYSTEM_ID", async () => {
     const setup = testAuth({ env: { ...ENV, APP_SYSTEM_ID: "ledger-app" } })
     const { browser } = await signedUp(setup)
-    expect((await browser.post("/auth/password", { password: "my billing-web pass" })).status).toBe(
-      200,
-    )
     expect(body(await browser.post("/auth/password", { password: "my ledger-app pass" }))).toEqual({
       error: "too-common",
     })
+    expect((await browser.post("/auth/password", { password: "my billing-web pass" })).status).toBe(
+      200,
+    )
   })
 
   it("asks for 15 characters when a deviation lets a password alone pass the default requirement", async () => {
@@ -365,7 +366,6 @@ describe("TOTP enrolment", () => {
   it.each([
     ["no session", undefined, 401, "unauthenticated"],
     ["a session below the default requirement", "aal1", 403, "step-up"],
-    ["a recovery-only session", "recovery", 403, "recovery-only"],
   ] as const)("refuses %s", async (_name, kind, status, code) => {
     const setup = testAuth()
     let browser: Browser
@@ -375,7 +375,7 @@ describe("TOTP enrolment", () => {
     } else {
       browser = (
         await seedSession(setup, {
-          state: kind === "recovery" ? "recovery-only" : "authenticated",
+          state: "authenticated",
           evidence: aal1(setup.clock),
         })
       ).browser
@@ -456,5 +456,141 @@ describe("TOTP enrolment", () => {
       at: setup.clock.now(),
     })
     expect(evidence[1]?.method).toBe("totp")
+  })
+})
+
+describe("an account that stopped before its second factor", () => {
+  /** Signs up, confirms the address and sets the password, then leaves; the next browser signs in with it. */
+  async function stopped(setup: ReturnType<typeof testAuth>) {
+    const { browser, subject } = await signedUp(setup)
+    await expectOk(browser.post("/auth/password", { password: PASSWORD }))
+    const later = new Browser(inProcess(setup.auth))
+    await later.start()
+    setup.events.length = 0
+    const reply = await later.post("/auth/sign-in", {
+      identifier: "ada@example.com",
+      password: PASSWORD,
+    })
+    return { later, reply, subject }
+  }
+
+  it("goes back to enrolment on a password sign-in, and finishes it with TOTP", async () => {
+    const setup = testAuth()
+    const { later, reply, subject } = await stopped(setup)
+    expect([reply.status, body(reply)["outcome"]]).toEqual([200, "enroll"])
+    expect(body(await later.get("/auth/session"))["session"]).toMatchObject({
+      subject,
+      state: "pre-auth",
+      level: null,
+    })
+    expect(setup.events.map(brief)).toEqual([
+      { type: LOGON, status: "Success", user: subject, factors: ["Password"], detail: "enroll" },
+    ])
+    const begun = (await later.post("/auth/totp/enrol")).json as {
+      authenticatorId: string
+      secret: string
+    }
+    setup.clock.advance(30_000)
+    const confirmed = await later.post("/auth/totp/confirm", {
+      authenticatorId: begun.authenticatorId,
+      code: await codeAt(begun.secret, setup.clock.now()),
+    })
+    expect(confirmed.status).toBe(200)
+    expect(body(await later.get("/auth/session"))["session"]).toMatchObject({
+      subject,
+      state: "authenticated",
+      level: "AAL2",
+    })
+  })
+
+  it("may not replace the password from that session: a password changes only through recovery", async () => {
+    const setup = testAuth()
+    const { later } = await stopped(setup)
+    const reply = await later.post("/auth/password", { password: "an entirely new passphrase" })
+    expect([reply.status, reply.text]).toEqual([409, '{"error":"password-set"}'])
+    const again = new Browser(inProcess(setup.auth))
+    await again.start()
+    const signIn = await again.post("/auth/sign-in", {
+      identifier: "ada@example.com",
+      password: PASSWORD,
+    })
+    expect(signIn.status).toBe(200)
+  })
+
+  it("signs in as usual when a deviation lets a password alone meet the default requirement", async () => {
+    const setup = testAuth({
+      policy: defineAuthPolicy({ version: "v", defaultRequirement: { level: "AAL1" } }),
+    })
+    const { browser, subject } = await signedUp(setup)
+    await expectOk(browser.post("/auth/password", { password: "fifteen chars!!" }))
+    const later = new Browser(inProcess(setup.auth))
+    await later.start()
+    const reply = await later.post("/auth/sign-in", {
+      identifier: "ada@example.com",
+      password: "fifteen chars!!",
+    })
+    expect([reply.status, body(reply)["outcome"]]).toEqual([200, "allow"])
+    expect(body(await later.get("/auth/session"))["session"]).toMatchObject({
+      subject,
+      state: "authenticated",
+      level: "AAL1",
+    })
+  })
+
+  it("signs out a pre-auth session of someone who knew only the password, once the owner confirms TOTP", async () => {
+    const setup = testAuth()
+    const { browser: owner } = await signedUp(setup)
+    await expectOk(owner.post("/auth/password", { password: PASSWORD }))
+    const intruder = new Browser(inProcess(setup.auth))
+    await intruder.start()
+    const signIn = await intruder.post("/auth/sign-in", {
+      identifier: "ada@example.com",
+      password: PASSWORD,
+    })
+    expect(body(signIn)["outcome"]).toBe("enroll")
+    const begun = (await owner.post("/auth/totp/enrol")).json as {
+      authenticatorId: string
+      secret: string
+    }
+    setup.clock.advance(30_000)
+    await expectOk(
+      owner.post("/auth/totp/confirm", {
+        authenticatorId: begun.authenticatorId,
+        code: await codeAt(begun.secret, setup.clock.now()),
+      }),
+    )
+    // Finishing enrolment is a credential change: every other session of the account is gone.
+    expect(body(await intruder.get("/auth/session"))["session"]).toBeNull()
+    expect((await intruder.post("/auth/totp/enrol")).status).toBe(401)
+  })
+
+  it("refuses TOTP enrolment to a pre-auth session whose account already has a second factor, and signs it out", async () => {
+    for (const path of ["/auth/totp/enrol", "/auth/totp/confirm"] as const) {
+      const setup = testAuth()
+      const { subject } = await seedAccount(setup, { password: true, totp: true })
+      // A pre-auth session that outlived the account's enrolment, however it did.
+      const { browser } = await seedSession(setup, { subject, state: "pre-auth" })
+      const fields =
+        path === "/auth/totp/confirm" ? { authenticatorId: "A".repeat(43), code: "000000" } : {}
+      const reply = await browser.post(path, fields)
+      expect([reply.status, reply.text], path).toEqual([401, '{"error":"unauthenticated"}'])
+      expect(body(await browser.get("/auth/session"))["session"], path).toBeNull()
+    }
+  })
+
+  it("counts a revoked TOTP authenticator as none", async () => {
+    const setup = testAuth()
+    const { subject, secret } = await seedAccount(setup, { password: true, totp: true })
+    for (const record of await setup.store.listByOwner(TENANT, "totp", subject)) {
+      expect(await setup.store.revoke(TENANT, "totp", record.key, setup.clock.now())).toBe(true)
+    }
+    expect(secret).toBeTypeOf("string")
+    const later = new Browser(inProcess(setup.auth))
+    await later.start()
+    const reply = await later.post("/auth/sign-in", {
+      identifier: "ada@example.com",
+      password: PASSWORD,
+    })
+    expect(body(reply)["outcome"]).toBe("enroll")
   })
 })

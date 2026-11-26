@@ -8,7 +8,7 @@
  * and Deno alike. Each check gets a fresh store from the factory.
  */
 
-import type { AuthStore } from "../store/port.js"
+import type { AuthStore, JsonValue, RecordChange } from "../store/port.js"
 
 /** One check's outcome. `detail` shows what the store did against what was required. */
 export interface ConformanceResult {
@@ -36,6 +36,27 @@ export interface ConformanceReport {
 export interface ConformanceOptions {
   /** Parallel calls per race check (default 25, at least 2). */
   readonly concurrency?: number
+  /**
+   * How long one check may run, in milliseconds (default 30,000, at least 1). A check still running then fails with
+   * that as its detail, so a store that deadlocks, such as a transaction that calls the outer store on a pool of one
+   * connection, is reported instead of hanging the run.
+   */
+  readonly timeoutMs?: number
+}
+
+/** The answer of `work`, or a rejection once `timeoutMs` passes without one. */
+async function within<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`the check did not finish within ${String(timeoutMs)} ms`))
+    }, timeoutMs)
+  })
+  try {
+    return await Promise.race([work, late])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 const A = "conformance-tenant-a"
@@ -61,7 +82,7 @@ type Check =
       readonly id: string
       readonly title: string
       readonly kind: "transaction"
-      run(store: AuthStore, transaction: Transaction): Promise<Observation>
+      run(store: AuthStore, transaction: Transaction, concurrency: number): Promise<Observation>
     }
 
 /**
@@ -104,6 +125,50 @@ const CHECKS: readonly Check[] = [
       return {
         observed: { created: count(results, (r) => r === "created"), storedData: stored?.data },
         required: { created: 1, storedData: { i: winner } },
+      }
+    },
+  },
+  {
+    id: "create-unique-existing",
+    title:
+      "createUnique of a key that is already taken, even by a consumed, revoked or expired record, gives exists and keeps that record",
+    kind: "plain",
+    async run(store) {
+      // The store has no clock, so "expired" is an expiry long before the times the other checks use.
+      const expiry = { live: null, consumed: HOUR, revoked: HOUR, expired: 1 }
+      const keys = ["live", "consumed", "revoked", "expired"] as const
+      for (const key of keys) {
+        await store.createUnique(A, {
+          collection: "c",
+          key,
+          owner: "first",
+          expiresAt: expiry[key],
+          data: key,
+        })
+      }
+      await store.consumeOnce(A, "c", "consumed", 10)
+      await store.revoke(A, "c", "revoked", 20)
+      const again: string[] = []
+      for (const key of keys) {
+        again.push(
+          await store.createUnique(A, { collection: "c", key, owner: "second", data: "second" }),
+        )
+      }
+      const kept = await Promise.all(keys.map((key) => store.get(A, "c", key)))
+      return {
+        observed: {
+          again,
+          kept: kept.map((r) => [r?.owner, r?.data, r?.version, r?.consumedAt, r?.revokedAt]),
+        },
+        required: {
+          again: ["exists", "exists", "exists", "exists"],
+          kept: [
+            ["first", "live", 1, null, null],
+            ["first", "consumed", 2, 10, null],
+            ["first", "revoked", 2, null, 20],
+            ["first", "expired", 1, null, null],
+          ],
+        },
       }
     },
   },
@@ -303,6 +368,44 @@ const CHECKS: readonly Check[] = [
     },
   },
   {
+    id: "list-by-owner",
+    title:
+      "listByOwner returns the owner's records of one collection, oldest first, revoked and consumed ones included",
+    kind: "plain",
+    async run(store) {
+      // Keys are not in creation order, so a store that sorts by key or newest first cannot pass by luck.
+      for (const [collection, key, owner] of [
+        ["session", "s3", "a"],
+        ["session", "s1", "a"],
+        ["session", "x1", "b"],
+        ["other", "o1", "a"],
+        ["session", "s2", "a"],
+        ["session", "s4", "a"],
+      ] as const) {
+        await store.createUnique(A, { collection, key, owner, expiresAt: HOUR, data: key })
+      }
+      await store.revoke(A, "session", "s1", 5)
+      await store.consumeOnce(A, "session", "s2", 6)
+      const list = await store.listByOwner(A, "session", "a")
+      return {
+        observed: {
+          keys: list.map((r) => r.key),
+          revokedAt: list.map((r) => r.revokedAt),
+          consumedAt: list.map((r) => r.consumedAt),
+          none: await store.listByOwner(A, "session", "nobody"),
+          other: (await store.listByOwner(A, "other", "a")).map((r) => r.key),
+        },
+        required: {
+          keys: ["s3", "s1", "s2", "s4"],
+          revokedAt: [null, 5, null, null],
+          consumedAt: [null, null, 6, null],
+          none: [],
+          other: ["o1"],
+        },
+      }
+    },
+  },
+  {
     id: "update-version",
     title: "update applies only at the expected version",
     kind: "plain",
@@ -324,6 +427,44 @@ const CHECKS: readonly Check[] = [
           version: 2,
           data: 2,
         },
+      }
+    },
+  },
+  {
+    id: "update-fields",
+    title:
+      "update replaces data whole, sets or removes expiresAt, and keeps every field the change leaves out",
+    kind: "plain",
+    async run(store) {
+      await store.createUnique(A, {
+        collection: "c",
+        key: "k",
+        owner: "o",
+        expiresAt: 1_000,
+        data: { a: 1, b: 2 },
+      })
+      const steps: unknown[] = []
+      const step = async (version: number, change: RecordChange): Promise<void> => {
+        steps.push(await store.update(A, "c", "k", version, change))
+        const r = await store.get(A, "c", "k")
+        steps.push([r?.version, r?.expiresAt, r?.data, r?.owner])
+      }
+      await step(1, { expiresAt: 5_000 })
+      await step(2, { data: { c: 3 } })
+      await step(3, { expiresAt: null })
+      await step(4, { data: "both", expiresAt: 7_000 })
+      return {
+        observed: steps,
+        required: [
+          "updated",
+          [2, 5_000, { a: 1, b: 2 }, "o"],
+          "updated",
+          [3, 5_000, { c: 3 }, "o"],
+          "updated",
+          [4, null, { c: 3 }, "o"],
+          "updated",
+          [5, 7_000, "both", "o"],
+        ],
       }
     },
   },
@@ -379,6 +520,30 @@ const CHECKS: readonly Check[] = [
       const read = await store.get(A, "c", "k")
       if (read !== null) (read.data as { nested: { n: number } }).nested.n = 3
       return { observed: (await store.get(A, "c", "k"))?.data, required: { nested: { n: 1 } } }
+    },
+  },
+  {
+    id: "data-round-trip",
+    title:
+      "Data comes back exactly as written, from createUnique and from update: unicode, floats, long strings, empty containers",
+    kind: "plain",
+    async run(store) {
+      const data: JsonValue = {
+        unicode: ["\u{1F600}", "e\u0301", "\uFB01", "\u2028", "\u00e9", "   ", ""],
+        floats: [0.1, -1.5e-7, 1e21, 123456789.12345679, Number.MAX_SAFE_INTEGER, -0.000001],
+        long: "x".repeat(5_000),
+        empty: { list: [], map: {} },
+        flags: [null, true, false],
+        nested: { a: { b: { c: [1, [2, [3]]] } } },
+      }
+      await store.createUnique(A, { collection: "c", key: "k", owner: null, data })
+      const created = (await store.get(A, "c", "k"))?.data
+      await store.update(A, "c", "k", 1, { data: { again: data } })
+      const updated = (await store.get(A, "c", "k"))?.data
+      return {
+        observed: { created, updated },
+        required: { created: data, updated: { again: data } },
+      }
     },
   },
   {
@@ -541,6 +706,127 @@ const CHECKS: readonly Check[] = [
       }
     },
   },
+  {
+    // A recovery code is spent in the transaction that starts its session (ADR 0007 §4): a failed step gives it back.
+    id: "transaction-rolls-back-single-use",
+    title:
+      "A transaction that throws gives back the single-use record it took and undoes its compare-and-set update",
+    kind: "transaction",
+    async run(store, transaction) {
+      await store.createUnique(A, {
+        collection: "secret",
+        key: "k",
+        owner: null,
+        expiresAt: HOUR,
+        data: 1,
+      })
+      await store.createUnique(A, { collection: "set", key: "acct", owner: "acct", data: "old" })
+      const outcome = await transaction(async (tx) => {
+        await tx.consumeOnce(A, "secret", "k", 0)
+        await tx.update(A, "set", "acct", 1, { data: "new" })
+        throw new Error("rolled back")
+      }).then(
+        () => "resolved",
+        // The store passes on the error the function threw, so the caller sees why its change was undone.
+        (error: unknown) => String(error),
+      )
+      const secret = await store.get(A, "secret", "k")
+      const set = await store.get(A, "set", "acct")
+      return {
+        observed: {
+          outcome,
+          consumedAt: secret?.consumedAt,
+          set: [set?.data, set?.version],
+          takenAgain: (await store.consumeOnce(A, "secret", "k", 0)) !== null,
+        },
+        required: {
+          outcome: "Error: rolled back",
+          consumedAt: null,
+          set: ["old", 1],
+          takenAgain: true,
+        },
+      }
+    },
+  },
+  {
+    id: "transaction-rolls-back-operations",
+    title:
+      "A transaction that throws also undoes its increment, resetCounter, appendAudit, delete and revoke",
+    kind: "transaction",
+    async run(store, transaction) {
+      await store.increment(A, "up", HOUR, 0)
+      await store.increment(A, "down", HOUR, 0)
+      await store.increment(A, "down", HOUR, 1)
+      await store.appendAudit(A, "log", 1, "first")
+      await store.createUnique(A, { collection: "c", key: "gone", owner: null, data: "kept" })
+      await store.createUnique(A, { collection: "c", key: "live", owner: null, data: 1 })
+      const outcome = await transaction(async (tx) => {
+        await tx.increment(A, "up", HOUR, 2)
+        await tx.resetCounter(A, "down")
+        await tx.appendAudit(A, "log", 2, "second")
+        await tx.delete(A, "c", "gone")
+        await tx.revoke(A, "c", "live", 9)
+        throw new Error("rolled back")
+      }).then(
+        () => "resolved",
+        (error: unknown) => String(error),
+      )
+      const gone = await store.get(A, "c", "gone")
+      const live = await store.get(A, "c", "live")
+      return {
+        observed: {
+          outcome,
+          audit: await store.readAudit(A, "log", 1, 10),
+          gone: gone?.data,
+          revokedAt: live?.revokedAt,
+          up: (await store.increment(A, "up", HOUR, 3)).count,
+          down: (await store.increment(A, "down", HOUR, 3)).count,
+        },
+        required: {
+          outcome: "Error: rolled back",
+          audit: [{ stream: "log", seq: 1, record: "first" }],
+          gone: "kept",
+          revokedAt: null,
+          up: 2,
+          down: 3,
+        },
+      }
+    },
+  },
+  {
+    id: "transaction-consume-once-concurrent",
+    title:
+      "Concurrent transactions that each take one single-use record: exactly one gets it, and only its writes are kept",
+    kind: "transaction",
+    async run(store, transaction, n) {
+      await store.createUnique(A, {
+        collection: "secret",
+        key: "k",
+        owner: null,
+        expiresAt: HOUR,
+        data: 1,
+      })
+      const taken = await parallel(n, (i) =>
+        transaction(async (tx) => {
+          const record = await tx.consumeOnce(A, "secret", "k", 0)
+          if (record !== null) {
+            await tx.createUnique(A, {
+              collection: "session",
+              key: `s${i}`,
+              owner: "acct",
+              data: i,
+            })
+          }
+          return record !== null
+        }),
+      )
+      const sessions = await store.listByOwner(A, "session", "acct")
+      return {
+        observed: { taken: count(taken, (t) => t), sessions: sessions.map((r) => r.data) },
+        required: { taken: 1, sessions: [taken.indexOf(true)] },
+      }
+    },
+  },
 ]
 
 /** Runs every check against fresh stores from `createStore`. */
@@ -551,6 +837,10 @@ export async function runAuthStoreConformance(
   const concurrency = options.concurrency ?? 25
   if (!Number.isInteger(concurrency) || concurrency < 2) {
     throw new RangeError("The concurrency must be a whole number of at least 2.")
+  }
+  const timeoutMs = options.timeoutMs ?? 30_000
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
+    throw new RangeError("The timeout must be a whole number of milliseconds, at least 1.")
   }
   const results: ConformanceResult[] = []
   for (const check of CHECKS) {
@@ -564,11 +854,11 @@ export async function runAuthStoreConformance(
       continue
     } else {
       const transaction = store.transaction.bind(store)
-      run = () => check.run(store, transaction)
+      run = () => check.run(store, transaction, concurrency)
     }
     let detail: string | undefined
     try {
-      const { observed, required } = await run()
+      const { observed, required } = await within(run(), timeoutMs)
       const got = canonical(observed)
       const want = canonical(required)
       if (got !== want) detail = `Required ${want}; the store gave ${got}.`

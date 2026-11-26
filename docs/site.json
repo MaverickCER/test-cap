@@ -51,7 +51,7 @@
       "→ The app's `AuthStore`: atomic operations over its own database"
     ],
     "flowDescription": "A request passes from the framework through a converting adapter to the core. The core reads and writes the app's own store and returns bytes for the adapter to send.",
-    "note": "Because the core makes every decision, a fix to the core reaches every framework at once. Express, fetch, Next.js and TanStack Start adapters exist today; the Nest adapter is planned for phase 4."
+    "note": "Because the core makes every decision, a fix to the core reaches every framework at once. Express, fetch, Next.js and TanStack Start adapters exist today; the Nest adapter is in progress and follows phase 4."
   },
   "demo": {
     "eyebrow": "See it",
@@ -148,7 +148,7 @@
     ],
     "whatItCosts": "An app adds one adapter line, a store over its database and two keys. Each person enrols a second factor at sign-up.",
     "whatCouldGoWrong": [
-      "It is phase 3 of 9, so passkeys, email recovery and social sign-in are not built yet.",
+      "It is phase 4 of 9, so passkeys, email recovery and social sign-in are not built yet.",
       "No durable store is exported yet, so it is ready for development and tests only.",
       "There has been no external penetration test, by the owner's decision."
     ],
@@ -191,7 +191,7 @@
       },
       {
         "title": "Decision records",
-        "description": "Twenty-nine decision records, each with its context, the decision and its consequences.",
+        "description": "Thirty-two decision records, each with its context, the decision and its consequences.",
         "label": "Browse the decisions",
         "url": "https://github.com/MaverickCER/test-cap/tree/main/specs/decisions"
       },

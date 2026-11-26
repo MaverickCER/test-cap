@@ -43,7 +43,9 @@ readonly optional clientAddress?: ClientAddress<Args>;
 ```
 
 Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,
-`(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address.
+`(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address, and in production
+and staging the adapter refuses to start with a `ConfigError`, unless a platform preset reads its header from every
+request or the app set `requireClientAddress: false` (ADR 0009 §8).
 
 ***
 
@@ -70,7 +72,9 @@ readonly optional clientAddress?: ClientAddress<Args>;
 ```
 
 Reads the client's address from the runtime's arguments: `(req, info) => info.remoteAddr.hostname` on Deno,
-`(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address.
+`(req, server) => server.requestIP(req)?.address` on Bun. Without it the core sees no address, and in production
+and staging the adapter refuses to start with a `ConfigError`, unless a platform preset reads its header from every
+request or the app set `requireClientAddress: false` (ADR 0009 §8).
 
 ###### Inherited from
 
@@ -187,7 +191,8 @@ function fetchAuth<Args>(auth, options?): (req, ...args) => Promise<Response | n
 ```
 
 Serves test-cap's `/auth/*` routes from a `Request`, and answers `null` for any other path, leaving its body unread,
-so the app routes it itself. It protects nothing else: `withAuth` adds deny by default.
+so the app routes it itself. It protects nothing else: `withAuth` adds deny by default. A missing `clientAddress`
+where production needs one throws a `ConfigError` here.
 
 #### Type Parameters
 
@@ -219,8 +224,9 @@ function withAuth<Args>(
 ```
 
 Wraps the app's fetch handler with test-cap: serves `/auth/*` and protects every other route at the default
-requirement unless `options.public` lists it. A malformed public list throws a `ConfigError` here. An error the
-app's handler throws reaches the runtime untouched; any other failure is a fixed 500.
+requirement unless `options.public` lists it. A malformed public list, or a missing `clientAddress` where production
+needs one, throws a `ConfigError` here. An error the app's handler throws reaches the runtime untouched; any other
+failure is a fixed 500.
 
 ```ts
 Deno.serve(withAuth(auth, handler, { public: ["/"], clientAddress: (req, info) => info.remoteAddr.hostname }))

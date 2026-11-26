@@ -121,6 +121,10 @@ export interface Messages {
   readonly rateLimitedOneSecond: string
   /** Rate-limited for an unknown time. */
   readonly rateLimitedUnknown: string
+  /** The app's credential-stuffing challenge is needed, and this page cannot show it. */
+  readonly challengeRequired: string
+  /** The step-up form's challenge expired or was used: nothing was checked, so the person only needs to try again. */
+  readonly challengeExpired: string
   /** A failure on the server's side. */
   readonly unexpected: string
   /** The show-password toggle while the password is hidden. */
@@ -179,6 +183,8 @@ export const DEFAULT_MESSAGES: Messages = {
   rateLimitedSeconds: "Too many attempts. Try again in {seconds} seconds.",
   rateLimitedOneSecond: "Too many attempts. Try again in 1 second.",
   rateLimitedUnknown: "Too many attempts. Try again in a moment.",
+  challengeRequired: "This sign-in needs an extra check that this page cannot show.",
+  challengeExpired: "This form expired. Enter your code again.",
   unexpected: "Something went wrong on our side. Please try again.",
   showPassword: "Show password",
   hidePassword: "Hide password",
@@ -440,6 +446,8 @@ export interface FlowOutcome {
     | "too-common"
     | "breached"
     | "rate-limited"
+    | "challenge-required"
+    | "invalid-challenge"
     | "unexpected"
   /** For `rate-limited`: how long until the next attempt is allowed. */
   readonly retryAfterMs?: number | undefined
@@ -463,6 +471,8 @@ export function withOutcome(model: FormModel, outcome: FlowOutcome): FormModel {
     "too-common": () => messages.passwordTooCommon,
     breached: () => messages.passwordBreached,
     "rate-limited": () => rateLimited(messages, outcome.retryAfterMs),
+    "challenge-required": () => messages.challengeRequired,
+    "invalid-challenge": () => messages.challengeExpired,
     unexpected: () => messages.unexpected,
   }
   return {

@@ -204,6 +204,57 @@ describe("confirmTotpEnrolment (F03)", () => {
 })
 
 describe("verifyTotp (F04)", () => {
+  it("counts a wrong code toward the ceiling only on a confirmed authenticator (ADR 0009 §3)", async () => {
+    const failed: string[] = []
+    const ceiling = {
+      reached: () => Promise.resolve(false),
+      failed: (id: string) => {
+        failed.push(id)
+        return Promise.resolve()
+      },
+      succeeded: () => Promise.resolve(),
+    }
+    const pending = deps({ ceiling })
+    await beginTotpEnrolment(pending, { tenant: "t", accountId: "a" })
+    await verifyTotp(pending, { tenant: "t", accountId: "a", code: "000000" })
+    expect(failed).toEqual([])
+    const confirmed = deps({ ceiling })
+    const begun = await enrolled(confirmed)
+    await verifyTotp(confirmed, { tenant: "t", accountId: "a", code: "000000" })
+    expect(failed).toEqual([begun.authenticatorId])
+  })
+
+  it("counts no failure on the account's other authenticators when one of them takes the code", async () => {
+    const failed: string[] = []
+    const ceiling = {
+      reached: () => Promise.resolve(false),
+      failed: (id: string) => {
+        failed.push(id)
+        return Promise.resolve()
+      },
+      succeeded: () => Promise.resolve(),
+    }
+    const d = deps({ ceiling })
+    const first = await enrolled(d)
+    const second = await enrolled(d)
+    d.clock.advance(30_000)
+    const code = await codeAt(second.secret, d.clock.now())
+    expect(await verifyTotp(d, { tenant: "t", accountId: "a", code })).toMatchObject({ ok: true })
+    expect(failed).toEqual([])
+    // A code none of them takes counts once on each one checked.
+    d.clock.advance(30_000)
+    const right = [
+      await codeAt(first.secret, d.clock.now()),
+      await codeAt(second.secret, d.clock.now()),
+    ]
+    const wrong = ["000000", "111111", "222222"].find((each) => !right.includes(each)) as string
+    expect(await verifyTotp(d, { tenant: "t", accountId: "a", code: wrong })).toEqual({
+      ok: false,
+      reason: "invalid",
+    })
+    expect(failed).toEqual([first.authenticatorId, second.authenticatorId])
+  })
+
   it("accepts a later step and records it", async () => {
     const d = deps()
     const begun = await enrolled(d)
