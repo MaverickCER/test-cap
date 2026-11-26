@@ -215,7 +215,7 @@ two requests, such as step-up's start and its ceremony, has two.
   - `test/failure/random.test.ts`: "that throws: sign-in answers 500 and hands out no token"
   - `test/failure/random.test.ts`: "that repeats itself: the sign-in whose token collides answers 500, and the first session stays its own"
   - `test/failure/random.test.ts`: "that only yields bytes the digit draw rejects: sign-up answers 500, sends nothing and issues no session"
-  - `test/core/create-auth.test.ts`: "accepts a custom clock and random source only in test mode"
+  - `test/sentinel/create-auth.test.ts`: "accepts a custom clock and random source only in test mode"
 
 ## Key material
 
@@ -261,7 +261,7 @@ two requests, such as step-up's start and its ceremony, has two.
 - **Tests:**
   - `test/failure/events.test.ts`: "that %s: the second factor still answers at once with the level it proved"
   - `test/failure/events.test.ts`: "that %s: a wrong code is still refused"
-  - `test/core/create-auth.test.ts`: "keeps the outcome when the event sink throws"
+  - `test/sentinel/create-auth.test.ts`: "keeps the outcome when the event sink throws"
 
 ## A proxy in front of the app
 

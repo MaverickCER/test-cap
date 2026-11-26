@@ -613,12 +613,12 @@ A phase that changes an invariant changes its section, its catalogue rows and it
 - **Attacks:** `production-runs-with-dev-defaults`, `missing-or-default-secret`, `https-downgrade`
 - **Flows:** F14, F22
 - **Positive tests:**
-  - `test/core/create-auth.test.ts`: "starts in production with an https origin, a durable store and both keys"
+  - `test/sentinel/create-auth.test.ts`: "starts in production with an https origin, a durable store and both keys"
 - **Negative tests:**
   - `test/attacks/production-runs-with-dev-defaults.test.ts`: "refuses the development setup once the mode falls back to production"
   - `test/attacks/missing-or-default-secret.test.ts`: "refuses a missing key in production at both layers"
   - `test/attacks/https-downgrade.test.ts`: "refuses to start production or staging on an http origin, loopback included"
-  - `test/core/create-auth.test.ts`: "accepts a custom clock and random source only in test mode"
+  - `test/sentinel/create-auth.test.ts`: "accepts a custom clock and random source only in test mode"
 - **Mutation evidence:** `src/core/mode.ts`, `src/core/auth.ts`
 - **Limitations:** An expired key is not refused at startup. A developer can still relax the policy; the policy
   lists every deviation (ADR 0005 §6).
