@@ -33,7 +33,8 @@ app.use(expressAuth(auth, { public: ["/"] }))
 // responses carry, so the scan's findings are about test-cap and not about this harness.
 app.use((_req, res, next) => {
   res.set({
-    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    "Content-Security-Policy":
+      "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
   })
