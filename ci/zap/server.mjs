@@ -29,6 +29,16 @@ const auth = createAuth({
 const app = express()
 app.disable("x-powered-by")
 app.use(expressAuth(auth, { public: ["/"] }))
+// After expressAuth, so only the harness's own pages get these: the headers a real app sets, as test-cap's own
+// responses carry, so the scan's findings are about test-cap and not about this harness.
+app.use((_req, res, next) => {
+  res.set({
+    "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+  })
+  next()
+})
 app.get("/", (_req, res) => {
   res.type("html").send('<!doctype html><title>Home</title><a href="/auth/sign-in">Sign in</a>')
 })
