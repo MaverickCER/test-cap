@@ -209,6 +209,20 @@ describe("the defaults", () => {
       subject: "acct-1",
       assurance: { policyVersion: "test-cap default" },
     })
+    const weaker = await seedSession(setup, { subject: "acct-2", evidence: aal1(setup.clock) })
+    const stepUp = await setup.auth.require(
+      {
+        method: "GET",
+        url: "/",
+        headers: new Headers({ Cookie: `__Host-test-cap=${weaker.token}` }),
+        body: null,
+      },
+      "default",
+    )
+    expect(stepUp).toMatchObject({
+      outcome: "step-up",
+      missing: [{ kind: "level", level: "AAL2" }],
+    })
   })
 
   it("scopes everything to the tenant `default` unless told otherwise", async () => {
