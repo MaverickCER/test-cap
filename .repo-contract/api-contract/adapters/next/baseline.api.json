@@ -178,7 +178,7 @@
   },
   "kind": "Package",
   "canonicalReference": "test-cap!",
-  "docComment": "/**\n * test-cap/next: the Next.js App Router adapter (Next.js 16), built on test-cap/fetch (ADR 0024 §4). It has three\n * surfaces, and only the second protects anything:\n *\n * - `nextAuthHandler(auth)` is the route handler for `app/auth/[...path]/route.ts`: it serves every `/auth/*` route.\n * - `nextServerAuth(auth, { headers })` is the authoritative check. Call it inside every route handler, server\n *  function and data-access function that needs a session, as close to the data as the app can.\n * - `nextProxy(auth, { public })` is an optional `proxy` that sends a visitor without a session cookie to the sign-in\n *  page early. It is not protection. Next.js's own guide says a proxy \"should not be your only line of defense in\n *  protecting your data\": it passes any request that carries a session cookie, forged or not, and a route the\n *  proxy's matcher misses never meets it.\n *\n * Next.js has no global check that covers every route, so a route handler or server function that never calls a\n * server helper is unprotected (ADR 0024, Limits). Next.js is typed structurally: this entry has no dependency on it.\n * Next.js gives a route handler no socket address, so the core sees none here; the address is never read from a\n * header (ADR 0009).\n *\n * @packageDocumentation\n */\n",
+  "docComment": "/**\n * test-cap/next: the Next.js App Router adapter (Next.js 16), built on test-cap/fetch (ADR 0024 §4). It has three\n * surfaces, and only the second protects anything:\n *\n * - `nextAuthHandler(auth)` is the route handler for `app/auth/[...path]/route.ts`: it serves every `/auth/*` route.\n * - `nextServerAuth(auth, { headers })` is the authoritative check. Call it inside every route handler, server\n *  function and data-access function that needs a session, as close to the data as the app can.\n * - `nextProxy(auth, { public })` is an optional `proxy` that sends a visitor without a session cookie to the sign-in\n *  page early. It is not protection. Next.js's own guide says a proxy \"should not be your only line of defense in\n *  protecting your data\": it passes any request that carries a session cookie, forged or not, and a route the\n *  proxy's matcher misses never meets it.\n *\n * Next.js has no global check that covers every route, so a route handler or server function that never calls a\n * server helper is unprotected (ADR 0024, Limits). Next.js is typed structurally: this entry has no dependency on it.\n * Next.js gives a route handler no socket address. The core sees one only from `nextAuthHandler`'s `clientAddress`\n * option, or reads a platform preset's header (ADR 0009 §5); no other header is ever read.\n *\n * @packageDocumentation\n */\n",
   "name": "test-cap",
   "preserveMemberOrder": false,
   "members": [
@@ -208,6 +208,15 @@
             },
             {
               "kind": "Content",
+              "text": ", options?: "
+            },
+            {
+              "kind": "Reference",
+              "text": "NextAuthHandlerOptions",
+              "canonicalReference": "test-cap!NextAuthHandlerOptions:interface"
+            },
+            {
+              "kind": "Content",
               "text": "): "
             },
             {
@@ -222,8 +231,8 @@
           ],
           "fileUrlPath": "src/adapters/next/index.ts",
           "returnTypeTokenRange": {
-            "startIndex": 4,
-            "endIndex": 5
+            "startIndex": 6,
+            "endIndex": 7
           },
           "releaseTag": "Public",
           "overloadIndex": 1,
@@ -235,9 +244,71 @@
                 "endIndex": 3
               },
               "isOptional": false
+            },
+            {
+              "parameterName": "options",
+              "parameterTypeTokenRange": {
+                "startIndex": 4,
+                "endIndex": 5
+              },
+              "isOptional": true
             }
           ],
           "name": "nextAuthHandler"
+        },
+        {
+          "kind": "Interface",
+          "canonicalReference": "test-cap!NextAuthHandlerOptions:interface",
+          "docComment": "/**\n * What `nextAuthHandler` takes.\n */\n",
+          "excerptTokens": [
+            {
+              "kind": "Content",
+              "text": "export interface NextAuthHandlerOptions "
+            }
+          ],
+          "fileUrlPath": "src/adapters/next/index.ts",
+          "releaseTag": "Public",
+          "name": "NextAuthHandlerOptions",
+          "preserveMemberOrder": false,
+          "members": [
+            {
+              "kind": "PropertySignature",
+              "canonicalReference": "test-cap!NextAuthHandlerOptions#clientAddress:member",
+              "docComment": "/**\n * The client's address for the throttle, read from what the app's own server knows, such as a custom server's\n * socket. Next.js gives a route handler none. Behind a platform preset whose header every request carries, such as\n * `platform(\"vercel\")`, leave it out: the core reads the preset's header (ADR 0009 §5). Otherwise production and\n * staging refuse to start without it, unless the app set `requireClientAddress: false` (ADR 0009 §8).\n */\n",
+              "excerptTokens": [
+                {
+                  "kind": "Content",
+                  "text": "readonly clientAddress?: "
+                },
+                {
+                  "kind": "Content",
+                  "text": "((request: "
+                },
+                {
+                  "kind": "Reference",
+                  "text": "Request",
+                  "canonicalReference": "@types/node!__global.Request:interface"
+                },
+                {
+                  "kind": "Content",
+                  "text": ") => string | undefined) | undefined"
+                },
+                {
+                  "kind": "Content",
+                  "text": ";"
+                }
+              ],
+              "isReadonly": true,
+              "isOptional": true,
+              "releaseTag": "Public",
+              "name": "clientAddress",
+              "propertyTypeTokenRange": {
+                "startIndex": 1,
+                "endIndex": 4
+              }
+            }
+          ],
+          "extendsTokenRanges": []
         },
         {
           "kind": "Interface",
@@ -501,7 +572,7 @@
             {
               "kind": "PropertySignature",
               "canonicalReference": "test-cap!NextProxyOptions#signIn:member",
-              "docComment": "/**\n * The path on `APP_ORIGIN` a visitor without a session cookie is sent to, with `returnTo`; `/auth/sign-in` when\n * absent.\n */\n",
+              "docComment": "/**\n * The path a visitor without a session cookie is sent to, with `returnTo`, as the app receives it; `/auth/sign-in`\n * when absent. Any `publicBasePath` is added before it in the redirect.\n */\n",
               "excerptTokens": [
                 {
                   "kind": "Content",

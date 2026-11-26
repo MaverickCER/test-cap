@@ -30,10 +30,15 @@ declare interface Auth<Id extends string = "default"> {
     readonly admin: AuthAdmin;
 }
 
-/** The server-side calls (ADR 0012, ADR 0014). Phase 3 has `revoke`. */
+/** The server-side calls (ADR 0012, ADR 0014): `revoke` (phase 3) and `deprovision` (phase 4). */
 declare interface AuthAdmin {
     /** Revokes every session of the account, with immediate visibility; resolves to how many it revoked. */
     revoke(subject: string): Promise<number>;
+    /**
+     * Deprovisions the account (ADR 0012 Open 15, the SCIM hook): disables it, so no ceremony, recovery or session of it
+     * works, and revokes every session. Resolves to `false` when there is no such account.
+     */
+    deprovision(subject: string): Promise<boolean>;
 }
 
 /** What one successful ceremony proves. A failed ceremony produces none. */
@@ -72,7 +77,10 @@ declare interface AuthenticationEvidence {
     };
 }
 
-/** The methods that produce evidence. Email sign-in and recovery codes produce none (ADR 0005 §5, ADR 0007). */
+/**
+ * The method ids evidence and events name. `recovery-code` is one that produces no evidence: redeeming a code yields a
+ * recovery-only session (ADR 0007). Email sign-in produces none either (ADR 0005 §5).
+ */
 declare type AuthenticationMethod = "password" | "totp" | "passkey" | "recovery-code" | "oidc" | "saml";
 
 /**
